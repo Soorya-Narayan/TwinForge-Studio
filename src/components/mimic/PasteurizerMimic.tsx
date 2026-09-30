@@ -806,41 +806,6 @@ export const PasteurizerMimic: React.FC = () => {
             </text>
           </g>
 
-          {/* ============================================================== */}
-          {/* 8. P&ID TITLE BLOCK (BOTTOM RIGHT)                             */}
-          {/* ============================================================== */}
-          <g transform="translate(870, 520)">
-            <rect x="0" y="0" width="300" height="130" fill="#f8fafc" stroke="#334155" strokeWidth="1.5" />
-            <line x1="0" y1="35" x2="300" y2="35" stroke="#cbd5e1" strokeWidth="1" />
-            <line x1="0" y1="70" x2="300" y2="70" stroke="#cbd5e1" strokeWidth="1" />
-            <line x1="0" y1="100" x2="300" y2="100" stroke="#cbd5e1" strokeWidth="1" />
-            <line x1="150" y1="0" x2="150" y2="35" stroke="#cbd5e1" strokeWidth="1" />
-
-            <text x="10" y="22" fill="#0f172a" fontSize="11" fontWeight="900">
-              PROCESS TEMPLATE
-            </text>
-            <text x="160" y="22" fill="#0284c7" fontSize="11" fontWeight="bold">
-              10,000 LPH CAPACITY
-            </text>
-
-            <text x="10" y="52" fill="#64748b" fontSize="8">
-              PROCESS SYSTEM
-            </text>
-            <text x="10" y="64" fill="#0f172a" fontSize="10" fontWeight="bold">
-              CONTINUOUS HTST MILK PASTEURIZER
-            </text>
-
-            <text x="10" y="86" fill="#64748b" fontSize="8">
-              DESIGN SPECIFICATION
-            </text>
-            <text x="10" y="96" fill="#0369a1" fontSize="9" fontWeight="bold" className="mono">
-              ISA-5.1 · 3-A SANITARY STANDARDS
-            </text>
-
-            <text x="10" y="118" fill="#64748b" fontSize="8">
-              CLASSIFICATION: PROCESS TOPOLOGY TEMPLATE
-            </text>
-          </g>
         </svg>
 
         {/* Live Engineering Telemetry Strip */}
