@@ -20,24 +20,53 @@ interface ChannelConfig {
 export const TrendOscilloscope: React.FC = () => {
   const trendHistory = useSimulationStore((s) => s.trendHistory);
   const clearTrendHistory = useSimulationStore((s) => s.clearTrendHistory);
+  const activeSkid = useSimulationStore((s) => s.activeSkid);
 
   const [timeWindowSec, setTimeWindowSec] = useState<number>(30); // 15, 30, 60
   const [isFrozen, setIsFrozen] = useState<boolean>(false);
   const [frozenSnapshot, setFrozenSnapshot] = useState<typeof trendHistory>([]);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
-  const [channels, setChannels] = useState<ChannelConfig[]>([
-    { id: 'tk100Level', name: 'TK-100 Supply Level', unit: '%', color: '#0284c7', min: 0, max: 100, enabled: true },
-    { id: 'tk400Level', name: 'TK-400 Mixing Level', unit: '%', color: '#6366f1', min: 0, max: 100, enabled: true },
-    { id: 'flowRate', name: 'Header Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 250, enabled: true },
-    { id: 'temperature', name: 'HX-100 Process Temp', unit: '°C', color: '#d97706', min: 0, max: 100, enabled: true },
-    { id: 'pumpSpeed', name: 'P-100 Pump Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100, enabled: true },
-  ]);
+  const channelDefs = useMemo<Record<string, { name: string; unit: string; color: string; min: number; max: number }>>(() => {
+    if (activeSkid === 'PASTEURIZER_10KLPH') {
+      return {
+        tk100Level: { name: 'Balance Tank (LT1)', unit: '%', color: '#0284c7', min: 0, max: 100 },
+        tk400Level: { name: 'Product Silo Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
+        flowRate: { name: 'Feed Flow Rate (FM)', unit: 'L/min', color: '#059669', min: 0, max: 200 },
+        temperature: { name: 'Holding Tube (TT5)', unit: '°C', color: '#d97706', min: 0, max: 100 },
+        pumpSpeed: { name: 'Feed Pump (VFD)', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
+      };
+    }
+    return {
+      tk100Level: { name: 'TK-100 Supply Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
+      tk400Level: { name: 'TK-400 Mixing Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
+      flowRate: { name: 'Header Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 250 },
+      temperature: { name: 'HX-100 Process Temp', unit: '°C', color: '#d97706', min: 0, max: 100 },
+      pumpSpeed: { name: 'P-100 Pump Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
+    };
+  }, [activeSkid]);
+
+  const [enabledChannels, setEnabledChannels] = useState<Record<string, boolean>>({
+    tk100Level: true,
+    tk400Level: true,
+    flowRate: true,
+    temperature: true,
+    pumpSpeed: true,
+  });
+
+  const channels: ChannelConfig[] = useMemo(() => {
+    return Object.entries(channelDefs).map(([id, def]) => ({
+      id,
+      ...def,
+      enabled: enabledChannels[id] ?? true,
+    }));
+  }, [channelDefs, enabledChannels]);
 
   const toggleChannel = (id: string) => {
-    setChannels((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
-    );
+    setEnabledChannels((prev) => ({
+      ...prev,
+      [id]: !(prev[id] ?? true),
+    }));
   };
 
   const handleFreezeToggle = () => {
@@ -103,7 +132,11 @@ export const TrendOscilloscope: React.FC = () => {
   const exportCsv = () => {
     if (activeData.length === 0) return;
 
-    const headers = ['Time (s)', 'TK100_Level (%)', 'TK400_Level (%)', 'Header_Flow (L/min)', 'HX100_Temp (C)', 'P100_Speed (%)'];
+    const isPast = activeSkid === 'PASTEURIZER_10KLPH';
+    const headers = isPast
+      ? ['Time (s)', 'Balance_Tank_LT1 (%)', 'Product_Silo_Level (%)', 'Feed_Flow_FM (L/min)', 'Holding_Temp_TT5 (C)', 'Feed_Pump_VFD (%)']
+      : ['Time (s)', 'TK100_Level (%)', 'TK400_Level (%)', 'Header_Flow (L/min)', 'HX100_Temp (C)', 'P100_Speed (%)'];
+
     const rows = activeData.map((d) => [
       d.timeSec.toFixed(1),
       d.tk100Level.toFixed(1),
@@ -117,7 +150,7 @@ export const TrendOscilloscope: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `twinforge_trend_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `twinforge_${activeSkid.toLowerCase()}_trend_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -154,7 +187,9 @@ export const TrendOscilloscope: React.FC = () => {
               Process Trend Recorder & Oscilloscope
             </h3>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, marginTop: 2 }}>
-              High-frequency multi-channel telemetry acquisition and transient analysis.
+              {activeSkid === 'PASTEURIZER_10KLPH'
+                ? 'High-frequency telemetry: Holding tube TT5, Feed flow FM, Tank levels, and VFD speed.'
+                : 'High-frequency multi-channel telemetry acquisition and transient analysis.'}
             </p>
           </div>
         </div>

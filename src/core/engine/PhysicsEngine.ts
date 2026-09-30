@@ -337,6 +337,26 @@ export class PhysicsEngine {
       const state = this.states.get(hx.id);
       if (!state) continue;
 
+      if (hx.id === 'PHE-HEATING') {
+        const hwPump = this.states.get('P-HOTWATER');
+        const scvValve = this.states.get('SCV-1');
+        const hwRunning = (hwPump?.speedPct ?? 0) > 10;
+        const steamOpening = (scvValve?.positionPct ?? 0) / 100;
+
+        // If hot water pump is running and steam valve has opening
+        if (hwRunning && steamOpening > 0.05) {
+          const targetTemp = 75.0 + steamOpening * 20.0; // 75 - 95 °C target
+          const currentTemp = state.temperatureC ?? 20.0;
+          const heatRate = 0.65 * dt; // Responsive warm-up into pasteurizing zone in ~5 seconds
+          state.temperatureC = Number((currentTemp + (targetTemp - currentTemp) * heatRate).toFixed(2));
+        } else if (!hwRunning) {
+          // Slowly cool down toward ambient
+          const currentTemp = state.temperatureC ?? 20.0;
+          state.temperatureC = Number(Math.max(20.0, currentTemp - 0.5 * dt).toFixed(2));
+        }
+        continue;
+      }
+
       // If fluid is passing through, heat up toward steam temperature (e.g. 85°C)
       let activeFlow = 0;
       for (const conn of this.topology.connections) {
@@ -350,6 +370,39 @@ export class PhysicsEngine {
         const currentTemp = state.temperatureC ?? 20.0;
         const heatRate = 0.05 * dt; // approach rate
         state.temperatureC = Number((currentTemp + (steamTemp - currentTemp) * heatRate).toFixed(2));
+      }
+    }
+
+    // Specialized Dairy Pasteurizer Tank Mass Dynamics
+    if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
+      const balTank = this.states.get('TK-BALANCE');
+      const prodTank = this.states.get('TK-PRODUCT');
+      const pFeed = this.states.get('P-FEED');
+      const pRaw = this.states.get('P-RAW');
+      const pv1 = this.states.get('PV-1');
+      const pv11 = this.states.get('PV-11');
+      const pv12 = this.states.get('PV-12');
+
+      const feedFlow = ((pFeed?.speedPct ?? 0) / 100) * 166.7;
+      const rawFlow = (pv1?.isOpen && (pRaw?.speedPct ?? 0) > 10) ? 166.7 : 0;
+      const divertFlow = pv12?.isOpen ? feedFlow : 0;
+      const forwardFlow = pv11?.isOpen ? feedFlow : 0;
+
+      // Balance Tank volume integration
+      if (balTank) {
+        const netBalFlow = rawFlow - feedFlow + divertFlow;
+        const deltaBal = netBalFlow * dtMin;
+        const newBalVol = Math.max(50, Math.min(600, (balTank.volumeL ?? 450) + deltaBal));
+        balTank.volumeL = Number(newBalVol.toFixed(2));
+        balTank.levelPct = Number(((newBalVol / 600) * 100).toFixed(2));
+      }
+
+      // Product Storage Silo volume integration
+      if (prodTank && forwardFlow > 0) {
+        const deltaProd = forwardFlow * dtMin;
+        const newProdVol = Math.min(10000, (prodTank.volumeL ?? 1000) + deltaProd);
+        prodTank.volumeL = Number(newProdVol.toFixed(2));
+        prodTank.levelPct = Number(((newProdVol / 10000) * 100).toFixed(2));
       }
     }
   }
@@ -411,7 +464,9 @@ export class PhysicsEngine {
       const feedSpd = feedState?.speedPct ?? 0;
       const boostSpd = boostState?.speedPct ?? 0;
       const hwSpd = hwState?.speedPct ?? 0;
-      const holdingTemp = heatState?.temperatureC ?? 20.0;
+      const heatFault = this.faults.get('PHE-HEATING');
+      const tempOffset = heatFault?.mode === 'sensor_offset' ? (heatFault.value ?? 0) : 0;
+      const holdingTemp = Math.max(0, (heatState?.temperatureC ?? 20.0) + tempOffset);
 
       // 9 Temperature Transmitters
       inputs['TT1'] = Number((balState?.temperatureC ?? 4.0).toFixed(1)); // Balance tank outlet
