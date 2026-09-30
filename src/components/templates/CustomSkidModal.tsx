@@ -21,6 +21,7 @@ import {
   RotateCcw,
   X,
   FileCode,
+  Trash2,
 } from 'lucide-react';
 
 interface CustomSkidModalProps {
@@ -135,6 +136,30 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
   // Reset to Sample Boilerplate
   const handleLoadBoilerplate = () => {
     setJsonText(JSON.stringify(SAMPLE_CUSTOM_BOILERPLATE, null, 2));
+  };
+
+  // Clear Editor
+  const handleClearEditor = () => {
+    setJsonText(
+      JSON.stringify(
+        {
+          meta: {
+            id: 'CUSTOM_SKID',
+            name: 'New Custom Process Skid',
+            category: 'Custom Process',
+          },
+          topology: {
+            tanks: [],
+            valves: [],
+            pumps: [],
+            exchangers: [],
+            connections: [],
+          },
+        },
+        null,
+        2
+      )
+    );
   };
 
   // Deploy to Simulator
@@ -255,6 +280,11 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
             <button onClick={handleLoadBoilerplate} className="btn btn-ghost" style={{ fontSize: 11 }}>
               <RotateCcw size={13} />
               LOAD SAMPLE CIP SKID
+            </button>
+
+            <button onClick={handleClearEditor} className="btn btn-ghost" style={{ fontSize: 11, color: '#dc2626' }}>
+              <Trash2 size={13} />
+              CLEAR
             </button>
           </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSimulationStore, type SkidId } from '../../store/useSimulationStore';
 import { useFatStore } from '../../store/useFatStore';
-import { CheckCircle2, Factory, ArrowRight, Cpu, Shield, Plus, UploadCloud, Edit3 } from 'lucide-react';
+import { CheckCircle2, Factory, ArrowRight, Cpu, Shield, Plus, UploadCloud, Edit3, Trash2 } from 'lucide-react';
 import { CustomSkidModal } from './CustomSkidModal';
 
 interface SiteTemplatesViewProps {
@@ -84,6 +84,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
   const setSkid = useSimulationStore((s) => s.setSkid);
   const customMeta = useSimulationStore((s) => s.customMeta);
   const customTopology = useSimulationStore((s) => s.customTopology);
+  const deleteCustomSkid = useSimulationStore((s) => s.deleteCustomSkid);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -469,6 +470,31 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
                   >
                     <Edit3 size={12} />
                     <span>EDIT JSON</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Delete custom skid template "${customMeta.name}"? This unloads the custom topology and restores the default environment.`)) {
+                        deleteCustomSkid();
+                      }
+                    }}
+                    className="btn btn-ghost"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      color: '#dc2626',
+                      border: '1px solid #fecaca',
+                      background: '#fff1f2',
+                      cursor: 'pointer',
+                    }}
+                    title="Delete this custom skid template"
+                  >
+                    <Trash2 size={12} />
+                    <span>DELETE</span>
                   </button>
 
                   {activeSkid === 'CUSTOM' ? (

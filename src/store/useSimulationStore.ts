@@ -39,6 +39,7 @@ interface SimulationStore {
   // Actions
   setSkid: (skid: SkidId) => void;
   setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => void;
+  deleteCustomSkid: () => void;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -176,6 +177,18 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         snapshot: snap,
         faults: [],
         trendHistory: [],
+      });
+    },
+
+    deleteCustomSkid: () => {
+      stopLoop();
+      const { activeSkid } = get();
+      if (activeSkid === 'CUSTOM') {
+        get().setSkid('PASTEURIZER_10KLPH');
+      }
+      set({
+        customMeta: null,
+        customTopology: null,
       });
     },
 
