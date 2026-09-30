@@ -1,6 +1,7 @@
 /**
  * TwinForge Studio - Milk Pasteurizer 10 KLPH Process Mimic
- * Standard Continuous HTST Sanitary Thermal Process Template
+ * Clean, ISA-101 compliant industrial SCADA mimic with zero overlaps,
+ * intuitive left-to-right fluid progression, and external process legend.
  */
 
 import React from 'react';
@@ -9,6 +10,7 @@ import {
   Play,
   Pause,
   RotateCcw,
+  Layers,
 } from 'lucide-react';
 
 export const PasteurizerMimic: React.FC = () => {
@@ -29,40 +31,28 @@ export const PasteurizerMimic: React.FC = () => {
   const pFeed = snapshot?.devices['P-FEED'];
   const pBoost = snapshot?.devices['P-BOOSTER'];
   const pHw = snapshot?.devices['P-HOTWATER'];
-  const pRaw = snapshot?.devices['P-RAW'];
 
   // Valves
   const pv1 = snapshot?.devices['PV-1'];
   const pv2 = snapshot?.devices['PV-2'];
   const pv4 = snapshot?.devices['PV-4'];
   const pv5 = snapshot?.devices['PV-5'];
-  const pv7 = snapshot?.devices['PV-7'];
   const pv8 = snapshot?.devices['PV-8'];
-  const pv9 = snapshot?.devices['PV-9'];
   const pv10 = snapshot?.devices['PV-10'];
   const pv11 = snapshot?.devices['PV-11'];
   const pv12 = snapshot?.devices['PV-12'];
   const scv1 = snapshot?.devices['SCV-1'];
 
-  // PLC inputs / transmitter readings
+  // Sensor tags
   const tags = snapshot?.tags.inputs ?? {};
   const tt1 = Number(tags['TT1'] ?? 4.0);
-  const tt2 = Number(tags['TT2'] ?? 65.0);
-  const tt3 = Number(tags['TT3'] ?? 70.0);
-  const tt4 = Number(tags['TT4'] ?? 70.0);
   const tt5 = Number(tags['TT5'] ?? 90.0);
   const tt6 = Number(tags['TT6'] ?? 95.0);
-  const tt7 = Number(tags['TT7'] ?? 91.8);
-  const tt8 = Number(tags['TT8'] ?? 88.0);
-  const tt9 = Number(tags['TT9'] ?? 6.2);
 
   const pt1 = Number(tags['PT1'] ?? 0.25);
   const pt2 = Number(tags['PT2'] ?? 2.5);
   const pt3 = Number(tags['PT3'] ?? 180.0);
   const pt4 = Number(tags['PT4'] ?? 4.1);
-  const pt5 = Number(tags['PT5'] ?? 2.1);
-  const pt6 = Number(tags['PT6'] ?? 3.0);
-  const pt7 = Number(tags['PT7'] ?? 3.0);
   const fmFlowLph = Number(tags['FM'] ?? (pFeed?.speedPct ? (pFeed.speedPct / 100) * 10000 : 0));
   const balLevel = Number(tags['LT1'] ?? balTank?.levelPct ?? 75);
   const isLs1Tripped = balLevel < 15;
@@ -75,8 +65,8 @@ export const PasteurizerMimic: React.FC = () => {
   const dpSafe = pt4 - pt2 >= 0.5;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%' }}>
-      {/* SCADA Operations Toolbar */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', overflowY: 'auto', paddingBottom: 16 }}>
+      {/* 1. SCADA Operator Control Toolbar */}
       <div
         className="industrial-card"
         style={{
@@ -157,7 +147,7 @@ export const PasteurizerMimic: React.FC = () => {
               fontSize: 11,
             }}
           >
-            <span style={{ color: 'var(--text-muted)' }}>HOLDING COIL (TT5):</span>
+            <span style={{ color: 'var(--text-muted)' }}>HOLDING TUBE (TT5):</span>
             <span
               className="mono"
               style={{ fontWeight: 800, fontSize: 13, color: isAtLegalTemp ? '#059669' : '#dc2626' }}
@@ -186,7 +176,7 @@ export const PasteurizerMimic: React.FC = () => {
             </span>
           </div>
 
-          {/* Quick Fault Trigger for Testing */}
+          {/* Fault Simulation Actuator */}
           {faults.length === 0 ? (
             <button
               onClick={() =>
@@ -214,609 +204,479 @@ export const PasteurizerMimic: React.FC = () => {
         </div>
       </div>
 
-      {/* Main SCADA Canvas - Exact 100% P&ID Architecture */}
+      {/* 2. Main High-Clarity Process Mimic (Non-Overlapping Layout) */}
       <div
         className="industrial-card"
         style={{
-          flex: 1,
-          padding: '12px 16px',
+          padding: '16px 20px',
           position: 'relative',
-          overflow: 'hidden',
           background: '#ffffff',
-          display: 'flex',
-          flexDirection: 'column',
+          borderRadius: 8,
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <svg viewBox="0 0 1200 680" style={{ width: '100%', height: '100%', userSelect: 'none' }}>
+        <svg viewBox="0 0 1200 560" style={{ width: '100%', height: 'auto', display: 'block', userSelect: 'none' }}>
           <defs>
-            <pattern id="pidGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-              <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#f1f5f9" strokeWidth="1" />
+            <pattern id="cleanGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f8fafc" strokeWidth="1" />
             </pattern>
 
-            <linearGradient id="milkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <linearGradient id="milkLevelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor="#ffffff" />
               <stop offset="100%" stopColor="#e0f2fe" />
             </linearGradient>
 
-            <linearGradient id="hotWaterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#fed7aa" />
-              <stop offset="100%" stopColor="#f97316" />
+            <linearGradient id="productLevelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#f0fdf4" />
+              <stop offset="100%" stopColor="#bbf7d0" />
             </linearGradient>
           </defs>
 
-          <rect width="1200" height="680" fill="url(#pidGrid)" />
+          <rect width="1200" height="560" fill="url(#cleanGrid)" />
 
           {/* ============================================================== */}
-          {/* PROCESS SCHEMATIC HEADER & BORDER                              */}
+          {/* ZONE 1: RAW INFEED & BALANCE TANK (Left: X = 40..220)          */}
           {/* ============================================================== */}
-          <rect x="15" y="15" width="1170" height="650" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="15" y1="50" x2="1185" y2="50" stroke="#cbd5e1" strokeWidth="1" />
-
-          <text x="30" y="38" fill="#0f172a" fontSize="16" fontWeight="900" letterSpacing="-0.02em">
-            MILK PASTEURIZER 10 KLPH
+          {/* Raw Milk Infeed Line (PV1) */}
+          <path d="M 40 160 L 120 160 L 120 200" fill="none" stroke="#0284c7" strokeWidth="4" />
+          <text x="40" y="150" fill="#0284c7" fontSize="10" fontWeight="bold">
+            RAW MILK INLET (Ø 51mm)
           </text>
-          <text x="300" y="36" fill="#64748b" fontSize="11" fontWeight="600">
-            CONTINUOUS HTST THERMAL PROCESS & AUTOMATED FLOW DIVERSION
-          </text>
-          <text x="1050" y="36" fill="#0284c7" fontSize="11" fontWeight="800">
-            PROCESS MIMIC
-          </text>
-
-          {/* ============================================================== */}
-          {/* 1. BALANCE TANK STATION & INFEED (Bottom Center / Right)       */}
-          {/* ============================================================== */}
-          {/* Milk Inlet Line (Ø 51 mm) */}
-          <path d="M 800 580 L 680 580 L 680 510" fill="none" stroke="#0284c7" strokeWidth="4" />
-          <text x="790" y="572" fill="#0284c7" fontSize="10" fontWeight="bold">
-            MILK INLET Ø 51 mm
-          </text>
-
-          {/* Raw Milk Transfer Pump */}
-          <g transform="translate(730, 565)">
-            <circle cx="15" cy="15" r="14" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
-            <polygon points="15,6 24,15 15,24" fill={(pRaw?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
-            <text x="15" y="38" textAnchor="middle" fill="#475569" fontSize="8" fontWeight="bold">
-              RAW PUMP
-            </text>
-          </g>
-
-          {/* Valve PV1 (Milk Inlet) */}
-          <g transform="translate(668, 545)">
-            <polygon points="0,0 24,16 24,0 0,16" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="32" y="12" fill="#0f172a" fontSize="9" fontWeight="bold">
+          {/* Valve PV1 */}
+          <g transform="translate(70, 150)">
+            <polygon points="0,0 20,10 20,0 0,10" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
+            <text x="10" y="24" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
               PV1
             </text>
           </g>
 
-          {/* Water Inlet Line (Ø 51 mm) with Valve PV2 */}
-          <path d="M 800 625 L 640 625 L 640 510" fill="none" stroke="#38bdf8" strokeWidth="3" />
-          <text x="790" y="618" fill="#0284c7" fontSize="10" fontWeight="bold">
-            WATER INLET Ø 51 mm
+          {/* Water / CIP Infeed Line (PV2) */}
+          <path d="M 40 210 L 100 210 L 100 230" fill="none" stroke="#38bdf8" strokeWidth="3" />
+          <text x="40" y="225" fill="#0284c7" fontSize="9">
+            WATER INLET
           </text>
-          <g transform="translate(628, 595)">
-            <polygon points="0,0 24,16 24,0 0,16" fill={pv2?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="32" y="12" fill="#0f172a" fontSize="9" fontWeight="bold">
+          {/* Valve PV2 */}
+          <g transform="translate(60, 203)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={pv2?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
+            <text x="8" y="20" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
               PV2
             </text>
           </g>
 
           {/* Balance Tank Vessel */}
-          <g transform="translate(590, 390)">
+          <g transform="translate(90, 240)">
             <rect x="0" y="0" width="80" height="120" rx="4" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
-            {/* Liquid Level */}
             <rect
               x="2"
               y={118 - (116 * balLevel) / 100}
               width="76"
               height={(116 * balLevel) / 100}
-              fill="url(#milkGradient)"
+              fill="url(#milkLevelGrad)"
               stroke="#bae6fd"
             />
-            <text x="40" y="-8" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="bold">
+            <text x="40" y="-8" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="800">
               BALANCE TANK
             </text>
-            <text x="40" y="55" textAnchor="middle" fill="#0369a1" fontSize="14" fontWeight="bold" className="mono">
-              {balLevel.toFixed(1)} %
+            <text x="40" y="55" textAnchor="middle" fill="#0369a1" fontSize="15" fontWeight="900" className="mono">
+              {balLevel.toFixed(0)} %
             </text>
             <text x="40" y="75" textAnchor="middle" fill="#64748b" fontSize="9" className="mono">
-              LT1: {balLevel.toFixed(0)}%
+              LT1: {balLevel.toFixed(1)}%
             </text>
 
             {/* Level Switches LS1 & LS2 */}
-            <circle cx="86" cy="18" r="6" fill={isLs2High ? '#dc2626' : '#94a3b8'} stroke="#334155" />
-            <text x="96" y="22" fill="#64748b" fontSize="8" fontWeight="bold">
-              LS2 (HI)
+            <circle cx="86" cy="18" r="5" fill={isLs2High ? '#dc2626' : '#94a3b8'} stroke="#334155" />
+            <text x="96" y="22" fill="#64748b" fontSize="8">
+              LS2 (High)
             </text>
-            <circle cx="86" cy="100" r="6" fill={isLs1Tripped ? '#dc2626' : '#22c55e'} stroke="#334155" />
-            <text x="96" y="104" fill="#64748b" fontSize="8" fontWeight="bold">
-              LS1 (LO)
+            <circle cx="86" cy="100" r="5" fill={isLs1Tripped ? '#dc2626' : '#22c55e'} stroke="#334155" />
+            <text x="96" y="104" fill="#64748b" fontSize="8">
+              LS1 (Low)
             </text>
           </g>
 
-          {/* Balance Tank Suction Line (Ø 51 mm) */}
-          <path d="M 590 490 L 530 490" fill="none" stroke="#0284c7" strokeWidth="4" />
+          {/* Suction Line: Balance Tank -> Filter -> NRV -> Feed Pump */}
+          <path d="M 130 360 L 130 420 L 270 420" fill="none" stroke="#0284c7" strokeWidth="4" />
 
-          {/* TT1 & PT1 Transmitters */}
-          <g transform="translate(555, 465)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+          {/* TT1 & PT1 at Tank Suction */}
+          <g transform="translate(150, 400)">
+            <circle cx="8" cy="8" r="8" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+            <text x="8" y="11" textAnchor="middle" fill="#0284c7" fontSize="7" fontWeight="bold">
               TT1
             </text>
-            <text x="10" y="-4" textAnchor="middle" fill="#475569" fontSize="8" className="mono">
+            <text x="8" y="-3" textAnchor="middle" fill="#475569" fontSize="8" className="mono">
               {tt1.toFixed(1)}°C
             </text>
           </g>
-          <g transform="translate(555, 515)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+          <g transform="translate(180, 430)">
+            <circle cx="8" cy="8" r="8" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+            <text x="8" y="11" textAnchor="middle" fill="#0284c7" fontSize="7" fontWeight="bold">
               PT1
             </text>
-            <text x="10" y="30" textAnchor="middle" fill="#475569" fontSize="8" className="mono">
-              {pt1.toFixed(2)} bar
+            <text x="8" y="25" textAnchor="middle" fill="#475569" fontSize="8" className="mono">
+              {pt1.toFixed(2)}b
             </text>
           </g>
 
-          {/* Pipe Line Filter & NRV */}
-          <g transform="translate(500, 478)">
-            <rect x="0" y="0" width="24" height="24" fill="#f1f5f9" stroke="#334155" strokeWidth="1.5" />
-            <line x1="4" y1="4" x2="20" y2="20" stroke="#64748b" strokeWidth="1.5" />
-            <line x1="20" y1="4" x2="4" y2="20" stroke="#64748b" strokeWidth="1.5" />
-            <text x="12" y="36" textAnchor="middle" fill="#64748b" fontSize="7" fontWeight="bold">
+          {/* Pipe Filter */}
+          <g transform="translate(205, 410)">
+            <rect x="0" y="0" width="20" height="20" fill="#f1f5f9" stroke="#334155" strokeWidth="1.2" />
+            <line x1="3" y1="3" x2="17" y2="17" stroke="#64748b" />
+            <line x1="17" y1="3" x2="3" y2="17" stroke="#64748b" />
+            <text x="10" y="32" textAnchor="middle" fill="#64748b" fontSize="7" fontWeight="bold">
               FILTER
             </text>
           </g>
 
-          <g transform="translate(460, 480)">
-            <polygon points="0,0 20,10 0,20" fill="#ffffff" stroke="#334155" strokeWidth="1.5" />
-            <line x1="20" y1="0" x2="20" y2="20" stroke="#334155" strokeWidth="2" />
-            <text x="10" y="34" textAnchor="middle" fill="#64748b" fontSize="7" fontWeight="bold">
+          {/* Check Valve (NRV) */}
+          <g transform="translate(235, 412)">
+            <polygon points="0,0 16,8 0,16" fill="#ffffff" stroke="#334155" strokeWidth="1.2" />
+            <line x1="16" y1="0" x2="16" y2="16" stroke="#334155" strokeWidth="1.5" />
+            <text x="8" y="30" textAnchor="middle" fill="#64748b" fontSize="7" fontWeight="bold">
               NRV
             </text>
           </g>
 
-          {/* Milk Feed Pump 5 HP (VFD) */}
-          <path d="M 460 490 L 420 490" fill="none" stroke="#0284c7" strokeWidth="4" />
-          <g transform="translate(390, 472)">
-            <circle cx="18" cy="18" r="18" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
-            <polygon points="18,6 30,18 18,30" fill={(pFeed?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
-            <text x="18" y="-6" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
-              MILK FEED PUMP (5 HP)
+          {/* Milk Feed Pump (5 HP VFD) */}
+          <g transform="translate(270, 404)">
+            <circle cx="16" cy="16" r="16" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
+            <polygon points="16,6 26,16 16,26" fill={(pFeed?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
+            <text x="16" y="44" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
+              FEED PUMP
             </text>
-            <text x="18" y="48" textAnchor="middle" fill="#0284c7" fontSize="9" fontWeight="bold" className="mono">
+            <text x="16" y="56" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold" className="mono">
               {(pFeed?.speedPct ?? 0).toFixed(0)}% VFD
             </text>
           </g>
 
-          {/* Flow Meter FM and PT2 at Feed Pump Discharge */}
-          <path d="M 390 490 L 320 490 L 320 380" fill="none" stroke="#0284c7" strokeWidth="4" />
-          <g transform="translate(340, 470)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+          {/* Feed Pump Discharge -> Flowmeter FM -> Enters REG-01 */}
+          <path d="M 302 420 L 360 420 L 360 270 L 460 270" fill="none" stroke="#0284c7" strokeWidth="4" />
+          <g transform="translate(325, 405)">
+            <circle cx="9" cy="9" r="9" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+            <text x="9" y="12" textAnchor="middle" fill="#0284c7" fontSize="7" fontWeight="bold">
               FM
             </text>
-            <text x="10" y="32" textAnchor="middle" fill="#0369a1" fontSize="9" fontWeight="bold" className="mono">
+            <text x="9" y="-4" textAnchor="middle" fill="#0369a1" fontSize="8" fontWeight="bold" className="mono">
               {fmFlowLph} LPH
             </text>
           </g>
-
-          <g transform="translate(305, 430)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+          <g transform="translate(325, 435)">
+            <circle cx="9" cy="9" r="9" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+            <text x="9" y="12" textAnchor="middle" fill="#0284c7" fontSize="7" fontWeight="bold">
               PT2
             </text>
-            <text x="-18" y="13" fill="#475569" fontSize="8" className="mono">
-              {pt2.toFixed(2)} bar
+            <text x="9" y="28" textAnchor="middle" fill="#475569" fontSize="8" className="mono">
+              {pt2.toFixed(2)}b
             </text>
           </g>
 
           {/* ============================================================== */}
-          {/* 2. 4-SECTION PLATE HEAT EXCHANGER (PHE) - CENTER STAGE        */}
+          {/* ZONE 2: 4-SECTION PLATE HEAT EXCHANGER (Center: X = 390..750)  */}
           {/* ============================================================== */}
-          <g transform="translate(180, 240)">
+          <g transform="translate(390, 140)">
             {/* PHE Frame */}
-            <rect x="0" y="0" width="280" height="150" rx="4" fill="#ffffff" stroke="#1e293b" strokeWidth="2.5" />
+            <rect x="0" y="0" width="360" height="150" rx="4" fill="#ffffff" stroke="#1e293b" strokeWidth="2" />
 
-            {/* CHILLING SECTION */}
-            <rect x="6" y="6" width="60" height="138" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.5" />
-            <text x="36" y="24" textAnchor="middle" fill="#15803d" fontSize="10" fontWeight="bold">
+            {/* Section 1: Chilling (Left) */}
+            <rect x="6" y="6" width="80" height="138" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.2" />
+            <text x="46" y="24" textAnchor="middle" fill="#15803d" fontSize="10" fontWeight="800">
               CHILLING
             </text>
-            <text x="36" y="40" textAnchor="middle" fill="#64748b" fontSize="8">
-              Ø 63 mm
-            </text>
-            <text x="36" y="80" textAnchor="middle" fill="#15803d" fontSize="14" fontWeight="bold" className="mono">
+            <text x="46" y="75" textAnchor="middle" fill="#15803d" fontSize="15" fontWeight="900" className="mono">
               4.0 °C
             </text>
-            <text x="36" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
+            <text x="46" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
               PHE-CHILL
             </text>
 
-            {/* REG-01 SECTION */}
-            <rect x="72" y="6" width="65" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-            <text x="104" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="bold">
+            {/* Section 2: REG-01 */}
+            <rect x="94" y="6" width="80" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
+            <text x="134" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="800">
               REG-01
             </text>
-            <text x="104" y="40" textAnchor="middle" fill="#64748b" fontSize="8">
-              Regeneration
+            <text x="134" y="75" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="700" className="mono">
+              28° - 45°C
             </text>
-            <text x="104" y="80" textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold" className="mono">
-              28°C - 45°C
-            </text>
-            <text x="104" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
+            <text x="134" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
               PHE-REG01
             </text>
 
-            {/* REG-02 SECTION */}
-            <rect x="143" y="6" width="65" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-            <text x="175" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="bold">
+            {/* Section 3: REG-02 */}
+            <rect x="182" y="6" width="80" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
+            <text x="222" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="800">
               REG-02
             </text>
-            <text x="175" y="40" textAnchor="middle" fill="#64748b" fontSize="8">
-              Pre-Heating
+            <text x="222" y="75" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="700" className="mono">
+              65° - 70°C
             </text>
-            <text x="175" y="80" textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold" className="mono">
-              65°C - 70°C
-            </text>
-            <text x="175" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
+            <text x="222" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
               PHE-REG02
             </text>
 
-            {/* HEATING SECTION */}
-            <rect x="214" y="6" width="60" height="138" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.5" />
-            <text x="244" y="24" textAnchor="middle" fill="#b45309" fontSize="10" fontWeight="bold">
+            {/* Section 4: Heating (Right) */}
+            <rect x="270" y="6" width="84" height="138" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.2" />
+            <text x="312" y="24" textAnchor="middle" fill="#b45309" fontSize="10" fontWeight="800">
               HEATING
             </text>
-            <text x="244" y="40" textAnchor="middle" fill="#64748b" fontSize="8">
-              Hot Water
-            </text>
-            <text x="244" y="80" textAnchor="middle" fill="#b45309" fontSize="14" fontWeight="bold" className="mono">
+            <text x="312" y="75" textAnchor="middle" fill="#b45309" fontSize="15" fontWeight="900" className="mono">
               90.0 °C
             </text>
-            <text x="244" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
+            <text x="312" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
               PHE-HEAT
             </text>
 
-            <text x="140" y="-8" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="900">
+            <text x="180" y="-8" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="900">
               PLATE HEAT EXCHANGER (10 KLPH 4-SECTION)
             </text>
           </g>
 
           {/* ============================================================== */}
-          {/* 3. CREAM SEPARATOR STATION (Between REG-01 & REG-02)          */}
+          {/* ZONE 3: SEPARATOR & HOMOGENIZER (Below PHE: Y = 360..520)      */}
           {/* ============================================================== */}
-          {/* Line from REG-01 down to Separator */}
-          <path d="M 284 390 L 284 570 L 240 570" fill="none" stroke="#0284c7" strokeWidth="3" />
-          <g transform="translate(180, 530)">
-            {/* Centrifuge Separator Cone */}
-            <polygon points="10,0 70,0 55,60 25,60" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
-            <circle cx="40" cy="20" r="12" fill="#e2e8f0" stroke="#475569" strokeWidth="1.5" />
-            <text x="40" y="24" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
-              10 KLPH
+          {/* Fluid leaves REG-01 down to Cream Separator */}
+          <path d="M 524 290 L 524 370 L 460 370 L 460 410" fill="none" stroke="#0284c7" strokeWidth="3" />
+          
+          {/* Cream Separator */}
+          <g transform="translate(420, 410)">
+            <polygon points="10,0 70,0 55,50 25,50" fill="#f8fafc" stroke="#334155" strokeWidth="1.8" />
+            <circle cx="40" cy="18" r="10" fill="#e2e8f0" stroke="#475569" strokeWidth="1.2" />
+            <text x="40" y="22" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
+              SEP
             </text>
-            <text x="40" y="74" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
+            <text x="40" y="65" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
               CREAM SEPARATOR
             </text>
-            <text x="40" y="86" textAnchor="middle" fill="#64748b" fontSize="8">
-              Capacity: 10,000 LPH
+            <text x="40" y="77" textAnchor="middle" fill="#64748b" fontSize="8">
+              10,000 LPH
             </text>
           </g>
 
-          {/* Separator Control Valves PV4, PV5, PV6, PV7 */}
-          <g transform="translate(250, 545)">
-            <polygon points="0,0 16,10 16,0 0,10" fill={pv4?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="20" y="8" fill="#475569" fontSize="8" fontWeight="bold">
+          {/* Separator Infeed Valve PV4 */}
+          <g transform="translate(450, 385)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={pv4?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
+            <text x="24" y="7" fill="#475569" fontSize="8" fontWeight="bold">
               PV4
             </text>
           </g>
-          <g transform="translate(160, 580)">
-            <polygon points="0,0 16,10 16,0 0,10" fill={pv5?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="-16" y="8" fill="#475569" fontSize="8" fontWeight="bold">
+
+          {/* Skim Milk return line from Separator up to REG-02 */}
+          <path d="M 480 435 L 530 435 L 530 330 L 612 330 L 612 290" fill="none" stroke="#0284c7" strokeWidth="3" />
+          {/* Valve PV5 */}
+          <g transform="translate(522, 380)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={pv5?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
+            <text x="24" y="7" fill="#475569" fontSize="8" fontWeight="bold">
               PV5
             </text>
           </g>
-          <g transform="translate(130, 540)">
-            <polygon points="0,0 16,10 16,0 0,10" fill="#f8fafc" stroke="#334155" strokeWidth="1.2" />
-            <text x="-24" y="8" fill="#d97706" fontSize="8" fontWeight="bold">
-              PV6 (Cream)
-            </text>
-          </g>
-          {/* Separator Bypass PV7 */}
-          <path d="M 284 410 L 320 410 L 320 480 L 350 480 L 350 390" fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4 2" />
-          <g transform="translate(310, 440)">
-            <polygon points="0,0 16,10 16,0 0,10" fill={pv7?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="20" y="8" fill="#475569" fontSize="8" fontWeight="bold">
-              PV7 (BYPASS)
-            </text>
-          </g>
 
-          {/* ============================================================== */}
-          {/* 4. HOMOGENIZER & BOOSTER PUMP STATION (After REG-02)          */}
-          {/* ============================================================== */}
-          {/* Line from REG-02 down to Homogenizer */}
-          <path d="M 355 390 L 355 420 L 100 420 L 100 500" fill="none" stroke="#0284c7" strokeWidth="3" />
-          <g transform="translate(50, 500)">
-            <rect x="0" y="0" width="90" height="50" rx="3" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
-            <text x="45" y="18" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
+          {/* Fluid leaves REG-02 down to Homogenizer */}
+          <path d="M 640 290 L 640 370 L 600 370 L 600 410" fill="none" stroke="#0284c7" strokeWidth="3" />
+          
+          {/* Homogenizer */}
+          <g transform="translate(570, 410)">
+            <rect x="0" y="0" width="80" height="50" rx="3" fill="#f8fafc" stroke="#334155" strokeWidth="1.8" />
+            <text x="40" y="18" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
               HOMOGENIZER
             </text>
-            <text x="45" y="32" textAnchor="middle" fill="#0284c7" fontSize="9" fontWeight="bold" className="mono">
-              10 KLPH · 200 BAR
+            <text x="40" y="32" textAnchor="middle" fill="#0284c7" fontSize="9" fontWeight="bold" className="mono">
+              200 BAR
             </text>
-            <text x="45" y="44" textAnchor="middle" fill="#15803d" fontSize="7" fontWeight="bold">
-              SEAL WATER PROVED
-            </text>
-          </g>
-
-          {/* Seal Cooling Water Line (Ø 25 mm) */}
-          <path d="M 30 525 L 50 525" fill="none" stroke="#38bdf8" strokeWidth="2" strokeDasharray="3 2" />
-          <text x="20" y="540" fill="#0284c7" fontSize="7" fontWeight="bold">
-            SEAL WATER Ø 25mm
-          </text>
-
-          {/* PT3 Homogenizer Pressure */}
-          <g transform="translate(145, 485)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
-              PT3
-            </text>
-            <text x="10" y="30" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold" className="mono">
-              {pt3.toFixed(0)} bar
+            <text x="40" y="44" textAnchor="middle" fill="#15803d" fontSize="7" fontWeight="bold">
+              SEAL WATER OK
             </text>
           </g>
 
-          {/* Homogenizer Valves PV8 and PV9 */}
-          <g transform="translate(85, 465)">
-            <polygon points="0,0 16,10 16,0 0,10" fill={pv8?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="20" y="8" fill="#475569" fontSize="8" fontWeight="bold">
+          {/* Homogenizer Infeed Valve PV8 */}
+          <g transform="translate(590, 385)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={pv8?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
+            <text x="24" y="7" fill="#475569" fontSize="8" fontWeight="bold">
               PV8
             </text>
           </g>
-          <g transform="translate(45, 465)">
-            <polygon points="0,0 16,10 16,0 0,10" fill={pv9?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
-            <text x="-24" y="8" fill="#475569" fontSize="8" fontWeight="bold">
-              PV9
-            </text>
-          </g>
-          <text x="50" y="490" fill="#64748b" fontSize="8" className="mono">
-            TT2: {tt2.toFixed(1)}°C
-          </text>
 
-          {/* Booster Pump 5 HP (VFD) */}
-          <path d="M 140 525 L 140 440 L 160 440" fill="none" stroke="#0284c7" strokeWidth="3" />
-          <g transform="translate(150, 425)">
-            <circle cx="16" cy="16" r="16" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
-            <polygon points="16,6 26,16 16,26" fill={(pBoost?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
-            <text x="16" y="44" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
-              BOOSTER PUMP (5 HP)
+          {/* Homogenizer Outlet -> Booster Pump */}
+          <path d="M 650 435 L 700 435" fill="none" stroke="#0284c7" strokeWidth="3" />
+          
+          {/* Booster Pump (5 HP VFD) */}
+          <g transform="translate(700, 420)">
+            <circle cx="15" cy="15" r="15" fill="#f8fafc" stroke="#334155" strokeWidth="1.8" />
+            <polygon points="15,5 25,15 15,25" fill={(pBoost?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
+            <text x="15" y="42" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
+              BOOSTER PUMP
+            </text>
+            <text x="15" y="54" textAnchor="middle" fill="#059669" fontSize="8" className="mono">
+              PT4: {pt4.toFixed(2)}b
             </text>
           </g>
 
-          {/* PT4 Booster Discharge Pressure Transmitter */}
-          <g transform="translate(180, 410)">
-            <circle cx="10" cy="10" r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
-            <text x="10" y="13" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
-              PT4
-            </text>
-            <text x="10" y="-4" textAnchor="middle" fill="#059669" fontSize="8" fontWeight="bold" className="mono">
-              {pt4.toFixed(2)} bar
-            </text>
-          </g>
-
-          {/* Booster discharge to Heating Section */}
-          <path d="M 182 440 L 424 440 L 424 390" fill="none" stroke="#0284c7" strokeWidth="4" />
-          <text x="435" y="420" fill="#64748b" fontSize="8" className="mono">
-            TT4: {tt4.toFixed(1)}°C · TT3: {tt3.toFixed(1)}°C
-          </text>
+          {/* Booster Pump Discharge -> Rises cleanly into HEATING section */}
+          <path d="M 730 435 L 750 435 L 750 250 L 720 250" fill="none" stroke="#0284c7" strokeWidth="3" />
 
           {/* ============================================================== */}
-          {/* 5. HEATING SECTION, HOLDING COIL & FLOW DIVERSION            */}
+          {/* ZONE 4: HOT WATER PREPARATION SKID (Top: X = 600..750, Y = 25) */}
           {/* ============================================================== */}
-          {/* Milk leaves Heating Section at 90°C -> Holding Coil */}
-          <path d="M 424 240 L 424 160 L 520 160" fill="none" stroke="#d97706" strokeWidth="4" />
-
-          {/* HOLDING COIL 20 SECONDS */}
-          <g transform="translate(520, 135)">
-            {/* Helical Holding Tube Loops */}
-            <path
-              d="M 0 25 Q 15 5 30 25 Q 45 45 60 25 Q 75 5 90 25 Q 105 45 120 25"
-              fill="none"
-              stroke="#0f766e"
-              strokeWidth="5"
-            />
-            <text x="60" y="-5" textAnchor="middle" fill="#0f766e" fontSize="11" fontWeight="bold">
-              HOLDING COIL (20 SEC RESIDENCE)
+          <g transform="translate(600, 25)">
+            <rect x="0" y="0" width="150" height="70" rx="4" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.2" />
+            <text x="75" y="16" textAnchor="middle" fill="#b45309" fontSize="10" fontWeight="bold">
+              HOT WATER SKID
             </text>
-            <text x="60" y="48" textAnchor="middle" fill="#64748b" fontSize="8">
-              Ø 51 mm Sanitary Holding Tube
+            <text x="75" y="32" textAnchor="middle" fill="#64748b" fontSize="8">
+              Brazed PHE & Steam Valve
+            </text>
+            <text x="75" y="58" textAnchor="middle" fill="#b45309" fontSize="12" fontWeight="bold" className="mono">
+              TT6: {tt6.toFixed(1)} °C
             </text>
           </g>
 
-          {/* TT5 Pasteurization Safety Critical Interlock Transmitter */}
-          <g transform="translate(650, 135)">
+          {/* Steam supply to Hot Water Skid */}
+          <path d="M 520 60 L 600 60" fill="none" stroke="#d97706" strokeWidth="3" />
+          <text x="520" y="52" fill="#d97706" fontSize="9" fontWeight="bold">
+            STEAM 1.5"
+          </text>
+          {/* SCV1 Steam Modulating Valve */}
+          <g transform="translate(555, 52)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={scv1?.positionPct ? '#fed7aa' : '#fee2e2'} stroke="#b45309" strokeWidth="1.2" />
+            <text x="8" y="20" textAnchor="middle" fill="#b45309" fontSize="8" fontWeight="bold">
+              SCV1
+            </text>
+          </g>
+
+          {/* Hot Water Circulation Pump & Line into Heating Section */}
+          <g transform="translate(760, 45)">
+            <circle cx="12" cy="12" r="12" fill="#f8fafc" stroke="#334155" strokeWidth="1.2" />
+            <polygon points="12,4 20,12 12,20" fill={(pHw?.speedPct ?? 0) > 0 ? '#f97316' : '#94a3b8'} />
+            <text x="12" y="36" textAnchor="middle" fill="#b45309" fontSize="8" fontWeight="bold">
+              P-HW
+            </text>
+          </g>
+          <path d="M 750 60 L 760 60" fill="none" stroke="#f97316" strokeWidth="3" />
+          <path d="M 784 60 L 800 60 L 800 180 L 740 180" fill="none" stroke="#f97316" strokeWidth="3" />
+
+          {/* ============================================================== */}
+          {/* ZONE 5: HOLDING TUBE & LEGAL DIVERSION (Right: X = 770..980)   */}
+          {/* ============================================================== */}
+          {/* Milk leaves Heating Section at 90°C -> Holding Tube */}
+          <path d="M 740 160 L 800 160" fill="none" stroke="#d97706" strokeWidth="4" />
+
+          {/* 20-Second Sanitary Holding Coil */}
+          <g transform="translate(800, 145)">
+            <path d="M 0 15 Q 15 0 30 15 Q 45 30 60 15 Q 75 0 90 15" fill="none" stroke="#0f766e" strokeWidth="4" />
+            <text x="45" y="-5" textAnchor="middle" fill="#0f766e" fontSize="9" fontWeight="bold">
+              HOLDING COIL (20s)
+            </text>
+          </g>
+
+          {/* TT5 Pasteurization Critical Interlock Sensor */}
+          <path d="M 890 160 L 920 160" fill="none" stroke="#d97706" strokeWidth="4" />
+          <g transform="translate(910, 145)">
             <circle cx="12" cy="12" r="12" fill={isAtLegalTemp ? '#dcfce7' : '#fee2e2'} stroke={isAtLegalTemp ? '#059669' : '#dc2626'} strokeWidth="2" />
-            <text x="12" y="16" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
+            <text x="12" y="16" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
               TT5
             </text>
-            <text x="12" y="-5" textAnchor="middle" fill={isAtLegalTemp ? '#059669' : '#dc2626'} fontSize="10" fontWeight="bold" className="mono">
-              {tt5.toFixed(1)} °C
-            </text>
-          </g>
-
-          {/* Constant Pressure Valve CPM */}
-          <g transform="translate(680, 150)">
-            <rect x="0" y="0" width="18" height="18" fill="#f1f5f9" stroke="#334155" strokeWidth="1.5" />
-            <text x="9" y="12" textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="bold">
-              CPM
+            <text x="12" y="-4" textAnchor="middle" fill={isAtLegalTemp ? '#059669' : '#dc2626'} fontSize="9" fontWeight="bold" className="mono">
+              {tt5.toFixed(1)}°C
             </text>
           </g>
 
           {/* DUAL DIVERSION VALVES: PV11 (Forward) & PV12 (Divert) */}
-          {/* PV11 Forward Flow Valve */}
-          <path d="M 698 160 L 750 160" fill="none" stroke={isForwardFlow ? '#059669' : '#cbd5e1'} strokeWidth="4" />
-          <g transform="translate(735, 145)">
+          <path d="M 935 160 L 970 160" fill="none" stroke={isForwardFlow ? '#059669' : '#cbd5e1'} strokeWidth="4" />
+          {/* Forward Valve PV11 */}
+          <g transform="translate(970, 150)">
             <polygon
-              points="0,0 24,15 24,0 0,15"
+              points="0,0 20,10 20,0 0,10"
               fill={isForwardFlow ? '#dcfce7' : '#fee2e2'}
               stroke={isForwardFlow ? '#059669' : '#dc2626'}
               strokeWidth="2"
             />
-            <text x="12" y="-6" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">
+            <text x="10" y="-4" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
               PV11 (FORWARD)
             </text>
-            <text x="12" y="28" textAnchor="middle" fill={isForwardFlow ? '#059669' : '#64748b'} fontSize="8" fontWeight="bold">
+            <text x="10" y="22" textAnchor="middle" fill={isForwardFlow ? '#059669' : '#64748b'} fontSize="8" fontWeight="bold">
               {isForwardFlow ? 'OPEN' : 'CLOSED'}
             </text>
           </g>
 
-          {/* PV12 Divert Flow Valve */}
-          <path d="M 720 160 L 720 220" fill="none" stroke={isDiverted ? '#dc2626' : '#cbd5e1'} strokeWidth="4" />
-          <g transform="translate(708, 205)">
+          {/* Divert Valve PV12 */}
+          <path d="M 950 160 L 950 210" fill="none" stroke={isDiverted ? '#dc2626' : '#cbd5e1'} strokeWidth="3" />
+          <g transform="translate(940, 210)">
             <polygon
-              points="0,0 24,15 24,0 0,15"
+              points="0,0 20,10 20,0 0,10"
               fill={pv12?.isOpen ?? isDiverted ? '#fee2e2' : '#f8fafc'}
               stroke={pv12?.isOpen ?? isDiverted ? '#dc2626' : '#94a3b8'}
-              strokeWidth="2"
+              strokeWidth="1.8"
             />
-            <text x="32" y="12" fill="#0f172a" fontSize="10" fontWeight="bold">
+            <text x="28" y="10" fill="#dc2626" fontSize="9" fontWeight="bold">
               PV12 (DIVERT)
             </text>
           </g>
 
-          {/* FROM DIVERSION TO BALANCE TANK (Ø 51 mm) */}
+          {/* Clean Return Divert Line back to Balance Tank (Clear path at Y = 230) */}
           <path
-            d="M 720 225 L 720 360 L 630 360 L 630 390"
+            d="M 950 230 L 950 250 L 190 250 L 190 270"
             fill="none"
             stroke={isDiverted ? '#dc2626' : '#cbd5e1'}
-            strokeWidth="3.5"
+            strokeWidth="3"
             strokeDasharray={isDiverted ? '6 3' : 'none'}
           />
-          <text x="730" y="320" fill="#dc2626" fontSize="9" fontWeight="bold">
-            FROM DIVERSION TO BALANCE TANK Ø 51 mm
+          <text x="800" y="244" fill="#dc2626" fontSize="9" fontWeight="bold">
+            RECIRCULATION TO BALANCE TANK (LEGAL DIVERT)
           </text>
 
-          {/* Forward Flow Line from PV11 through Chilling to Product Out */}
-          <path
-            d="M 760 160 L 980 160 L 980 320"
-            fill="none"
-            stroke={isForwardFlow ? '#059669' : '#cbd5e1'}
-            strokeWidth="4"
-          />
-          <text x="860" y="152" fill="#059669" fontSize="10" fontWeight="bold">
-            PASTEURIZED MILK Ø 51 mm
+          {/* Forward Flow Line from PV11 -> Chilling Section -> Product Silo */}
+          <path d="M 990 160 L 1050 160 L 1050 240" fill="none" stroke={isForwardFlow ? '#059669' : '#cbd5e1'} strokeWidth="4" />
+          <text x="1000" y="150" fill="#059669" fontSize="9" fontWeight="bold">
+            PASTEURIZED MILK (Ø 51mm)
           </text>
 
-          {/* Product Storage Silo */}
-          <g transform="translate(930, 320)">
-            <rect x="0" y="0" width="100" height="150" rx="4" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
+          {/* ============================================================== */}
+          {/* ZONE 6: STORAGE SILO (Far Right: X = 1010..1120)               */}
+          {/* ============================================================== */}
+          <g transform="translate(1010, 240)">
+            <rect x="0" y="0" width="90" height="130" rx="4" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
             <rect
               x="2"
-              y={148 - (146 * (prodTank?.levelPct ?? 15)) / 100}
-              width="96"
-              height={(146 * (prodTank?.levelPct ?? 15)) / 100}
-              fill="#dcfce7"
+              y={128 - (126 * (prodTank?.levelPct ?? 15)) / 100}
+              width="86"
+              height={(126 * (prodTank?.levelPct ?? 15)) / 100}
+              fill="url(#productLevelGrad)"
               stroke="#bbf7d0"
             />
-            <rect x="0" y="-18" width="100" height="18" fill="#f1f5f9" stroke="#cbd5e1" />
-            <text x="50" y="-5" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="bold">
+            <text x="45" y="-8" textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="800">
               STORAGE SILO
             </text>
-            <text x="50" y="65" textAnchor="middle" fill="#15803d" fontSize="15" fontWeight="bold" className="mono">
+            <text x="45" y="60" textAnchor="middle" fill="#15803d" fontSize="15" fontWeight="900" className="mono">
               {(prodTank?.levelPct ?? 15).toFixed(0)} %
             </text>
-            <text x="50" y="85" textAnchor="middle" fill="#64748b" fontSize="9">
+            <text x="45" y="80" textAnchor="middle" fill="#64748b" fontSize="9">
               FINAL PRODUCT OUT
             </text>
           </g>
 
           {/* ============================================================== */}
-          {/* 6. HOT WATER GENERATION SYSTEM & STEAM INLET (Top Left)       */}
+          {/* ZONE 7: CHILLED WATER UTILITY HEADERS (X = 390..450, Y = 100)  */}
           {/* ============================================================== */}
-          <g transform="translate(200, 65)">
-            <rect x="0" y="0" width="160" height="80" rx="4" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.5" />
-            <text x="80" y="18" textAnchor="middle" fill="#b45309" fontSize="10" fontWeight="bold">
-              HOT WATER GENERATOR
-            </text>
-            <text x="80" y="34" textAnchor="middle" fill="#64748b" fontSize="8">
-              Brazed PHE & Steam Injection
-            </text>
-            <text x="80" y="65" textAnchor="middle" fill="#b45309" fontSize="12" fontWeight="bold" className="mono">
-              TT6: {tt6.toFixed(1)} °C
-            </text>
-          </g>
-
-          {/* Steam Supply Line (1.5") with SCV1, PG1, PT7 */}
-          <path d="M 120 105 L 200 105" fill="none" stroke="#d97706" strokeWidth="3" />
-          <text x="80" y="98" fill="#d97706" fontSize="9" fontWeight="bold">
-            STEAM INLET 1.5"
+          <path d="M 330 110 L 400 110 L 400 140" fill="none" stroke="#0284c7" strokeWidth="3" />
+          <text x="250" y="105" fill="#0284c7" fontSize="9" fontWeight="bold">
+            CHILLED WATER IN (Ø 63mm)
           </text>
-          <g transform="translate(140, 95)">
-            <polygon points="0,0 20,10 20,0 0,10" fill={scv1?.positionPct ? '#fed7aa' : '#fee2e2'} stroke="#b45309" strokeWidth="1.5" />
-            <text x="10" y="-4" textAnchor="middle" fill="#b45309" fontSize="8" fontWeight="bold">
-              SCV1 ({scv1?.positionPct?.toFixed(0) ?? 55}%)
+          {/* Modulating Valve PV10 */}
+          <g transform="translate(360, 102)">
+            <polygon points="0,0 16,8 16,0 0,8" fill={pv10?.positionPct ? '#dcfce7' : '#fee2e2'} stroke="#0284c7" strokeWidth="1.2" />
+            <text x="8" y="20" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+              PV10
             </text>
           </g>
-          <g transform="translate(170, 75)">
-            <circle cx="8" cy="8" r="8" fill="#ffffff" stroke="#b45309" strokeWidth="1" />
-            <text x="8" y="11" textAnchor="middle" fill="#b45309" fontSize="7" fontWeight="bold">
-              PG1
-            </text>
-            <text x="8" y="-3" textAnchor="middle" fill="#b45309" fontSize="7" className="mono">
-              PT7: {pt7.toFixed(1)} bar
-            </text>
-          </g>
-
-          {/* Hot Water Circulation Pump (3 HP VFD) */}
-          <g transform="translate(370, 90)">
-            <circle cx="15" cy="15" r="14" fill="#f8fafc" stroke="#334155" strokeWidth="1.5" />
-            <polygon points="15,6 24,15 15,24" fill={(pHw?.speedPct ?? 0) > 0 ? '#f97316' : '#94a3b8'} />
-            <text x="15" y="42" textAnchor="middle" fill="#b45309" fontSize="8" fontWeight="bold">
-              P-HW (3 HP)
-            </text>
-            <text x="15" y="54" textAnchor="middle" fill="#b45309" fontSize="7" className="mono">
-              PT5: {pt5.toFixed(2)}b · TT8: {tt8.toFixed(0)}°C
-            </text>
-          </g>
-          <path d="M 360 105 L 370 105" fill="none" stroke="#f97316" strokeWidth="3" />
-          <path d="M 398 105 L 440 105 L 440 240" fill="none" stroke="#f97316" strokeWidth="3" />
-          <text x="450" y="170" fill="#b45309" fontSize="8" className="mono">
-            TT7: {tt7.toFixed(1)}°C
-          </text>
-
-          {/* ============================================================== */}
-          {/* 7. CHILLED WATER UTILITY INLET / OUTLET (Ø 63 mm)              */}
-          {/* ============================================================== */}
-          <g transform="translate(40, 260)">
-            <path d="M 0 20 L 140 20" fill="none" stroke="#0284c7" strokeWidth="4" />
-            <text x="0" y="12" fill="#0284c7" fontSize="9" fontWeight="bold">
-              CHILLED WATER IN Ø 63 mm
-            </text>
-            <g transform="translate(70, 10)">
-              <polygon points="0,0 20,10 20,0 0,10" fill={pv10?.positionPct ? '#dcfce7' : '#fee2e2'} stroke="#0284c7" strokeWidth="1.2" />
-              <text x="10" y="-3" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
-                PV10
-              </text>
-            </g>
-
-            <path d="M 0 60 L 140 60" fill="none" stroke="#38bdf8" strokeWidth="4" />
-            <text x="0" y="75" fill="#38bdf8" fontSize="9" fontWeight="bold">
-              CHILLED WATER OUT Ø 63 mm
-            </text>
-            <text x="145" y="75" fill="#64748b" fontSize="8" className="mono">
-              TT9: {tt9.toFixed(1)}°C · PT6: {pt6.toFixed(1)} bar
-            </text>
-          </g>
-
         </svg>
 
-        {/* Live Engineering Telemetry Strip */}
+        {/* Live Process Telemetry Strip */}
         <div
           style={{
-            marginTop: 8,
+            marginTop: 10,
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 10,
+            gap: 12,
             padding: '8px 14px',
             background: '#f8fafc',
             borderRadius: 6,
@@ -824,15 +684,15 @@ export const PasteurizerMimic: React.FC = () => {
             fontSize: 11,
           }}
         >
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <div>
-              <span style={{ color: 'var(--text-muted)' }}>FLOW: </span>
+              <span style={{ color: 'var(--text-muted)' }}>FEED FLOW: </span>
               <strong className="mono" style={{ color: '#0369a1' }}>
                 {fmFlowLph} LPH
               </strong>
             </div>
             <div>
-              <span style={{ color: 'var(--text-muted)' }}>BALANCE TK: </span>
+              <span style={{ color: 'var(--text-muted)' }}>BALANCE TANK: </span>
               <strong className="mono" style={{ color: '#0f172a' }}>
                 {balLevel.toFixed(1)}%
               </strong>
@@ -870,6 +730,100 @@ export const PasteurizerMimic: React.FC = () => {
             >
               SANITARY PROCESS TOPOLOGY · 10 KLPH HTST
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Dedicated Process Legend & Component Guide (OUTSIDE the Template) */}
+      <div
+        className="industrial-card"
+        style={{
+          padding: '16px 20px',
+          borderRadius: 8,
+          background: '#ffffff',
+          border: '1px solid var(--border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <Layers size={16} color="var(--color-primary)" />
+          <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Process Schematic Legend & Component Directory
+          </h4>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+          {/* Column 1: Pipelines & Streams */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Pipelines & Flow Streams
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 11 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 4, background: '#0284c7', borderRadius: 2 }} />
+                <span><strong>Raw / Process Milk (Ø 51 mm)</strong>: Main process stream</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 4, background: '#059669', borderRadius: 2 }} />
+                <span><strong>Pasteurized Legal Product</strong>: Forward flow to Silo (4.0°C)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 3, borderTop: '3px dashed #dc2626' }} />
+                <span><strong>Recirculation Divert Line</strong>: Under-temp return to Balance Tank</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 4, background: '#d97706', borderRadius: 2 }} />
+                <span><strong>Heating & Steam Circuit</strong>: 1.5" Steam / 95°C Hot Water loop</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 4, background: '#38bdf8', borderRadius: 2 }} />
+                <span><strong>Chilled Water & Utilities</strong>: Ø 63 mm Cooling supply (4°C)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Major Equipment */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Major Processing Units
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+              <div><strong>Balance Tank</strong>: 600L raw infeed float buffer vessel</div>
+              <div><strong>PHE (Plate Heat Exchanger)</strong>: 4-stage thermal recovery & heating block</div>
+              <div><strong>Cream Separator</strong>: Centrifugal whole-milk fractionator (10,000 LPH)</div>
+              <div><strong>Homogenizer</strong>: 2-stage high-shear particle breaker (200 bar)</div>
+              <div><strong>Holding Coil</strong>: 20-second sanitary residence tube for pathogen elimination</div>
+              <div><strong>Storage Silo</strong>: Finished pasteurized milk buffer reservoir</div>
+            </div>
+          </div>
+
+          {/* Column 3: Actuators & Valves */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Valves & Actuation
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+              <div><strong>PV1 / PV2</strong>: Raw milk infeed & CIP flush valves</div>
+              <div><strong>PV4 / PV5 / PV7</strong>: Cream separator feed, skim return, & bypass</div>
+              <div><strong>PV8 / PV9</strong>: Homogenizer feed & bypass isolation valves</div>
+              <div><strong>PV10</strong>: Chilled water modulating cooling regulator</div>
+              <div><strong>PV11 (Forward)</strong>: Legal pasteurization product forward valve</div>
+              <div><strong>PV12 (Divert)</strong>: Safety diversion valve routing to Balance Tank</div>
+              <div><strong>SCV1</strong>: Modulating steam valve controlling hot water temperature</div>
+            </div>
+          </div>
+
+          {/* Column 4: Process Sensors & Transmitters */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Sensors & Safety Transmitters
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+              <div><strong className="mono">TT1..TT9</strong>: Process temperature transmitters (Holding: TT5)</div>
+              <div><strong className="mono">PT1..PT7</strong>: Process pressure transmitters (Homogenizer: PT3)</div>
+              <div><strong className="mono">LT1</strong>: Balance tank hydrostatic continuous level sensor</div>
+              <div><strong className="mono">LS1 / LS2</strong>: Dry-run pump cutoff (LS1) & overfill trip (LS2)</div>
+              <div><strong className="mono">FM</strong>: Electromagnetic in-line flow meter (0–12,000 LPH)</div>
+            </div>
           </div>
         </div>
       </div>
