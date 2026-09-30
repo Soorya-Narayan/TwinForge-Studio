@@ -7,7 +7,10 @@ import { create } from 'zustand';
 import { PhysicsEngine } from '../core/engine/PhysicsEngine';
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
+import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
+
+export type SkidId = 'PASTEURIZER_10KLPH' | 'BATCH_MIXING';
 
 export interface TrendDataPoint {
   timeSec: number;
@@ -19,6 +22,7 @@ export interface TrendDataPoint {
 }
 
 interface SimulationStore {
+  activeSkid: SkidId;
   engine: PhysicsEngine;
   plc: MockPlcDriver;
   running: boolean;
@@ -28,6 +32,7 @@ interface SimulationStore {
   trendHistory: TrendDataPoint[];
 
   // Actions
+  setSkid: (skid: SkidId) => void;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -46,7 +51,7 @@ interface SimulationStore {
   manualOverrideOutput: (tag: string, value: boolean | number) => void;
 }
 
-const initialEngine = new PhysicsEngine(defaultMixingSkid);
+const initialEngine = new PhysicsEngine(milkPasteurizerSkid);
 const initialPlc = new MockPlcDriver();
 
 export const useSimulationStore = create<SimulationStore>((set, get) => {
@@ -102,6 +107,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
   initialPlc.writeInputs(initialSnap.tags.inputs);
 
   return {
+    activeSkid: 'PASTEURIZER_10KLPH',
     engine: initialEngine,
     plc: initialPlc,
     running: false,
@@ -109,6 +115,17 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     snapshot: initialSnap,
     faults: [],
     trendHistory: [],
+
+    setSkid: (skid) => {
+      stopLoop();
+      const topology = skid === 'PASTEURIZER_10KLPH' ? milkPasteurizerSkid : defaultMixingSkid;
+      const newEngine = new PhysicsEngine(topology);
+      const { plc } = get();
+      plc.resetBatch();
+      const snap = newEngine.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+      set({ activeSkid: skid, engine: newEngine, snapshot: snap, faults: [], trendHistory: [] });
+    },
 
     start: () => {
       startLoop();
