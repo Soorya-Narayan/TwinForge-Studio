@@ -128,12 +128,14 @@ export function App() {
 
         {/* Diagnostics & Interlock Indicators */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-subtle)' }}>
-            <span className={`led ${hasTrippedInterlock ? 'led-alarm' : 'led-normal'}`} />
-            <span className="mono" style={{ color: hasTrippedInterlock ? 'var(--color-danger)' : 'var(--color-success)', fontWeight: 700 }}>
-              {hasTrippedInterlock ? 'INTERLOCK TRIP' : 'INTERLOCKS HEALTHY'}
-            </span>
-          </div>
+          {hasTrippedInterlock && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, background: '#fee2e2', padding: '4px 8px', borderRadius: 4, border: '1px solid #fca5a5' }}>
+              <span className="led led-alarm" />
+              <span className="mono" style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
+                INTERLOCK TRIP
+              </span>
+            </div>
+          )}
 
           <div style={{ padding: '4px 8px', borderRadius: 4, background: '#f8fafc', border: '1px solid var(--border-subtle)', fontSize: 11 }}>
             <span className="mono" style={{ color: 'var(--text-secondary)' }}>MOCK PLC · 100ms FIXED SCAN</span>
