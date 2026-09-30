@@ -397,6 +397,52 @@ export class PhysicsEngine {
       inputs[`${hx.tag}_TT`] = state?.temperatureC ?? 20.0;
     }
 
+    // Specialized Dairy Pasteurizer P&ID Tag Mapping (GP-LACTALIS, BHOPAL-PID-PSTRZ-001)
+    if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
+      const balState = this.states.get('TK-BALANCE');
+      const feedState = this.states.get('P-FEED');
+      const boostState = this.states.get('P-BOOSTER');
+      const hwState = this.states.get('P-HOTWATER');
+      const heatState = this.states.get('PHE-HEATING');
+      const chillState = this.states.get('PHE-CHILLING');
+      const reg2State = this.states.get('PHE-REG02');
+
+      const balLevel = balState?.levelPct ?? 75;
+      const feedSpd = feedState?.speedPct ?? 0;
+      const boostSpd = boostState?.speedPct ?? 0;
+      const hwSpd = hwState?.speedPct ?? 0;
+      const holdingTemp = heatState?.temperatureC ?? 20.0;
+
+      // 9 Temperature Transmitters
+      inputs['TT1'] = Number((balState?.temperatureC ?? 4.0).toFixed(1)); // Balance tank outlet
+      inputs['TT2'] = Number((reg2State?.temperatureC ? reg2State.temperatureC - 5.0 : 65.0).toFixed(1)); // Homogenizer inlet
+      inputs['TT3'] = Number((reg2State?.temperatureC ?? 70.0).toFixed(1)); // REG-02 exit
+      inputs['TT4'] = Number((reg2State?.temperatureC ?? 70.0).toFixed(1)); // Heating section entrance
+      inputs['TT5'] = Number(holdingTemp.toFixed(1)); // Holding coil exit (Critical safety interlock)
+      inputs['TT6'] = Number((hwSpd > 10 ? 95.0 : 25.0).toFixed(1)); // Hot water supply
+      inputs['TT7'] = Number((hwSpd > 10 ? 91.8 : 24.5).toFixed(1)); // Hot water return
+      inputs['TT8'] = Number((hwSpd > 10 ? 88.0 : 23.0).toFixed(1)); // Steam condensate recovery
+      inputs['TT9'] = Number((chillState?.temperatureC ? Math.max(4.0, chillState.temperatureC + 2.0) : 6.2).toFixed(1)); // Chilled water return
+
+      // 7 Pressure Transmitters & Gauge
+      inputs['PT1'] = Number((0.2 + (balLevel / 100) * 0.1).toFixed(2)); // Suction head (bar)
+      inputs['PT2'] = Number((feedSpd > 10 ? 2.5 * (feedSpd / 100) : 0.2).toFixed(2)); // Feed pump discharge (bar)
+      inputs['PT3'] = Number((feedSpd > 10 ? 180.0 : 0.0).toFixed(1)); // Homogenizer stage pressure (bar)
+      inputs['PT4'] = Number((boostSpd > 10 ? 4.1 : feedSpd > 10 ? 2.3 : 0.2).toFixed(2)); // Booster pump discharge (bar)
+      inputs['PT5'] = Number((hwSpd > 10 ? 2.1 : 0.0).toFixed(2)); // Hot water pump discharge (bar)
+      inputs['PT6'] = 3.0; // Chilled water supply header (bar)
+      inputs['PT7'] = 3.0; // Steam header supply (bar)
+      inputs['PG1'] = 3.0; // Steam pressure gauge (bar)
+
+      // Flowmeter (0 - 12,000 LPH, rated 10,000 LPH)
+      inputs['FM'] = Number(((feedSpd / 100) * 10000).toFixed(0)); // LPH
+
+      // Level Transmitters & Switches
+      inputs['LT1'] = Number(balLevel.toFixed(1));
+      inputs['LS1'] = balLevel < 15; // Low level switch cutoff
+      inputs['LS2'] = balLevel > 95; // High level switch cutoff
+    }
+
     return inputs;
   }
 
