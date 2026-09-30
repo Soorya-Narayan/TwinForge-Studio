@@ -37,6 +37,15 @@ export const TrendOscilloscope: React.FC = () => {
         pumpSpeed: { name: 'Feed Pump (VFD)', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
       };
     }
+    if (activeSkid === 'CUSTOM') {
+      return {
+        tk100Level: { name: 'Primary Vessel Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
+        tk400Level: { name: 'Secondary Vessel Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
+        flowRate: { name: 'Process Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 300 },
+        temperature: { name: 'Process Temperature', unit: '°C', color: '#d97706', min: 0, max: 120 },
+        pumpSpeed: { name: 'Pump Drive Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
+      };
+    }
     return {
       tk100Level: { name: 'TK-100 Supply Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
       tk400Level: { name: 'TK-400 Mixing Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
@@ -132,10 +141,12 @@ export const TrendOscilloscope: React.FC = () => {
   const exportCsv = () => {
     if (activeData.length === 0) return;
 
-    const isPast = activeSkid === 'PASTEURIZER_10KLPH';
-    const headers = isPast
-      ? ['Time (s)', 'Balance_Tank_LT1 (%)', 'Product_Silo_Level (%)', 'Feed_Flow_FM (L/min)', 'Holding_Temp_TT5 (C)', 'Feed_Pump_VFD (%)']
-      : ['Time (s)', 'TK100_Level (%)', 'TK400_Level (%)', 'Header_Flow (L/min)', 'HX100_Temp (C)', 'P100_Speed (%)'];
+    const headers =
+      activeSkid === 'PASTEURIZER_10KLPH'
+        ? ['Time (s)', 'Balance_Tank_LT1 (%)', 'Product_Silo_Level (%)', 'Feed_Flow_FM (L/min)', 'Holding_Temp_TT5 (C)', 'Feed_Pump_VFD (%)']
+        : activeSkid === 'CUSTOM'
+        ? ['Time (s)', 'Vessel_1_Level (%)', 'Vessel_2_Level (%)', 'Line_Flow (L/min)', 'Process_Temp (C)', 'Pump_Speed (%)']
+        : ['Time (s)', 'TK100_Level (%)', 'TK400_Level (%)', 'Header_Flow (L/min)', 'HX100_Temp (C)', 'P100_Speed (%)'];
 
     const rows = activeData.map((d) => [
       d.timeSec.toFixed(1),

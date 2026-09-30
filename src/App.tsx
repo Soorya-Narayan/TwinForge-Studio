@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PlantMimic } from './components/mimic/PlantMimic';
 import { PasteurizerMimic } from './components/mimic/PasteurizerMimic';
+import { CustomSkidMimic } from './components/mimic/CustomSkidMimic';
 import { FatSuitePanel } from './components/fat/FatSuitePanel';
 import { FaultDeck } from './components/faults/FaultDeck';
 import { TagWatchTable } from './components/tags/TagWatchTable';
@@ -25,6 +26,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
+  const customMeta = useSimulationStore((s) => s.customMeta);
   const plc = useSimulationStore((s) => s.plc);
   const faults = useSimulationStore((s) => s.faults);
   const openReportModal = useFatStore((s) => s.openReportModal);
@@ -148,7 +150,11 @@ export function App() {
             <Factory size={13} color="var(--color-primary)" />
             <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Plant:</span>
             <span style={{ fontWeight: 700, color: '#0369a1' }}>
-              {activeSkid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer 10 KLPH' : 'Batch Mixing (25 KLPH)'}
+              {activeSkid === 'PASTEURIZER_10KLPH'
+                ? 'Pasteurizer 10 KLPH'
+                : activeSkid === 'BATCH_MIXING'
+                ? 'Batch Mixing (25 KLPH)'
+                : customMeta?.name || 'Custom Skid (Active)'}
             </span>
           </button>
 
@@ -171,7 +177,15 @@ export function App() {
 
       {/* Main SCADA Workspace */}
       <main style={{ flex: 1, padding: '10px 14px 14px 14px', overflow: 'hidden' }}>
-        {activeTab === 'MIMIC' && (activeSkid === 'PASTEURIZER_10KLPH' ? <PasteurizerMimic /> : <PlantMimic />)}
+        {activeTab === 'MIMIC' && (
+          activeSkid === 'PASTEURIZER_10KLPH' ? (
+            <PasteurizerMimic />
+          ) : activeSkid === 'BATCH_MIXING' ? (
+            <PlantMimic />
+          ) : (
+            <CustomSkidMimic />
+          )
+        )}
         {activeTab === 'TRENDS' && <TrendOscilloscope />}
         {activeTab === 'FAT' && <FatSuitePanel />}
         {activeTab === 'FAULTS' && <FaultDeck />}

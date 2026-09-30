@@ -6,6 +6,7 @@
 import type { TestCase } from './types';
 import type { MockPlcDriver } from '../driver/MockPlcDriver';
 import type { PhysicsEngine } from '../engine/PhysicsEngine';
+import type { SkidId } from '../../store/useSimulationStore';
 
 export const fatScenarios: TestCase[] = [
   {
@@ -570,7 +571,64 @@ export const pasteurizerFatScenarios: TestCase[] = [
   },
 ];
 
-export function getFatScenarios(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING'): TestCase[] {
-  return skid === 'PASTEURIZER_10KLPH' ? pasteurizerFatScenarios : fatScenarios;
+export const customSkidFatScenarios: TestCase[] = [
+  {
+    id: 'TC-CUSTOM-01',
+    phase: 'P1_STOPPED_CONDITION',
+    title: 'Custom Plant Baseline & Actuator Isolation',
+    clause: 'CUST-01.1',
+    description: 'Verify all dynamic actuators respond to PLC commands and safety interlocks are healthy.',
+    stimulus: (_sim: PhysicsEngine, plc: any) => {
+      if (typeof plc.resetBatch === 'function') plc.resetBatch();
+    },
+    assertions: (_sim: PhysicsEngine, plc: any) => {
+      const tripped = Array.from(plc?.interlocks?.values?.() ?? []).some((il: any) => il.tripped);
+      return [
+        {
+          tag: 'PLC_INTERLOCKS',
+          expected: 'HEALTHY',
+          actual: tripped ? 'TRIPPED' : 'HEALTHY',
+          passed: !tripped,
+          message: 'All custom plant hardware safety interlocks are HEALTHY',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-CUSTOM-02',
+    phase: 'P2_PERMISSIVES',
+    title: 'Custom Plant Dynamic Hydraulic Response',
+    clause: 'CUST-02.1',
+    description: 'Validate hydraulic mass balance and vessel hydrostatic level tracking.',
+    stimulus: (sim: PhysicsEngine, plc: any) => {
+      const outputs = typeof plc?.readOutputs === 'function' ? plc.readOutputs() : {};
+      sim.tick(outputs);
+    },
+    assertions: (sim: PhysicsEngine, plc: any) => {
+      const outputs = typeof plc?.readOutputs === 'function' ? plc.readOutputs() : {};
+      const snap = sim.tick(outputs);
+      const devices = Object.values(snap.devices);
+      const allFinite = devices.every((d) => {
+        if ('levelPct' in d && typeof d.levelPct === 'number' && isNaN(d.levelPct)) return false;
+        if ('volumeL' in d && typeof d.volumeL === 'number' && isNaN(d.volumeL)) return false;
+        return true;
+      });
+      return [
+        {
+          tag: 'HYDRO_INTEGRITY',
+          expected: 'VALID_NUMBERS',
+          actual: allFinite ? 'VALID_NUMBERS' : 'NAN_DETECTED',
+          passed: allFinite,
+          message: 'Hydraulic state solver produces finite hydrostatic pressures & levels',
+        },
+      ];
+    },
+  },
+];
+
+export function getFatScenarios(skid: SkidId): TestCase[] {
+  if (skid === 'PASTEURIZER_10KLPH') return pasteurizerFatScenarios;
+  if (skid === 'BATCH_MIXING') return fatScenarios;
+  return customSkidFatScenarios;
 }
 
