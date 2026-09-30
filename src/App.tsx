@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   Sliders,
   Network,
-  Cpu,
   Zap,
   TrendingUp,
 } from 'lucide-react';
@@ -44,20 +43,15 @@ export function App() {
       >
         {/* Brand & Plant Metadata */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
+          <img
+            src="/gooselogo.png"
+            alt="Goose Logo"
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 4,
-              background: '#0f766e',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
+              width: 36,
+              height: 36,
+              objectFit: 'contain',
             }}
-          >
-            <Cpu size={18} />
-          </div>
+          />
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
