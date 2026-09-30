@@ -247,11 +247,31 @@ export class PhysicsEngine {
       const suction = this.topology.connections.find((c) => c.toNode === pump.id);
       if (!suction) continue;
 
-      const sourceTank = this.topology.tanks.find((t) => t.id === suction.fromNode);
-      const sourceState = sourceTank ? this.states.get(sourceTank.id) : undefined;
-      const sourceVolume = sourceState?.volumeL ?? 0;
+      let sourceTank = this.topology.tanks.find((t) => t.id === suction.fromNode);
+      let suctionPassable = true;
 
-      if (sourceVolume <= 0.5) {
+      // If suction comes from an upstream valve (e.g. TK-100 -> V-101 -> P-100), trace back
+      if (!sourceTank) {
+        const upstreamValve = this.topology.valves.find((v) => v.id === suction.fromNode);
+        if (upstreamValve) {
+          const vState = this.states.get(upstreamValve.id);
+          if (!vState?.isOpen) {
+            suctionPassable = false;
+          } else {
+            const tankConn = this.topology.connections.find((c) => c.toNode === upstreamValve.id);
+            if (tankConn) {
+              sourceTank = this.topology.tanks.find((t) => t.id === tankConn.fromNode);
+            }
+          }
+        }
+      }
+
+      if (!suctionPassable) continue;
+
+      const sourceState = sourceTank ? this.states.get(sourceTank.id) : undefined;
+      const sourceVolume = sourceState?.volumeL ?? 500; // Allow circulation/utility pumps
+
+      if (sourceTank && sourceVolume <= 0.5) {
         // Source tank empty -> no flow, risk of cavitation!
         continue;
       }
@@ -262,6 +282,11 @@ export class PhysicsEngine {
         // Trace line forward through valves
         const pathPassable = this.tracePassability(dConn.toNode, outgoing);
         if (pathPassable) {
+          // If suction had an upstream connection (e.g. PIPE-01), set flow on it too
+          const upstreamConn = suction.fromNode ? this.topology.connections.find((c) => c.toNode === suction.fromNode) : undefined;
+          if (upstreamConn) {
+            this.connectionFlows.set(upstreamConn.id, ratedFlow);
+          }
           this.connectionFlows.set(suction.id, ratedFlow);
           this.connectionFlows.set(dConn.id, ratedFlow);
           this.propagateFlow(dConn.toNode, ratedFlow, outgoing);
@@ -368,7 +393,7 @@ export class PhysicsEngine {
       if (activeFlow > 0) {
         const steamTemp = 95.0; // steam header
         const currentTemp = state.temperatureC ?? 20.0;
-        const heatRate = 0.05 * dt; // approach rate
+        const heatRate = 0.20 * dt; // approach rate
         state.temperatureC = Number((currentTemp + (steamTemp - currentTemp) * heatRate).toFixed(2));
       }
     }

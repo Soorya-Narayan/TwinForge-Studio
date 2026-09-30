@@ -264,7 +264,7 @@ export const PlantMimic: React.FC = () => {
             {/* Agitator Motor & Shaft */}
             <rect x="55" y="-20" width="30" height="20" fill="#475569" rx="2" />
             <line x1="70" y1="0" x2="70" y2="135" stroke="#334155" strokeWidth="3" />
-            <ellipse cx="70" cy="135" rx="35" ry="8" fill="#64748b" opacity={Boolean(plc.outputs['AGITATOR_CMD']) ? 0.9 : 0.4} />
+            <ellipse cx="70" cy="135" rx="35" ry="8" fill="#64748b" opacity={plc.outputs['AGITATOR_CMD'] ? 0.9 : 0.4} />
 
             <text x="70" y="-28" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="bold">
               TK-400 (MIXER)

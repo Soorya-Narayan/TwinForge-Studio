@@ -13,16 +13,20 @@ export const FatReportModal: React.FC = () => {
   const closeReportModal = useFatStore((s) => s.closeReportModal);
   const results = useFatStore((s) => s.results);
   const plc = useSimulationStore((s) => s.plc);
+  const activeSkid = useSimulationStore((s) => s.activeSkid);
+
+  const [reportDate] = React.useState(() => {
+    return new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  });
 
   if (!showReportModal) return null;
 
   const passedCount = results.filter((r) => r.passed).length;
   const isCertified = passedCount === results.length && results.length > 0;
-  const reportDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 
   const handlePrint = () => {
     window.print();
@@ -130,7 +134,11 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Target Process Skid:</span>
-              <strong style={{ fontSize: 12, color: '#0f172a' }}>Batch Mixing & CIP Thermal Skid (25 KLPH)</strong>
+              <strong style={{ fontSize: 12, color: '#0f172a' }}>
+                {activeSkid === 'PASTEURIZER_10KLPH'
+                  ? 'Continuous Milk Pasteurizer Skid (10 KLPH · HTST)'
+                  : 'Batch Mixing & CIP Thermal Skid (25 KLPH)'}
+              </strong>
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>PLC Controller Platform:</span>

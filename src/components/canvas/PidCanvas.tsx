@@ -18,7 +18,6 @@ import { Database, Disc, GitCommit, Flame } from 'lucide-react';
 
 export const PidCanvas: React.FC = () => {
   const snapshot = useSimulationStore((s) => s.snapshot);
-  const faults = useSimulationStore((s) => s.faults);
 
   // Derive dynamic visual nodes from current plant topology & live simulation values
   const nodes: Node[] = useMemo(() => {
@@ -152,7 +151,7 @@ export const PidCanvas: React.FC = () => {
         style: { background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 4, minWidth: 140, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
       },
     ];
-  }, [snapshot, faults]);
+  }, [snapshot]);
 
   const edges: Edge[] = useMemo(() => {
     const isFlowingP1 = (snapshot?.paths.find((p) => p.id === 'PIPE-02')?.flowLpm ?? 0) > 0;

@@ -162,7 +162,7 @@ export class MockPlcDriver implements Driver {
         this.outputs['V102_CMD'] = true;
 
         // Start pump once valve proves open (satisfying IL-01)
-        if (Boolean(this.inputs['V101_ZSO'])) {
+        if (this.inputs['V101_ZSO']) {
           this.outputs['P100_START'] = true;
         }
 

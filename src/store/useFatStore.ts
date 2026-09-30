@@ -4,9 +4,9 @@
  */
 
 import { create } from 'zustand';
-import { fatScenarios } from '../core/testgen/scenarios';
+import { getFatScenarios } from '../core/testgen/scenarios';
 import type { TestCase, TestResult } from '../core/testgen/types';
-import { useSimulationStore } from './useSimulationStore';
+import { useSimulationStore, type SkidId } from './useSimulationStore';
 
 export interface ScanJournalEntry {
   id: string;
@@ -29,6 +29,7 @@ interface FatStore {
   showReportModal: boolean;
 
   // Actions
+  syncScenarios: (skid: SkidId) => void;
   runAllTests: () => Promise<void>;
   runSingleTest: (testId: string) => Promise<void>;
   resetSuite: () => void;
@@ -38,12 +39,21 @@ interface FatStore {
 }
 
 export const useFatStore = create<FatStore>((set, get) => ({
-  scenarios: fatScenarios,
+  scenarios: getFatScenarios('PASTEURIZER_10KLPH'),
   currentTestIndex: -1,
   isRunningSuite: false,
   results: [],
   journal: [],
   showReportModal: false,
+
+  syncScenarios: (skid: SkidId) => {
+    set({
+      scenarios: getFatScenarios(skid),
+      currentTestIndex: -1,
+      isRunningSuite: false,
+      results: [],
+    });
+  },
 
   openReportModal: () => set({ showReportModal: true }),
   closeReportModal: () => set({ showReportModal: false }),
@@ -56,7 +66,9 @@ export const useFatStore = create<FatStore>((set, get) => ({
   },
 
   resetSuite: () => {
+    const currentSkid = useSimulationStore.getState().activeSkid;
     set({
+      scenarios: getFatScenarios(currentSkid),
       currentTestIndex: -1,
       isRunningSuite: false,
       results: [],
@@ -67,7 +79,8 @@ export const useFatStore = create<FatStore>((set, get) => ({
   },
 
   runSingleTest: async (testId: string) => {
-    const { scenarios } = get();
+    const currentSkid = useSimulationStore.getState().activeSkid;
+    const scenarios = getFatScenarios(currentSkid);
     const test = scenarios.find((s) => s.id === testId);
     if (!test) return;
 
@@ -124,8 +137,9 @@ export const useFatStore = create<FatStore>((set, get) => ({
   },
 
   runAllTests: async () => {
-    const { scenarios, resetSuite, runSingleTest } = get();
+    const { resetSuite, runSingleTest } = get();
     resetSuite();
+    const scenarios = get().scenarios;
     set({ isRunningSuite: true });
 
     for (let i = 0; i < scenarios.length; i++) {
