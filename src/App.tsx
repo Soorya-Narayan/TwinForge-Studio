@@ -7,6 +7,7 @@ import { TagWatchTable } from './components/tags/TagWatchTable';
 import { PidCanvas } from './components/canvas/PidCanvas';
 import { TrendOscilloscope } from './components/trend/TrendOscilloscope';
 import { FatReportModal } from './components/report/FatReportModal';
+import { SiteTemplatesView } from './components/templates/SiteTemplatesView';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useFatStore } from './store/useFatStore';
 import {
@@ -16,13 +17,14 @@ import {
   Network,
   Zap,
   TrendingUp,
+  Layers,
+  Factory,
 } from 'lucide-react';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER'>('MIMIC');
+  const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
-  const setSkid = useSimulationStore((s) => s.setSkid);
   const plc = useSimulationStore((s) => s.plc);
   const faults = useSimulationStore((s) => s.faults);
   const openReportModal = useFatStore((s) => s.openReportModal);
@@ -44,7 +46,7 @@ export function App() {
           borderRadius: 6,
         }}
       >
-        {/* Brand & Plant Metadata with Skid Selector */}
+        {/* Brand & Identity */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <img
             src="/gooselogo.png"
@@ -57,31 +59,11 @@ export function App() {
           />
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                TwinForge Studio
-              </span>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+              TwinForge Studio
             </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <select
-                value={activeSkid}
-                onChange={(e) => setSkid(e.target.value as any)}
-                style={{
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  border: '1px solid var(--border-strong)',
-                  background: '#f8fafc',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#0f766e',
-                  cursor: 'pointer',
-                  outline: 'none',
-                }}
-              >
-                <option value="PASTEURIZER_10KLPH">SKID: MILK PASTEURIZER 10 KLPH · LACTALIS BHOPAL</option>
-                <option value="BATCH_MIXING">SKID: THREE-SOLUTION BATCH MIXING (25 KLPH)</option>
-              </select>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
+              Goose Industrial Solutions
             </div>
           </div>
         </div>
@@ -136,10 +118,43 @@ export function App() {
             <Network size={14} />
             P&ID MODELER
           </button>
+          <button
+            onClick={() => setActiveTab('TEMPLATES')}
+            className={`btn ${activeTab === 'TEMPLATES' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ padding: '5px 12px', fontSize: 11 }}
+          >
+            <Layers size={14} />
+            SITE TEMPLATES
+          </button>
         </div>
 
-        {/* Diagnostics & Interlock Indicators */}
+        {/* Diagnostics & Plant Status Indicators */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Active Plant Chip (Clickable to switch) */}
+          <button
+            onClick={() => setActiveTab('TEMPLATES')}
+            className="btn btn-ghost"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 11,
+              background: '#f8fafc',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 4,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+            }}
+            title="Click to view and switch plant templates"
+          >
+            <Factory size={13} color="var(--color-primary)" />
+            <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Plant:</span>
+            <span style={{ fontWeight: 700, color: '#0369a1' }}>
+              {activeSkid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer 10 KLPH' : 'Batch Mixing (25 KLPH)'}
+            </span>
+          </button>
+
           {hasTrippedInterlock && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, background: '#fee2e2', padding: '4px 8px', borderRadius: 4, border: '1px solid #fca5a5' }}>
               <span className="led led-alarm" />
@@ -150,7 +165,7 @@ export function App() {
           )}
 
           <div style={{ padding: '4px 8px', borderRadius: 4, background: '#f8fafc', border: '1px solid var(--border-subtle)', fontSize: 11 }}>
-            <span className="mono" style={{ color: 'var(--text-secondary)' }}>MOCK PLC · 100ms FIXED SCAN</span>
+            <span className="mono" style={{ color: 'var(--text-secondary)' }}>MOCK PLC · 100ms SCAN</span>
           </div>
 
           {results.length > 0 && (
@@ -169,6 +184,7 @@ export function App() {
         {activeTab === 'FAULTS' && <FaultDeck />}
         {activeTab === 'TAGS' && <TagWatchTable />}
         {activeTab === 'MODELER' && <PidCanvas />}
+        {activeTab === 'TEMPLATES' && <SiteTemplatesView onSelectAndNavigate={() => setActiveTab('MIMIC')} />}
       </main>
 
       {/* Certified FAT Compliance Report Modal */}
