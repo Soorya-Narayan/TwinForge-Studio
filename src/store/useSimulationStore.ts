@@ -4,14 +4,16 @@
  */
 
 import { create } from 'zustand';
-import { PhysicsEngine } from '../core/engine/PhysicsEngine';
+import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
+import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
+import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
 
-export type SkidId = 'PASTEURIZER_10KLPH' | 'BATCH_MIXING';
+export type SkidId = 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
 
 export interface TrendDataPoint {
   timeSec: number;
@@ -24,8 +26,10 @@ export interface TrendDataPoint {
 
 interface SimulationStore {
   activeSkid: SkidId;
+  customMeta: CustomSkidMeta | null;
+  customTopology: PlantTopology | null;
   engine: PhysicsEngine;
-  plc: MockPlcDriver | PasteurizerPlcDriver;
+  plc: MockPlcDriver | PasteurizerPlcDriver | GenericPlcDriver;
   running: boolean;
   speed: number; // 1x, 2x, 5x, 10x
   snapshot: SimulationSnapshot | null;
@@ -34,6 +38,7 @@ interface SimulationStore {
 
   // Actions
   setSkid: (skid: SkidId) => void;
+  setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => void;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -72,25 +77,41 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     plc.writeInputs(snap.tags.inputs);
 
     // 4. Capture Trend Data Point dynamically mapped for current skid
-    const isPast = activeSkid === 'PASTEURIZER_10KLPH';
-    const dataPoint: TrendDataPoint = {
-      timeSec: Number((snap.timeMs / 1000).toFixed(1)),
-      tk100Level: isPast
-        ? (snap.devices['TK-BALANCE']?.levelPct ?? 0)
-        : (snap.devices['TK-100']?.levelPct ?? 0),
-      tk400Level: isPast
-        ? (snap.devices['TK-PRODUCT']?.levelPct ?? 0)
-        : (snap.devices['TK-400']?.levelPct ?? 0),
-      flowRate: isPast
-        ? Number(snap.tags.inputs['FM'] ?? 0) / 60
-        : (snap.paths.find((p) => p.id === 'PIPE-02')?.flowLpm ?? 0),
-      temperature: isPast
-        ? Number(snap.tags.inputs['TT5'] ?? snap.devices['PHE-HEATING']?.temperatureC ?? 20)
-        : (snap.devices['HX-100']?.temperatureC ?? 20),
-      pumpSpeed: isPast
-        ? (snap.devices['P-FEED']?.speedPct ?? 0)
-        : (snap.devices['P-100']?.speedPct ?? 0),
-    };
+    let dataPoint: TrendDataPoint;
+    if (activeSkid === 'PASTEURIZER_10KLPH') {
+      dataPoint = {
+        timeSec: Number((snap.timeMs / 1000).toFixed(1)),
+        tk100Level: snap.devices['TK-BALANCE']?.levelPct ?? 0,
+        tk400Level: snap.devices['TK-PRODUCT']?.levelPct ?? 0,
+        flowRate: Number(snap.tags.inputs['FM'] ?? 0) / 60,
+        temperature: Number(snap.tags.inputs['TT5'] ?? snap.devices['PHE-HEATING']?.temperatureC ?? 20),
+        pumpSpeed: snap.devices['P-FEED']?.speedPct ?? 0,
+      };
+    } else if (activeSkid === 'BATCH_MIXING') {
+      dataPoint = {
+        timeSec: Number((snap.timeMs / 1000).toFixed(1)),
+        tk100Level: snap.devices['TK-100']?.levelPct ?? 0,
+        tk400Level: snap.devices['TK-400']?.levelPct ?? 0,
+        flowRate: snap.paths.find((p) => p.id === 'PIPE-02')?.flowLpm ?? 0,
+        temperature: snap.devices['HX-100']?.temperatureC ?? 20,
+        pumpSpeed: snap.devices['P-100']?.speedPct ?? 0,
+      };
+    } else {
+      // Dynamic mapping for CUSTOM skid: pick first available vessels and motive equipment
+      const tanks = Object.values(snap.devices).filter((d) => d.type === 'tank');
+      const pumps = Object.values(snap.devices).filter((d) => d.type === 'centrifugal_pump');
+      const exchangers = Object.values(snap.devices).filter((d) => d.type === 'heat_exchanger');
+      const firstActivePath = snap.paths.find((p) => (p.flowLpm ?? 0) > 0) ?? snap.paths[0];
+
+      dataPoint = {
+        timeSec: Number((snap.timeMs / 1000).toFixed(1)),
+        tk100Level: tanks[0]?.levelPct ?? 0,
+        tk400Level: tanks[1]?.levelPct ?? tanks[0]?.levelPct ?? 0,
+        flowRate: firstActivePath?.flowLpm ?? 0,
+        temperature: exchangers[0]?.temperatureC ?? tanks[0]?.temperatureC ?? 25,
+        pumpSpeed: pumps[0]?.speedPct ?? 0,
+      };
+    }
 
     const nextTrend = [...trendHistory, dataPoint].slice(-600); // 60s window at 100ms
 
@@ -120,6 +141,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
   return {
     activeSkid: 'PASTEURIZER_10KLPH',
+    customMeta: null,
+    customTopology: null,
     engine: initialEngine,
     plc: initialPlc,
     running: false,
@@ -138,6 +161,24 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       set({ activeSkid: skid, engine: newEngine, plc: newPlc, snapshot: snap, faults: [], trendHistory: [] });
     },
 
+    setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => {
+      stopLoop();
+      const newEngine = new PhysicsEngine(topology);
+      const newPlc = new GenericPlcDriver(topology);
+      const snap = newEngine.tick(newPlc.readOutputs());
+      newPlc.writeInputs(snap.tags.inputs);
+      set({
+        activeSkid: 'CUSTOM',
+        customMeta: meta,
+        customTopology: topology,
+        engine: newEngine,
+        plc: newPlc,
+        snapshot: snap,
+        faults: [],
+        trendHistory: [],
+      });
+    },
+
     start: () => {
       const { plc, activeSkid } = get();
       if (activeSkid === 'PASTEURIZER_10KLPH') {
@@ -145,10 +186,15 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         if (pastPlc.state === 'STOPPED') {
           pastPlc.startProduction();
         }
-      } else {
+      } else if (activeSkid === 'BATCH_MIXING') {
         const mockPlc = plc as MockPlcDriver;
         if (mockPlc.state === 'IDLE') {
           mockPlc.startBatch();
+        }
+      } else if (activeSkid === 'CUSTOM') {
+        const genPlc = plc as GenericPlcDriver;
+        if (genPlc.state === 'STOPPED') {
+          genPlc.startProduction();
         }
       }
       startLoop();
@@ -169,8 +215,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       engine.reset();
       if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).resetSystem();
-      } else {
+      } else if (activeSkid === 'BATCH_MIXING') {
         (plc as MockPlcDriver).resetBatch();
+      } else if (activeSkid === 'CUSTOM') {
+        (plc as GenericPlcDriver).resetSystem();
       }
       const snap = engine.tick(plc.readOutputs());
       plc.writeInputs(snap.tags.inputs);
