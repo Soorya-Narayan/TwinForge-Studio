@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSimulationStore, type SkidId } from '../../store/useSimulationStore';
 import { useFatStore } from '../../store/useFatStore';
-import { CheckCircle2, Factory, ArrowRight, Cpu, Shield, Plus, UploadCloud, Edit3, Trash2 } from 'lucide-react';
+import { CheckCircle2, Factory, ArrowRight, Cpu, Shield, Plus, UploadCloud, Edit3, Trash2, AlertTriangle, X } from 'lucide-react';
 import { CustomSkidModal } from './CustomSkidModal';
 
 interface SiteTemplatesViewProps {
@@ -87,6 +87,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
   const deleteCustomSkid = useSimulationStore((s) => s.deleteCustomSkid);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedJson, setDroppedJson] = useState<string | undefined>(undefined);
 
@@ -475,9 +476,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm(`Delete custom skid template "${customMeta.name}"? This unloads the custom topology and restores the default environment.`)) {
-                        deleteCustomSkid();
-                      }
+                      setShowDeleteModal(true);
                     }}
                     className="btn btn-ghost"
                     style={{
@@ -781,6 +780,146 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
           }
         }}
       />
+
+      {/* In-App Skid Deletion Confirmation Dialog (Never auto-dismisses) */}
+      {showDeleteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 23, 42, 0.72)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+          onClick={() => setShowDeleteModal(false)}
+        >
+          <div
+            className="industrial-card"
+            style={{
+              background: '#ffffff',
+              width: '100%',
+              maxWidth: 480,
+              borderRadius: 8,
+              border: '1px solid #fca5a5',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+              animation: 'fadeIn 0.15s ease',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                background: '#fff1f2',
+                borderBottom: '1px solid #fecaca',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: '#fee2e2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AlertTriangle size={18} color="#dc2626" />
+                </div>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#991b1b' }}>
+                  Confirm Skid Deletion
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="btn btn-ghost"
+                style={{ padding: '4px 6px', color: '#64748b' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                Are you sure you want to delete the custom skid template{' '}
+                <strong style={{ color: '#0f172a' }}>"{customMeta?.name ?? 'Custom Skid'}"</strong>?
+              </p>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: '#f8fafc',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
+                • The custom P&ID topology will be unloaded from memory.<br />
+                • If currently running, the simulation will safely revert to the default standard plant.<br />
+                • You can always re-import or drop another JSON schema at any time.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div
+              style={{
+                padding: '14px 20px',
+                background: '#f8fafc',
+                borderTop: '1px solid var(--border-subtle)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="btn btn-secondary"
+                style={{ padding: '7px 16px', fontSize: 12, fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => {
+                  deleteCustomSkid();
+                  setShowDeleteModal(false);
+                }}
+                className="btn btn-danger"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 18px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: '#dc2626',
+                  borderColor: '#dc2626',
+                  color: '#ffffff',
+                }}
+              >
+                <Trash2 size={13} />
+                <span>YES, DELETE TEMPLATE</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
