@@ -59,11 +59,8 @@ export function App() {
           />
 
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               TwinForge Studio
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
-              Goose Industrial Solutions
             </div>
           </div>
         </div>
