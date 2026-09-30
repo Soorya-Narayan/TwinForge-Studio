@@ -10,9 +10,8 @@ interface TemplateMeta {
   id: SkidId;
   name: string;
   tagline: string;
-  client: string;
-  pidRef: string;
   category: string;
+  standard: string;
   throughput: string;
   ioCount: string;
   description: string;
@@ -25,14 +24,13 @@ const TEMPLATES: TemplateMeta[] = [
   {
     id: 'PASTEURIZER_10KLPH',
     name: 'Milk Pasteurizer 10 KLPH',
-    tagline: '100% P&ID Parity: 4-Section PHE, Cream Separator, Homogenizer & Dual Flow Diversion',
-    client: 'Lactalis Dairy · Bhopal Facility',
-    pidRef: 'GP-LACTALIS, BHOPAL-PID-PSTRZ-001',
+    tagline: 'Continuous HTST: 4-Section PHE, Cream Separator, Homogenizer & Dual Flow Diversion',
     category: 'Thermal Dairy Processing',
+    standard: '3-A Sanitary / PMO Standards',
     throughput: '10,000 LPH (Liters Per Hour)',
     ioCount: '13 Valves · 9 TT · 7 PT · 4 Pumps · FM · LT1',
     description:
-      'Full-fidelity digital twin of Goose Drawing GP-LACTALIS, BHOPAL-PID-PSTRZ-001 (Rev 0). Features a 4-section PHE (Chilling 4°C, REG-01 45°C, REG-02 70°C, Heating 90°C), in-line 10 KLPH Cream Separator with bypass PV7, 10 KLPH Homogenizer (200 bar, seal water proved), Booster Pump, 20-second Holding Coil, dual diversion valves (PV11/PV12), and closed hot water generation loop with steam valve SCV1.',
+      'Standard high-fidelity digital twin of a continuous HTST (High Temperature Short Time) dairy pasteurization plant. Features a 4-section PHE (Chilling 4°C, REG-01 45°C, REG-02 70°C, Heating 90°C), in-line 10 KLPH Cream Separator with bypass PV7, 10 KLPH Homogenizer (200 bar, seal water proved), Booster Pump, 20-second Holding Coil, dual diversion valves (PV11/PV12), and closed hot water generation loop with steam valve SCV1.',
     highlights: [
       '4-Section PHE: Chilling (4°C), REG-01 (45°C), REG-02 (70°C), and Heating (90°C)',
       'In-Line Processing: Cream Separator (PV4..PV7) + Homogenizer (PV8..PV9 with seal water interlock)',
@@ -47,9 +45,8 @@ const TEMPLATES: TemplateMeta[] = [
     id: 'BATCH_MIXING',
     name: 'Three-Solution Batch Mixing Skid',
     tagline: 'Multi-Stream In-Line Chemical Blending & Agitated Tank Reactor',
-    client: 'Industrial Process Standard',
-    pidRef: 'TF-ENG-SKID-BM25',
     category: 'Formulation & Blending',
+    standard: 'ISA-88 Batch Standards',
     throughput: '25,000 LPH Combined Output',
     ioCount: '8 DI · 10 DO · 4 AI',
     description:
@@ -172,14 +169,14 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
                         {tmpl.category}
                       </span>
                       <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {tmpl.pidRef}
+                        {tmpl.standard}
                       </span>
                     </div>
                     <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>
                       {tmpl.name}
                     </h3>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      {tmpl.client}
+                      {tmpl.tagline}
                     </div>
                   </div>
 

@@ -1,8 +1,7 @@
 /**
  * TwinForge Studio - Pasteurizer PLC Control Driver
  * Implements dairy pasteurization process state machine and PMO/FDA safety interlocks.
- * 100% Faithful to Goose Industrial Solutions Drawing: GP-LACTALIS, BHOPAL-PID-PSTRZ-001
- * Client: LACTALIS, BHOPAL
+ * Standard Continuous HTST Sanitary Process Automation
  */
 
 import type { Driver, DriverStatus } from './Driver';
