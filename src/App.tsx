@@ -61,9 +61,6 @@ export function App() {
               <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                 TwinForge Studio
               </span>
-              <span className="badge badge-neutral" style={{ fontSize: 10 }}>
-                FAT Virtual Commissioning System
-              </span>
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
