@@ -9,6 +9,7 @@ import { PidCanvas } from './components/canvas/PidCanvas';
 import { TrendOscilloscope } from './components/trend/TrendOscilloscope';
 import { FatReportModal } from './components/report/FatReportModal';
 import { SiteTemplatesView } from './components/templates/SiteTemplatesView';
+import { SplashScreen } from './components/loading/SplashScreen';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useFatStore } from './store/useFatStore';
 import {
@@ -24,6 +25,7 @@ import {
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
   const customMeta = useSimulationStore((s) => s.customMeta);
@@ -36,6 +38,11 @@ export function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: 'var(--bg-main)' }}>
+      {/* Industrial Goose Loading Splash Screen */}
+      {isInitialLoading && (
+        <SplashScreen onComplete={() => setIsInitialLoading(false)} />
+      )}
+
       {/* Industrial HMI Header Bar */}
       <header
         className="industrial-card"
@@ -49,7 +56,11 @@ export function App() {
         }}
       >
         {/* Brand & Identity */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          onClick={() => setIsInitialLoading(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+          title="Click to replay Goose startup sequence"
+        >
           <img
             src="/gooselogo.png"
             alt="Goose Logo"
