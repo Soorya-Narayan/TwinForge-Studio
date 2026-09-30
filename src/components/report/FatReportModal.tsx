@@ -100,17 +100,22 @@ export const FatReportModal: React.FC = () => {
             fontFamily: 'Inter, sans-serif',
           }}
         >
-          {/* Document Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
+          {/* Document Header with Goose Industrial Banner */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
             <div>
-              <h1 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+              <img
+                src="/goosebanner.png"
+                alt="Goose Industrial Solutions Banner"
+                style={{ height: 46, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+              />
+              <h1 style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
                 FACTORY ACCEPTANCE TEST CERTIFICATE
               </h1>
-              <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              <p style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                 Automated Virtual Commissioning & Interlock Verification Report (Phase G)
               </p>
             </div>
-            <div style={{ textAlign: 'right' }}>
+            <div style={{ textAlign: 'right', paddingTop: 6 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>TwinForge Studio</div>
               <div style={{ fontSize: 10, color: '#64748b' }}>Certificate Ref: FAT-2026-SCM-001</div>
               <div style={{ fontSize: 10, color: '#64748b' }}>Execution Date: {reportDate}</div>
