@@ -30,7 +30,7 @@ export function App() {
   const openReportModal = useFatStore((s) => s.openReportModal);
   const results = useFatStore((s) => s.results);
 
-  const hasTrippedInterlock = Array.from(plc.interlocks.values()).some((il) => il.tripped);
+  const hasTrippedInterlock = Array.from(plc?.interlocks?.values?.() ?? []).some((il) => il.tripped);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: 'var(--bg-main)' }}>

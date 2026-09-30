@@ -125,8 +125,8 @@ export const fatScenarios: TestCase[] = [
       sim.clearAllFaults();
       plc.resetBatch();
       plc.startBatch();
-      // Tick 2 seconds so valve travels to 100% and pump starts
-      for (let i = 0; i < 20; i++) {
+      // Tick 3.5 seconds so valve travels to 100% and pump ramps to full speed
+      for (let i = 0; i < 35; i++) {
         const snap = sim.tick(plc.readOutputs());
         plc.writeInputs(snap.tags.inputs);
         plc.tick(100);
@@ -167,9 +167,9 @@ export const fatScenarios: TestCase[] = [
     clause: 'FDS-05.3',
     description: 'Verify steam plate exchanger heats product stream and temperature transmitter reads thermal rise.',
     stimulus: (sim: PhysicsEngine, plc: MockPlcDriver) => {
-      // Simulate heating loop
-      for (let i = 0; i < 30; i++) {
-        const snap = sim.tick({ ...plc.readOutputs(), TCV100_CMD: 80 });
+      // Simulate heating loop with active flow
+      for (let i = 0; i < 40; i++) {
+        const snap = sim.tick({ ...plc.readOutputs(), TCV100_CMD: 90, P100_START: true, V101_CMD: true, V102_CMD: true });
         plc.writeInputs(snap.tags.inputs);
         plc.tick(100);
       }
@@ -202,7 +202,8 @@ export const fatScenarios: TestCase[] = [
     description: 'Command product discharge valve V-400 open and verify level transfer into TK-PROD.',
     stimulus: (sim: PhysicsEngine, plc: MockPlcDriver) => {
       plc.outputs['V400_PROD_CMD'] = true;
-      for (let i = 0; i < 15; i++) {
+      // V-400 travelTimeS is 2.0s (20 ticks), step 25 ticks
+      for (let i = 0; i < 25; i++) {
         const snap = sim.tick(plc.readOutputs());
         plc.writeInputs(snap.tags.inputs);
         plc.tick(100);
@@ -263,3 +264,313 @@ export const fatScenarios: TestCase[] = [
     },
   },
 ];
+
+export const pasteurizerFatScenarios: TestCase[] = [
+  {
+    id: 'TC-P01',
+    phase: 'P1_STOPPED_CONDITION',
+    title: 'Stopped Condition Baseline & Fail-Safe Audit',
+    clause: 'FDS-PAST-01.1',
+    description: 'Verify all pumps de-energized, valves at fail-safe seated posture, and legal interlocks initialized.',
+    stimulus: (sim: any, plc: any) => {
+      sim.clearAllFaults();
+      plc.resetSystem();
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+    },
+    assertions: (_sim: any, plc: any) => {
+      const pFeed = Boolean(plc.outputs['P_FEED_START']);
+      const pBoost = Boolean(plc.outputs['P_BOOST_START']);
+      const pv11 = Boolean(plc.outputs['PV11_CMD']);
+      return [
+        {
+          tag: 'PLC_STATE',
+          expected: 'STOPPED',
+          actual: plc.state,
+          passed: plc.state === 'STOPPED',
+          message: 'Pasteurizer controller state is safely STOPPED',
+        },
+        {
+          tag: 'P_FEED_START',
+          expected: false,
+          actual: pFeed,
+          passed: !pFeed,
+          message: 'Raw milk feed pump P-FEED is de-energized',
+        },
+        {
+          tag: 'P_BOOST_START',
+          expected: false,
+          actual: pBoost,
+          passed: !pBoost,
+          message: 'Regeneration booster pump P-BOOSTER is de-energized',
+        },
+        {
+          tag: 'PV11_CMD',
+          expected: false,
+          actual: pv11,
+          passed: !pv11,
+          message: 'Forward flow valve PV11 closed in fail-safe seated orientation',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P02',
+    phase: 'P2_PERMISSIVES',
+    title: 'Raw Milk Permissives & Balance Tank Inventory',
+    clause: 'FDS-PAST-02.3',
+    description: 'Verify Balance Tank level LT1 > 15% satisfies low-level interlock IL-BAL-LOW to prevent pump cavitation.',
+    stimulus: (sim: any, plc: any) => {
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+      plc.tick(100);
+    },
+    assertions: (_sim: any, plc: any) => {
+      const lt1 = Number(plc.inputs['LT1'] ?? 75);
+      const ilBalLow = plc.interlocks?.get('IL-BAL-LOW');
+      return [
+        {
+          tag: 'LT1',
+          expected: '>= 15%',
+          actual: `${lt1.toFixed(1)}%`,
+          passed: lt1 >= 15,
+          message: 'Balance Tank volume is verified above minimum pump priming threshold',
+        },
+        {
+          tag: 'IL-BAL-LOW',
+          expected: true,
+          actual: ilBalLow?.isOk,
+          passed: ilBalLow?.isOk === true,
+          message: 'Low level lockout IL-BAL-LOW is healthy',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P03',
+    phase: 'P3_INTERLOCK_VERIFICATION',
+    title: 'Legal Flow Diversion Lockout (IL-FDV Under-Temp)',
+    clause: 'PMO Item 16p / 3-A Standards',
+    description: 'Assert forward flow valve PV11 is strictly locked closed while holding tube temperature TT5 is under 88.0°C.',
+    stimulus: (sim: any, plc: any) => {
+      plc.startProduction();
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+      plc.tick(100);
+    },
+    assertions: (_sim: any, plc: any) => {
+      const pv11 = Boolean(plc.outputs['PV11_CMD']);
+      const pv12 = Boolean(plc.outputs['PV12_CMD']);
+      const ilFdv = plc.interlocks?.get('IL-FDV');
+      return [
+        {
+          tag: 'IL-FDV',
+          expected: false,
+          actual: ilFdv?.isOk,
+          passed: ilFdv?.isOk === false,
+          message: 'Legal diversion interlock IL-FDV correctly unproved while warming up',
+        },
+        {
+          tag: 'PV11_CMD',
+          expected: false,
+          actual: pv11,
+          passed: !pv11,
+          message: 'Product forward flow valve PV11 strictly locked CLOSED',
+        },
+        {
+          tag: 'PV12_CMD',
+          expected: true,
+          actual: pv12,
+          passed: pv12,
+          message: 'Diversion valve PV12 commanded OPEN for recycle to Balance Tank',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P04',
+    phase: 'P4_RECIPE_DOSING',
+    title: 'Thermal Pasteurizing Ramp & Forward Proving',
+    clause: 'FDS-PAST-04.2',
+    description: 'Modulate steam valve SCV1 to heat holding tube TT5 past 88.0°C. Assert automatic transition to PASTEURIZING_FORWARD and feed flow proving.',
+    stimulus: (sim: any, plc: any) => {
+      sim.clearAllFaults();
+      plc.startProduction();
+      // Step simulation until legal temperature proved (~50 ticks)
+      for (let i = 0; i < 60; i++) {
+        const snap = sim.tick(plc.readOutputs());
+        plc.writeInputs(snap.tags.inputs);
+        plc.tick(100);
+      }
+    },
+    assertions: (sim: any, plc: any) => {
+      const snap = sim.tick(plc.readOutputs());
+      const tt5 = Number(snap.tags.inputs['TT5'] ?? 0);
+      const fm = Number(snap.tags.inputs['FM'] ?? 0);
+      const pv11 = Boolean(plc.outputs['PV11_CMD']);
+      return [
+        {
+          tag: 'TT5',
+          expected: '>= 88.0°C',
+          actual: `${tt5.toFixed(1)}°C`,
+          passed: tt5 >= 88.0,
+          message: 'Holding coil exit temperature achieved legal pasteurizing threshold',
+        },
+        {
+          tag: 'PLC_STATE',
+          expected: 'PASTEURIZING_FORWARD',
+          actual: plc.state,
+          passed: plc.state === 'PASTEURIZING_FORWARD',
+          message: 'State machine automatically transitioned to continuous forward pasteurizing',
+        },
+        {
+          tag: 'PV11_CMD',
+          expected: true,
+          actual: pv11,
+          passed: pv11,
+          message: 'Sanitary forward flow valve PV11 opened to product silo',
+        },
+        {
+          tag: 'FM_FLOW',
+          expected: '>= 9500 LPH',
+          actual: `${fm} LPH`,
+          passed: fm >= 9500,
+          message: 'Rated continuous pasteurization throughput confirmed (10,000 LPH)',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P05',
+    phase: 'P5_THERMAL_CYCLE',
+    title: 'Regenerator Positive Differential Pressure (IL-DP)',
+    clause: 'PMO Section 16p(D) Cross-Contamination Prevention',
+    description: 'Verify booster pump discharge pressure PT4 exceeds raw feed PT2 by >= 0.5 bar to protect pasteurized stream.',
+    stimulus: (sim: any, plc: any) => {
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+      plc.tick(100);
+    },
+    assertions: (_sim: any, plc: any) => {
+      const pt4 = Number(plc.inputs['PT4'] ?? 4.0);
+      const pt2 = Number(plc.inputs['PT2'] ?? 2.5);
+      const dp = pt4 - pt2;
+      const ilDp = plc.interlocks?.get('IL-DP');
+      return [
+        {
+          tag: 'PT4_PT2_DP',
+          expected: '>= +0.50 bar',
+          actual: `+${dp.toFixed(2)} bar`,
+          passed: dp >= 0.5,
+          message: 'Booster pump creates positive pressure gradient preventing raw-to-pasteurized leakage',
+        },
+        {
+          tag: 'IL-DP',
+          expected: true,
+          actual: ilDp?.isOk,
+          passed: ilDp?.isOk === true,
+          message: 'Regenerator differential pressure interlock IL-DP is healthy',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P06',
+    phase: 'P6_DISCHARGE',
+    title: 'Thermal Anomaly Safety Trip & Instant Diversion',
+    clause: 'FDS-PAST-06.1 (Safety Trip)',
+    description: 'Inject sudden thermal disturbance (-15°C sensor fault). Assert immediate trip of IL-FDV, rapid closure of PV11, and opening of PV12 diversion line.',
+    faults: [{ deviceId: 'PHE-HEATING', mode: 'sensor_offset', value: -15 }],
+    stimulus: (sim: any, plc: any) => {
+      sim.setFault({ deviceId: 'PHE-HEATING', mode: 'sensor_offset', value: -15 });
+      for (let i = 0; i < 6; i++) {
+        const snap = sim.tick(plc.readOutputs());
+        plc.writeInputs(snap.tags.inputs);
+        plc.tick(100);
+      }
+    },
+    assertions: (_sim: any, plc: any) => {
+      const trippedTt5 = Number(plc.inputs['TT5'] ?? 0);
+      const ilFdv = plc.interlocks?.get('IL-FDV');
+      const pv11 = Boolean(plc.outputs['PV11_CMD']);
+      const pv12 = Boolean(plc.outputs['PV12_CMD']);
+      return [
+        {
+          tag: 'TT5_SENSE',
+          expected: '< 88.0°C',
+          actual: `${trippedTt5.toFixed(1)}°C`,
+          passed: trippedTt5 < 88.0,
+          message: 'Holding tube thermal disturbance detected by dual RTDs',
+        },
+        {
+          tag: 'IL-FDV_TRIP',
+          expected: true,
+          actual: ilFdv?.tripped,
+          passed: ilFdv?.tripped === true,
+          message: 'Legal flow diversion safety interlock IL-FDV tripped',
+        },
+        {
+          tag: 'PV11_CMD',
+          expected: false,
+          actual: pv11,
+          passed: !pv11,
+          message: 'Product forward line shut down instantly (< 0.5s stroke)',
+        },
+        {
+          tag: 'PV12_CMD',
+          expected: true,
+          actual: pv12,
+          passed: pv12,
+          message: 'Sub-temperature milk safely redirected to Balance Tank',
+        },
+      ];
+    },
+  },
+  {
+    id: 'TC-P07',
+    phase: 'P7_ABORT_SAFETY',
+    title: 'Emergency Stop & Actuator Fail-Safe De-energization',
+    clause: 'FDS-PAST-08.1 (E-Stop)',
+    description: 'Trigger Emergency Stop. Assert all drive VFDs drop to 0, steam control valve cuts off, and system fails safe.',
+    stimulus: (sim: any, plc: any) => {
+      plc.emergencyStop();
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+      plc.tick(100);
+    },
+    assertions: (_sim: any, plc: any) => {
+      const pFeed = Boolean(plc.outputs['P_FEED_START']);
+      const pBoost = Boolean(plc.outputs['P_BOOST_START']);
+      const pHw = Boolean(plc.outputs['P_HW_START']);
+      const scv1 = Number(plc.outputs['SCV1_CMD'] ?? 0);
+      return [
+        {
+          tag: 'PLC_STATE',
+          expected: 'EMERGENCY_STOP',
+          actual: plc.state,
+          passed: plc.state === 'EMERGENCY_STOP',
+          message: 'Pasteurizer controller halted in safe EMERGENCY_STOP',
+        },
+        {
+          tag: 'DRIVES_DEENERGIZED',
+          expected: true,
+          actual: !pFeed && !pBoost && !pHw,
+          passed: !pFeed && !pBoost && !pHw,
+          message: 'All mechanical pump drives tripped and confirmed de-energized',
+        },
+        {
+          tag: 'SCV1_CMD',
+          expected: 0,
+          actual: scv1,
+          passed: scv1 === 0,
+          message: 'Steam modulating control valve SCV1 isolated to 0% stroke',
+        },
+      ];
+    },
+  },
+];
+
+export function getFatScenarios(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING'): TestCase[] {
+  return skid === 'PASTEURIZER_10KLPH' ? pasteurizerFatScenarios : fatScenarios;
+}
+

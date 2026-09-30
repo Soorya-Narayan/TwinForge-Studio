@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSimulationStore, type SkidId } from '../../store/useSimulationStore';
+import { useFatStore } from '../../store/useFatStore';
 import { CheckCircle2, Factory, ArrowRight, Cpu, Shield } from 'lucide-react';
 
 interface SiteTemplatesViewProps {
@@ -83,6 +84,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
 
   const handleActivate = (id: SkidId) => {
     setSkid(id);
+    useFatStore.getState().syncScenarios(id);
     if (onSelectAndNavigate) {
       onSelectAndNavigate();
     }

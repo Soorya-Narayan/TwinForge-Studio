@@ -13,6 +13,8 @@ export const FaultDeck: React.FC = () => {
   const injectFault = useSimulationStore((s) => s.injectFault);
   const clearFaults = useSimulationStore((s) => s.clearFaults);
 
+  const activeSkid = useSimulationStore((s) => s.activeSkid);
+
   const isFaultActive = (deviceId: string, mode: string) => {
     return faults.some((f) => f.deviceId === deviceId && f.mode === mode);
   };
@@ -25,38 +27,79 @@ export const FaultDeck: React.FC = () => {
     }
   };
 
-  const faultCatalog: { title: string; category: string; desc: string; fault: DeviceFault }[] = [
+  const pasteurizerFaults = [
+    {
+      title: 'PHE-HEATING Thermal Anomaly (-15°C Offset)',
+      category: 'Thermal / Instrumentation',
+      desc: 'Drops holding tube temp TT5 below 88.0°C. Verifies legal diversion trip IL-FDV (PV11 closes, PV12 opens).',
+      fault: { deviceId: 'PHE-HEATING', mode: 'sensor_offset' as const, value: -15 },
+    },
+    {
+      title: 'PV-11 Forward Valve Seized Closed (Mechanical)',
+      category: 'Mechanical Valve',
+      desc: 'Simulates pneumatic seat failure on product delivery valve PV11. Tests rapid diversion response.',
+      fault: { deviceId: 'PV-11', mode: 'stuck_closed' as const },
+    },
+    {
+      title: 'PV-12 Divert Valve Jammed Open (Seat Leakage)',
+      category: 'Mechanical Valve',
+      desc: 'Simulates diversion valve stuck 100% open, recirculating product to Balance Tank.',
+      fault: { deviceId: 'PV-12', mode: 'stuck_open' as const },
+    },
+    {
+      title: 'P-FEED Feed Pump VFD Thermal Overload Trip',
+      category: 'Electrical Drive',
+      desc: 'Simulates motor thermal contactor trip on 5 HP main feed pump. Verifies line shutdown.',
+      fault: { deviceId: 'P-FEED', mode: 'pump_trip' as const },
+    },
+    {
+      title: 'P-BOOSTER Booster Pump Failure (DP Trip)',
+      category: 'Electrical Drive',
+      desc: 'Trips booster pump, dropping differential pressure PT4 - PT2 < 0.5 bar to trigger IL-DP safety interlock.',
+      fault: { deviceId: 'P-BOOSTER', mode: 'pump_trip' as const },
+    },
+    {
+      title: 'TK-BALANCE Transmitter Calibration Drift (-40%)',
+      category: 'Instrumentation',
+      desc: 'Simulates sensor drift on Balance Tank transmitter LT1. Tests low level lockout IL-BAL-LOW (LS1).',
+      fault: { deviceId: 'TK-BALANCE', mode: 'sensor_offset' as const, value: -40 },
+    },
+  ];
+
+  const batchMixingFaults = [
     {
       title: 'V-101 Seized Closed (Mechanical Failure)',
       category: 'Mechanical',
       desc: 'Simulates mechanical valve jam. Verifies IL-01 pump dry-run lockout.',
-      fault: { deviceId: 'V-101', mode: 'stuck_closed' },
+      fault: { deviceId: 'V-101', mode: 'stuck_closed' as const },
     },
     {
       title: 'V-101 Stuck 100% Open (Seat Rupture)',
       category: 'Mechanical',
       desc: 'Simulates seat blow-out or solenoid bypass. Fluid passes unconditionally.',
-      fault: { deviceId: 'V-101', mode: 'stuck_open' },
+      fault: { deviceId: 'V-101', mode: 'stuck_open' as const },
     },
     {
       title: 'P-100 Motor Thermal Overload Trip',
       category: 'Electrical',
       desc: 'Simulates thermal contactor trip. Motor stops and drops running proof.',
-      fault: { deviceId: 'P-100', mode: 'pump_trip' },
+      fault: { deviceId: 'P-100', mode: 'pump_trip' as const },
     },
     {
       title: 'TK-100 Transmitter Calibration Drift (-40%)',
       category: 'Instrumentation',
       desc: 'Simulates sensor drift on level transmitter. Tests low level alarm response.',
-      fault: { deviceId: 'TK-100', mode: 'sensor_offset', value: -40 },
+      fault: { deviceId: 'TK-100', mode: 'sensor_offset' as const, value: -40 },
     },
     {
       title: 'V-102 Pilot Transit Delay (10 seconds)',
       category: 'Pneumatic',
       desc: 'Simulates restricted air pilot pressure. Tests PLC transit timeout alarm.',
-      fault: { deviceId: 'V-102', mode: 'travel_delay', value: 10 },
+      fault: { deviceId: 'V-102', mode: 'travel_delay' as const, value: 10 },
     },
   ];
+
+  const faultCatalog = activeSkid === 'PASTEURIZER_10KLPH' ? pasteurizerFaults : batchMixingFaults;
 
   return (
     <div className="industrial-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14, height: '100%', overflowY: 'auto' }}>
