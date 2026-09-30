@@ -161,10 +161,6 @@ export function App() {
             </div>
           )}
 
-          <div style={{ padding: '4px 8px', borderRadius: 4, background: '#f8fafc', border: '1px solid var(--border-subtle)', fontSize: 11 }}>
-            <span className="mono" style={{ color: 'var(--text-secondary)' }}>MOCK PLC · 100ms SCAN</span>
-          </div>
-
           {results.length > 0 && (
             <button onClick={openReportModal} className="btn btn-success" style={{ fontSize: 11, padding: '5px 10px' }}>
               FAT REPORT
