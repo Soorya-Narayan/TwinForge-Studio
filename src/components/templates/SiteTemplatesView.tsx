@@ -86,6 +86,8 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
   const customTopology = useSimulationStore((s) => s.customTopology);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [droppedJson, setDroppedJson] = useState<string | undefined>(undefined);
 
   const handleActivate = (id: SkidId) => {
     setSkid(id);
@@ -93,6 +95,42 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
     if (onSelectAndNavigate) {
       onSelectAndNavigate();
     }
+  };
+
+  const handleCardDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleCardDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleCardDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json' && file.type !== 'text/plain') {
+      alert('Please drop a valid .json custom skid template file.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setDroppedJson(content);
+        setIsModalOpen(true);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const getActiveSkidDisplayName = () => {
@@ -591,9 +629,12 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
             </div>
           </div>
         ) : (
-          /* Empty State / Custom Ingestion Card */
+          /* Empty State / Custom Ingestion Card with Drag and Drop */
           <div
             onClick={() => setIsModalOpen(true)}
+            onDragOver={handleCardDragOver}
+            onDragLeave={handleCardDragLeave}
+            onDrop={handleCardDrop}
             style={{
               borderRadius: 8,
               padding: '28px 24px',
@@ -602,32 +643,37 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
               alignItems: 'center',
               justifyContent: 'center',
               textAlign: 'center',
-              border: '2px dashed #94a3b8',
-              background: '#f8fafc',
+              border: isDragging ? '2px dashed #0284c7' : '2px dashed #94a3b8',
+              background: isDragging ? '#eff6ff' : '#f8fafc',
+              boxShadow: isDragging ? '0 8px 24px rgba(2, 132, 199, 0.2)' : 'none',
               cursor: 'pointer',
               minHeight: 380,
               transition: 'all 0.2s ease',
+              transform: isDragging ? 'scale(1.01)' : 'none',
             }}
           >
             <div
               style={{
-                width: 56,
-                height: 56,
+                width: 60,
+                height: 60,
                 borderRadius: '50%',
-                background: '#e0f2fe',
+                background: isDragging ? '#dbeafe' : '#e0f2fe',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 16,
+                transition: 'all 0.2s ease',
               }}
             >
-              <UploadCloud size={28} color="#0284c7" />
+              <UploadCloud size={30} color="#0284c7" />
             </div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
-              Import Custom Skid Topology (JSON)
+              {isDragging ? 'Drop Custom Skid JSON Here!' : 'Drag & Drop or Import Custom Skid Topology'}
             </h3>
             <p style={{ margin: '8px 0 20px 0', fontSize: 12, color: 'var(--text-secondary)', maxWidth: 360, lineHeight: 1.5 }}>
-              Upload your proprietary P&ID schema, configure tanks, valves, pumps, and pipes, run live validation checks, and simulate your bespoke plant in real time.
+              {isDragging
+                ? 'Release file now to automatically parse, validate, and simulate your bespoke plant.'
+                : 'Drag & drop any .json P&ID schema directly onto this card, or click to launch the builder with live hydraulic validation.'}
             </p>
             <button
               className="btn btn-primary"
@@ -643,7 +689,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
               }}
             >
               <Plus size={14} />
-              <span>LAUNCH JSON SKID BUILDER</span>
+              <span>{isDragging ? 'DROP TO LOAD' : 'LAUNCH JSON SKID BUILDER'}</span>
             </button>
           </div>
         )}
@@ -698,7 +744,11 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
       {/* Custom Skid Importer & Builder Modal */}
       <CustomSkidModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        initialJson={droppedJson}
+        onClose={() => {
+          setIsModalOpen(false);
+          setDroppedJson(undefined);
+        }}
         onDeploySuccess={() => {
           if (onSelectAndNavigate) {
             onSelectAndNavigate();

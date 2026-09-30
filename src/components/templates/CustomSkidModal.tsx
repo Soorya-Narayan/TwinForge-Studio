@@ -11,7 +11,7 @@ import {
 } from '../../core/templates/customTemplateValidator';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import {
-  Upload,
+  UploadCloud,
   Download,
   Code2,
   CheckCircle2,
@@ -27,18 +27,29 @@ interface CustomSkidModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDeploySuccess?: () => void;
+  initialJson?: string;
 }
 
 export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
   isOpen,
   onClose,
   onDeploySuccess,
+  initialJson,
 }) => {
   const setCustomSkid = useSimulationStore((s) => s.setCustomSkid);
 
   const [jsonText, setJsonText] = useState<string>(() =>
-    JSON.stringify(SAMPLE_CUSTOM_BOILERPLATE, null, 2)
+    initialJson || JSON.stringify(SAMPLE_CUSTOM_BOILERPLATE, null, 2)
   );
+  const [prevInitialJson, setPrevInitialJson] = useState<string | undefined>(initialJson);
+  const [isDragging, setIsDragging] = useState(false);
+
+  if (initialJson !== prevInitialJson) {
+    setPrevInitialJson(initialJson);
+    if (initialJson) {
+      setJsonText(initialJson);
+    }
+  }
 
   // Real-time validation
   const validation = useMemo(() => {
@@ -57,11 +68,12 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
 
   if (!isOpen) return null;
 
-  // File Upload Handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // File Processor for both Drag-and-Drop and File Dialog Upload
+  const processFile = (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json' && file.type !== 'text/plain') {
+      alert('Please provide a valid .json template file.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
@@ -70,6 +82,41 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
       }
     };
     reader.readAsText(file);
+  };
+
+  // Drag-and-Drop Event Handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  // File Dialog Upload Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+    e.target.value = '';
   };
 
   // Download Current JSON
@@ -133,6 +180,9 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
     >
       <div
         className="industrial-card"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           background: '#ffffff',
           width: '100%',
@@ -141,9 +191,11 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 8,
-          boxShadow: 'var(--shadow-lg)',
+          boxShadow: isDragging ? '0 8px 30px rgba(2, 132, 199, 0.25)' : 'var(--shadow-lg)',
           overflow: 'hidden',
-          border: '1px solid var(--border-strong)',
+          border: isDragging ? '2px dashed #0284c7' : '1px solid var(--border-strong)',
+          transition: 'border 0.15s ease, box-shadow 0.15s ease',
+          position: 'relative',
         }}
       >
         {/* Header */}
@@ -188,10 +240,10 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Upload File Input */}
-            <label className="btn btn-ghost" style={{ cursor: 'pointer', fontSize: 11 }}>
-              <Upload size={13} />
-              UPLOAD JSON FILE
+            {/* Upload File Input with Drag & Drop Label */}
+            <label className="btn btn-ghost" style={{ cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <UploadCloud size={14} color="#0284c7" />
+              <span>DRAG & DROP / BROWSE JSON</span>
               <input type="file" accept=".json" onChange={handleFileUpload} style={{ display: 'none' }} />
             </label>
 
@@ -224,12 +276,79 @@ export const CustomSkidModal: React.FC<CustomSkidModalProps> = ({
 
         {/* Main Body: Two Columns */}
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.4fr 1fr', minHeight: 0, overflow: 'hidden' }}>
-          {/* Left Column: Monospace Editor */}
-          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-strong)', background: '#f8fafc' }}>
-            <div style={{ padding: '6px 14px', background: '#f1f5f9', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Code2 size={13} />
-              JSON Plant Definition
+          {/* Left Column: Monospace Editor with Drag-and-Drop Area */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid var(--border-strong)',
+              background: '#f8fafc',
+              position: 'relative',
+            }}
+          >
+            {/* Drag & Drop Visual Overlay when dragging file over modal */}
+            {isDragging && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(240, 249, 255, 0.96)',
+                  border: '3px dashed #0284c7',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  zIndex: 200,
+                  pointerEvents: 'none',
+                  animation: 'fadeIn 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: '50%',
+                    background: '#e0f2fe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.2)',
+                  }}
+                >
+                  <UploadCloud size={34} color="#0284c7" />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0369a1' }}>
+                  Drop Custom Skid JSON Here
+                </div>
+                <div style={{ fontSize: 11, color: '#475569', maxWidth: 320, textAlign: 'center' }}>
+                  Release to instantly load and validate your physical plant topology against fluid solver rules
+                </div>
+              </div>
+            )}
+
+            <div
+              style={{
+                padding: '6px 14px',
+                background: '#f1f5f9',
+                borderBottom: '1px solid var(--border-subtle)',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Code2 size={13} />
+                <span>JSON Plant Definition</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+                Drop .json file anywhere or edit inline
+              </div>
             </div>
+
             <textarea
               value={jsonText}
               onChange={(e) => setJsonText(e.target.value)}
