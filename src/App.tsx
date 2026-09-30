@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PlantMimic } from './components/mimic/PlantMimic';
+import { PasteurizerMimic } from './components/mimic/PasteurizerMimic';
 import { FatSuitePanel } from './components/fat/FatSuitePanel';
 import { FaultDeck } from './components/faults/FaultDeck';
 import { TagWatchTable } from './components/tags/TagWatchTable';
@@ -20,6 +21,8 @@ import {
 export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER'>('MIMIC');
 
+  const activeSkid = useSimulationStore((s) => s.activeSkid);
+  const setSkid = useSimulationStore((s) => s.setSkid);
   const plc = useSimulationStore((s) => s.plc);
   const faults = useSimulationStore((s) => s.faults);
   const openReportModal = useFatStore((s) => s.openReportModal);
@@ -41,7 +44,7 @@ export function App() {
           borderRadius: 6,
         }}
       >
-        {/* Brand & Plant Metadata */}
+        {/* Brand & Plant Metadata with Skid Selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <img
             src="/gooselogo.png"
@@ -62,8 +65,26 @@ export function App() {
                 FAT Virtual Commissioning System
               </span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Plant Skid: GIS-CIP-25KLPH · Goose Industrial Solutions
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <select
+                value={activeSkid}
+                onChange={(e) => setSkid(e.target.value as any)}
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  border: '1px solid var(--border-strong)',
+                  background: '#f8fafc',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#0f766e',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="PASTEURIZER_10KLPH">SKID: MILK PASTEURIZER 10 KLPH · LACTALIS BHOPAL</option>
+                <option value="BATCH_MIXING">SKID: THREE-SOLUTION BATCH MIXING (25 KLPH)</option>
+              </select>
             </div>
           </div>
         </div>
@@ -145,7 +166,7 @@ export function App() {
 
       {/* Main SCADA Workspace */}
       <main style={{ flex: 1, padding: '10px 14px 14px 14px', overflow: 'hidden' }}>
-        {activeTab === 'MIMIC' && <PlantMimic />}
+        {activeTab === 'MIMIC' && (activeSkid === 'PASTEURIZER_10KLPH' ? <PasteurizerMimic /> : <PlantMimic />)}
         {activeTab === 'TRENDS' && <TrendOscilloscope />}
         {activeTab === 'FAT' && <FatSuitePanel />}
         {activeTab === 'FAULTS' && <FaultDeck />}
