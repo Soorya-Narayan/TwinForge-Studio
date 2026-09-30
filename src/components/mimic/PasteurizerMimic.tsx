@@ -1,8 +1,6 @@
 /**
  * TwinForge Studio - Milk Pasteurizer 10 KLPH Process Mimic
- * 100% Faithful Engineering Replica of Goose Industrial Solutions P&ID Drawing:
- * Drawing No: GP-LACTALIS, BHOPAL-PID-PSTRZ-001 (Rev 0, 24.06.26)
- * Client: LACTALIS, BHOPAL
+ * Standard Continuous HTST Sanitary Thermal Process Template
  */
 
 import React from 'react';
@@ -249,7 +247,7 @@ export const PasteurizerMimic: React.FC = () => {
           <rect width="1200" height="680" fill="url(#pidGrid)" />
 
           {/* ============================================================== */}
-          {/* DRAWING HEADER & BORDER (GP-LACTALIS, BHOPAL-PID-PSTRZ-001)   */}
+          {/* PROCESS SCHEMATIC HEADER & BORDER                              */}
           {/* ============================================================== */}
           <rect x="15" y="15" width="1170" height="650" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
           <line x1="15" y1="50" x2="1185" y2="50" stroke="#cbd5e1" strokeWidth="1" />
@@ -257,11 +255,11 @@ export const PasteurizerMimic: React.FC = () => {
           <text x="30" y="38" fill="#0f172a" fontSize="16" fontWeight="900" letterSpacing="-0.02em">
             MILK PASTEURIZER 10 KLPH
           </text>
-          <text x="320" y="36" fill="#64748b" fontSize="11" fontWeight="600">
-            CLIENT: LACTALIS, BHOPAL · DRAWING NO: GP-LACTALIS, BHOPAL-PID-PSTRZ-001 (REV 0)
+          <text x="300" y="36" fill="#64748b" fontSize="11" fontWeight="600">
+            CONTINUOUS HTST THERMAL PROCESS & AUTOMATED FLOW DIVERSION
           </text>
-          <text x="1060" y="36" fill="#0284c7" fontSize="11" fontWeight="800">
-            GOOSE INDUSTRIAL SOLUTIONS
+          <text x="1050" y="36" fill="#0284c7" fontSize="11" fontWeight="800">
+            PROCESS MIMIC
           </text>
 
           {/* ============================================================== */}
@@ -818,32 +816,29 @@ export const PasteurizerMimic: React.FC = () => {
             <line x1="0" y1="100" x2="300" y2="100" stroke="#cbd5e1" strokeWidth="1" />
             <line x1="150" y1="0" x2="150" y2="35" stroke="#cbd5e1" strokeWidth="1" />
 
-            <text x="10" y="22" fill="#0f172a" fontSize="12" fontWeight="900">
-              GOOSE
-            </text>
-            <text x="60" y="22" fill="#64748b" fontSize="10" fontWeight="bold">
-              PUNE
+            <text x="10" y="22" fill="#0f172a" fontSize="11" fontWeight="900">
+              PROCESS TEMPLATE
             </text>
             <text x="160" y="22" fill="#0284c7" fontSize="11" fontWeight="bold">
-              LACTALIS, BHOPAL
+              10,000 LPH CAPACITY
             </text>
 
             <text x="10" y="52" fill="#64748b" fontSize="8">
-              DRAWING TITLE
+              PROCESS SYSTEM
             </text>
             <text x="10" y="64" fill="#0f172a" fontSize="10" fontWeight="bold">
-              MILK PASTEURIZER 10 KLPH P&ID
+              CONTINUOUS HTST MILK PASTEURIZER
             </text>
 
             <text x="10" y="86" fill="#64748b" fontSize="8">
-              DRAWING NO
+              DESIGN SPECIFICATION
             </text>
             <text x="10" y="96" fill="#0369a1" fontSize="9" fontWeight="bold" className="mono">
-              GP-LACTALIS, BHOPAL-PID-PSTRZ-001
+              ISA-5.1 · 3-A SANITARY STANDARDS
             </text>
 
             <text x="10" y="118" fill="#64748b" fontSize="8">
-              REV: 0 · 24.06.26 · APPROVED: JT · DRAWN: AM
+              CLASSIFICATION: PROCESS TOPOLOGY TEMPLATE
             </text>
           </g>
         </svg>
@@ -908,7 +903,7 @@ export const PasteurizerMimic: React.FC = () => {
                 color: '#15803d',
               }}
             >
-              100% P&ID MATCH · GP-LACTALIS, BHOPAL-PID-PSTRZ-001
+              SANITARY PROCESS TOPOLOGY · 10 KLPH HTST
             </span>
           </div>
         </div>

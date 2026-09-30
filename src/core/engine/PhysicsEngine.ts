@@ -397,7 +397,7 @@ export class PhysicsEngine {
       inputs[`${hx.tag}_TT`] = state?.temperatureC ?? 20.0;
     }
 
-    // Specialized Dairy Pasteurizer P&ID Tag Mapping (GP-LACTALIS, BHOPAL-PID-PSTRZ-001)
+    // Specialized Continuous Dairy Pasteurizer Tag Mapping (10 KLPH HTST)
     if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
       const balState = this.states.get('TK-BALANCE');
       const feedState = this.states.get('P-FEED');

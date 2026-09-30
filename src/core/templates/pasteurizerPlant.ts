@@ -1,9 +1,7 @@
 /**
  * TwinForge Studio - Milk Pasteurizer 10 KLPH Plant Topology
- * 100% Faithful Engineering Mirror of Goose Industrial Solutions Drawing:
- * Drawing No: GP-LACTALIS, BHOPAL-PID-PSTRZ-001 (Rev 0, 24.06.26)
- * Client: LACTALIS, BHOPAL
- * Title: MILK PASTEURIZER 10 KLPH P&ID
+ * Continuous HTST Dairy Process Simulation Template
+ * 10,000 LPH Capacity · 3-A Sanitary / PMO Standards
  */
 
 import type { PlantTopology } from '../engine/PhysicsEngine';
