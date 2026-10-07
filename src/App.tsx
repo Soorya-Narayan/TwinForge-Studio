@@ -62,7 +62,7 @@ export function App() {
           title="Click to replay Goose startup sequence"
         >
           <img
-            src="/gooselogo.png"
+            src="./gooselogo.png"
             alt="Goose Logo"
             style={{
               width: 36,
