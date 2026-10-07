@@ -445,26 +445,16 @@ export const PasteurizerMimic: React.FC = () => {
               strokeWidth="2"
             />
 
-            {/* Header Title Bar & Status Badge */}
+            {/* Header Title Bar */}
             <rect x="0" y="0" width="360" height="24" rx="4" fill="#0f172a" />
-            <text x="12" y="16" fill="#f8fafc" fontSize="10" fontWeight="900" letterSpacing="0.4">
+            <text x="180" y="16" textAnchor="middle" fill="#f8fafc" fontSize="10" fontWeight="900" letterSpacing="0.4">
               PLATE HEAT EXCHANGER (10 KLPH 4-SECTION)
-            </text>
-            <rect
-              x="266"
-              y="5"
-              width="86"
-              height="15"
-              rx="3"
-              fill={pheStatus === 'NORMAL' ? '#166534' : pheStatus === 'LEAK_SAFE' ? '#ca8a04' : '#991b1b'}
-            />
-            <text x="309" y="16" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="900">
-              {pheStatus.replace('_', ' ')}
             </text>
 
             {/* Section 1: Chilling */}
             <g
               transform="translate(6, 28)"
+              style={{ cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedSectionId('CHILLING');
@@ -489,8 +479,6 @@ export const PasteurizerMimic: React.FC = () => {
                 <text x="0" y="24" fill="#15803d">Milk In: {chillThIn.toFixed(1)}°C</text>
               </g>
 
-              {/* Counterflow Arrows */}
-              <text x="70" y="108" fill="#86efac" fontSize="9">⇄</text>
               <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
                 PHE-CHILL
               </text>
@@ -499,6 +487,7 @@ export const PasteurizerMimic: React.FC = () => {
             {/* Section 2: REG-01 */}
             <g
               transform="translate(94, 28)"
+              style={{ cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedSectionId('REG-01');
@@ -523,8 +512,6 @@ export const PasteurizerMimic: React.FC = () => {
                 <text x="0" y="24" fill="#d97706">Hot Out: {reg1ThOut.toFixed(1)}°C</text>
               </g>
 
-              {/* Counterflow Arrows */}
-              <text x="70" y="108" fill="#94a3b8" fontSize="9">⇄</text>
               <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
                 PHE-REG01
               </text>
@@ -533,6 +520,7 @@ export const PasteurizerMimic: React.FC = () => {
             {/* Section 3: REG-02 */}
             <g
               transform="translate(182, 28)"
+              style={{ cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedSectionId('REG-02');
@@ -557,8 +545,6 @@ export const PasteurizerMimic: React.FC = () => {
                 <text x="0" y="24" fill="#d97706">Hot: {reg2ThIn.toFixed(0)}°→{reg2ThOut.toFixed(0)}°</text>
               </g>
 
-              {/* Counterflow Arrows */}
-              <text x="70" y="108" fill="#94a3b8" fontSize="9">⇄</text>
               <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
                 PHE-REG02
               </text>
@@ -567,6 +553,7 @@ export const PasteurizerMimic: React.FC = () => {
             {/* Section 4: Heating */}
             <g
               transform="translate(270, 28)"
+              style={{ cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedSectionId('HEATING');
@@ -591,18 +578,8 @@ export const PasteurizerMimic: React.FC = () => {
                 <text x="0" y="24" fill="#dc2626">HW: {heatThIn.toFixed(0)}°→{heatThOut.toFixed(0)}°</text>
               </g>
 
-              {/* Counterflow Arrows */}
-              <text x="74" y="108" fill="#fde68a" fontSize="9">⇄</text>
               <text x="42" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
                 PHE-HEAT
-              </text>
-            </g>
-
-            {/* Click to Inspect Prompt Badge */}
-            <g transform="translate(230, -12)">
-              <rect x="0" y="0" width="124" height="18" rx="3" fill="#0284c7" />
-              <text x="62" y="12" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
-                🔍 CLICK TO INSPECT PHE
               </text>
             </g>
           </g>
