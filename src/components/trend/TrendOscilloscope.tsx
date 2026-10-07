@@ -157,11 +157,23 @@ export const TrendOscilloscope: React.FC = () => {
       d.pumpSpeed.toFixed(1),
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const rawCsv = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const defaultFileName = `twinforge_${activeSkid.toLowerCase()}_trend_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if (window.electronAPI?.saveFile) {
+      window.electronAPI.saveFile({
+        defaultPath: defaultFileName,
+        filters: [{ name: 'CSV File', extensions: ['csv'] }],
+        content: rawCsv,
+      });
+      return;
+    }
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + rawCsv;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `twinforge_${activeSkid.toLowerCase()}_trend_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', defaultFileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
