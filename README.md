@@ -36,35 +36,55 @@
 
 ## 3. Tech Stack
 
-- **Framework**: Vite 8 + React 19 + TypeScript
+- **Desktop Shell**: Electron 44 + `electron-builder` (Cross-platform native executable packaging)
+- **Frontend Core**: Vite 8 + React 19 + TypeScript
 - **State Management**: Zustand (sub-millisecond real-time simulation coordination)
 - **Node Graph Canvas**: `@xyflow/react` (React Flow)
 - **Styling**: ISA-101 High-Performance Light Theme Vanilla CSS
 - **Iconography**: `lucide-react`
+- **Native OS Bridges**: Secure IPC file dialogs for FAT reports and CSV oscillograms
 
 ---
 
-## 4. Getting Started
+## 4. Desktop Software Development & Packaging
 
 ### Prerequisites
 - Node.js >= 18
 - npm >= 9
 
-### Installation & Launch
+### Running the Desktop App
 
 ```bash
-# Clone the repository
-git clone https://github.com/Soorya-Narayan/TwinForge-Studio.git
-cd TwinForge-Studio
+# 1. Start live desktop development with HMR
+npm run electron:dev
 
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
-
-# Build production bundle
-npm run build
+# 2. Or run the compiled production desktop application locally
+npm run electron:start
 ```
 
-The application will be accessible at `http://localhost:5173`.
+### Packaging & Distribution
+
+```bash
+# Compile and create unpackaged native .app / binary
+npm run dist:dir
+
+# Build production installer for your current OS (DMG/Zip on macOS, NSIS on Windows, AppImage on Linux)
+npm run dist
+
+# Target-specific builds
+npm run dist:mac     # macOS DMG and ZIP
+npm run dist:win     # Windows NSIS and Portable EXE
+npm run dist:linux   # Linux AppImage
+```
+
+Packaged binaries and installers are output to the `./release/` directory.
+
+---
+
+## 5. Web Mode (Optional)
+
+If running in a browser environment without Electron:
+```bash
+npm run dev
+```
+The browser view is available at `http://localhost:5173`.

@@ -80,7 +80,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
           }}
         >
           <img
-            src="/gooselogo.png"
+            src="./gooselogo.png"
             alt="Goose Logo"
             style={{
               width: 120,
