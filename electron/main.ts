@@ -9,8 +9,42 @@ const __dirname = path.dirname(__filename);
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
+let splashWindow: BrowserWindow | null = null;
+
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 420,
+    height: 380,
+    frame: false,
+    resizable: false,
+    transparent: true,
+    center: true,
+    alwaysOnTop: true,
+    show: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  if (isDev) {
+    const devSplashUrl = process.env.VITE_DEV_SERVER_URL
+      ? `${process.env.VITE_DEV_SERVER_URL}/splash.html`
+      : 'http://localhost:5173/splash.html';
+    splashWindow.loadURL(devSplashUrl);
+  } else {
+    splashWindow.loadFile(path.join(__dirname, '../dist/splash.html'));
+  }
+
+  splashWindow.once('ready-to-show', () => {
+    splashWindow?.show();
+  });
+}
 
 function createMainWindow() {
+  const startTime = Date.now();
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -27,9 +61,20 @@ function createMainWindow() {
     show: false,
   });
 
-  // Show window once ready to prevent white flash
+  // Smoothly transition from splash window to main window
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    const elapsed = Date.now() - startTime;
+    const minSplashDuration = 1600; // Allow boot animation with logo and v1.0.0 to display
+    const remainingDelay = Math.max(0, minSplashDuration - elapsed);
+
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.destroy();
+        splashWindow = null;
+      }
+      mainWindow?.show();
+      mainWindow?.focus();
+    }, remainingDelay);
   });
 
   // Handle external link clicks securely
@@ -43,8 +88,6 @@ function createMainWindow() {
   if (isDev) {
     const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
     mainWindow.loadURL(devUrl);
-    // Optionally open DevTools in dev mode
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
@@ -184,6 +227,7 @@ ipcMain.handle('app:getVersion', () => {
 
 // App lifecycle
 app.whenReady().then(() => {
+  createSplashWindow();
   createMainWindow();
 
   app.on('activate', () => {
