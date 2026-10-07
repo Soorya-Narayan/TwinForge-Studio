@@ -13,8 +13,8 @@ let splashWindow: BrowserWindow | null = null;
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 420,
-    height: 380,
+    width: 380,
+    height: 320,
     frame: false,
     resizable: false,
     transparent: true,
