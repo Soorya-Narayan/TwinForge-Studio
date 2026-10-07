@@ -28,31 +28,36 @@ export const TrendOscilloscope: React.FC = () => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const channelDefs = useMemo<Record<string, { name: string; unit: string; color: string; min: number; max: number }>>(() => {
+    let defs: Record<string, { name: string; unit: string; color: string; min: number; max: number }>;
     if (activeSkid === 'PASTEURIZER_10KLPH') {
-      return {
+      defs = {
         tk100Level: { name: 'Balance Tank (LT1)', unit: '%', color: '#0284c7', min: 0, max: 100 },
         tk400Level: { name: 'Product Silo Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
         flowRate: { name: 'Feed Flow Rate (FM)', unit: 'L/min', color: '#059669', min: 0, max: 200 },
         temperature: { name: 'Holding Tube (TT5)', unit: '°C', color: '#d97706', min: 0, max: 100 },
         pumpSpeed: { name: 'Feed Pump (VFD)', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
+        pheRegenEff: { name: 'PHE Regen Eff', unit: '%', color: '#10b981', min: 0, max: 100 },
+        pheDuty: { name: 'Total Duty (Q)', unit: 'kW', color: '#8b5cf6', min: 0, max: 400 },
+        pheDiffPress: { name: 'Booster ΔP Barrier', unit: 'bar', color: '#06b6d4', min: -1, max: 4 },
       };
-    }
-    if (activeSkid === 'CUSTOM') {
-      return {
+    } else if (activeSkid === 'CUSTOM') {
+      defs = {
         tk100Level: { name: 'Primary Vessel Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
         tk400Level: { name: 'Secondary Vessel Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
         flowRate: { name: 'Process Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 300 },
         temperature: { name: 'Process Temperature', unit: '°C', color: '#d97706', min: 0, max: 120 },
         pumpSpeed: { name: 'Pump Drive Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
       };
+    } else {
+      defs = {
+        tk100Level: { name: 'TK-100 Supply Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
+        tk400Level: { name: 'TK-400 Mixing Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
+        flowRate: { name: 'Header Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 250 },
+        temperature: { name: 'HX-100 Process Temp', unit: '°C', color: '#d97706', min: 0, max: 100 },
+        pumpSpeed: { name: 'P-100 Pump Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
+      };
     }
-    return {
-      tk100Level: { name: 'TK-100 Supply Level', unit: '%', color: '#0284c7', min: 0, max: 100 },
-      tk400Level: { name: 'TK-400 Mixing Level', unit: '%', color: '#6366f1', min: 0, max: 100 },
-      flowRate: { name: 'Header Flow Rate', unit: 'L/min', color: '#059669', min: 0, max: 250 },
-      temperature: { name: 'HX-100 Process Temp', unit: '°C', color: '#d97706', min: 0, max: 100 },
-      pumpSpeed: { name: 'P-100 Pump Speed', unit: '% RPM', color: '#dc2626', min: 0, max: 100 },
-    };
+    return defs;
   }, [activeSkid]);
 
   const [enabledChannels, setEnabledChannels] = useState<Record<string, boolean>>({
@@ -61,6 +66,9 @@ export const TrendOscilloscope: React.FC = () => {
     flowRate: true,
     temperature: true,
     pumpSpeed: true,
+    pheRegenEff: true,
+    pheDuty: false,
+    pheDiffPress: true,
   });
 
   const channels: ChannelConfig[] = useMemo(() => {

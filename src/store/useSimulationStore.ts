@@ -22,6 +22,9 @@ export interface TrendDataPoint {
   flowRate: number;
   temperature: number;
   pumpSpeed: number;
+  pheRegenEff?: number;
+  pheDuty?: number;
+  pheDiffPress?: number;
 }
 
 interface SimulationStore {
@@ -87,6 +90,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         flowRate: Number(snap.tags.inputs['FM'] ?? 0) / 60,
         temperature: Number(snap.tags.inputs['TT5'] ?? snap.devices['PHE-HEATING']?.temperatureC ?? 20),
         pumpSpeed: snap.devices['P-FEED']?.speedPct ?? 0,
+        pheRegenEff: Number(snap.tags.inputs['PHE_REGEN_EFF_PCT'] ?? 91.5),
+        pheDuty: Number(snap.tags.inputs['PHE_TOTAL_DUTY_KW'] ?? 245),
+        pheDiffPress: Number(snap.tags.inputs['PT4'] ?? 4.1) - Number(snap.tags.inputs['PT2'] ?? 2.5),
       };
     } else if (activeSkid === 'BATCH_MIXING') {
       dataPoint = {
