@@ -5,14 +5,16 @@
  * standard two-way opposing-triangle valve symbols, and external legend.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import {
   Play,
   Pause,
   RotateCcw,
   Layers,
+  Thermometer,
 } from 'lucide-react';
+import { PheInspectorDrawer } from './PheInspectorDrawer';
 
 export const PasteurizerMimic: React.FC = () => {
   const snapshot = useSimulationStore((s) => s.snapshot);
@@ -25,6 +27,10 @@ export const PasteurizerMimic: React.FC = () => {
   const injectFault = useSimulationStore((s) => s.injectFault);
   const clearFaults = useSimulationStore((s) => s.clearFaults);
   const faults = useSimulationStore((s) => s.faults);
+
+  // Inspector drawer state
+  const [isPheDrawerOpen, setIsPheDrawerOpen] = useState(false);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('ALL');
 
   // Extract simulated devices
   const balTank = snapshot?.devices['TK-BALANCE'];
@@ -64,6 +70,32 @@ export const PasteurizerMimic: React.FC = () => {
   const isForwardFlow = isAtLegalTemp && Boolean(pv11?.isOpen ?? true);
   const isDiverted = !isForwardFlow && (pFeed?.speedPct ?? 0) > 0;
   const dpSafe = pt4 - pt2 >= 0.5;
+
+  // PHE Dynamic Tags
+  const chillTcIn = Number(tags['PHE_CHILL_TC_IN'] ?? 3.5);
+  const chillTcOut = Number(tags['PHE_CHILL_TC_OUT'] ?? 6.2);
+  const chillThIn = Number(tags['PHE_CHILL_TH_IN'] ?? 14.8);
+  const chillThOut = Number(tags['PHE_CHILL_TH_OUT'] ?? 4.0);
+
+  const reg1TcIn = Number(tags['PHE_REG1_TC_IN'] ?? tt1);
+  const reg1TcOut = Number(tags['PHE_REG1_TC_OUT'] ?? 38.5);
+  const reg1ThIn = Number(tags['PHE_REG1_TH_IN'] ?? 45.0);
+  const reg1ThOut = Number(tags['PHE_REG1_TH_OUT'] ?? chillThIn);
+
+  const reg2TcIn = Number(tags['PHE_REG2_TC_IN'] ?? reg1TcOut);
+  const reg2TcOut = Number(tags['PHE_REG2_TC_OUT'] ?? 68.2);
+  const reg2ThIn = Number(tags['PHE_REG2_TH_IN'] ?? tt5);
+  const reg2ThOut = Number(tags['PHE_REG2_TH_OUT'] ?? reg1ThIn);
+
+  const heatTcIn = Number(tags['PHE_HEAT_TC_IN'] ?? reg2TcOut);
+  const heatTcOut = Number(tags['PHE_HEAT_TC_OUT'] ?? tt5);
+  const heatThIn = Number(tags['PHE_HEAT_TH_IN'] ?? tt6);
+  const heatThOut = Number(tags['PHE_HEAT_TH_OUT'] ?? (tt6 - 4.5));
+
+  const regenEff = Number(tags['PHE_REGEN_EFF_PCT'] ?? 91.5);
+  const totalDutyKw = Number(tags['PHE_TOTAL_DUTY_KW'] ?? 245.0);
+  const holdingTimeS = Number(tags['PHE_HOLDING_TIME_S'] ?? 20.0);
+  const pheStatus = String(tags['PHE_STATUS'] ?? 'NORMAL');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', overflowY: 'auto', paddingBottom: 20 }}>
@@ -240,7 +272,7 @@ export const PasteurizerMimic: React.FC = () => {
           {/* ============================================================== */}
           {/* Raw Milk Infeed Line (passes through PV1, turns down directly into Balance Tank) */}
           <path d="M 40 160 L 130 160 L 130 240" fill="none" stroke="#0284c7" strokeWidth="4" />
-          <text x="40" y="148" fill="#0284c7" fontSize="10" fontWeight="bold">
+          <text x="40" y="136" fill="#0284c7" fontSize="10" fontWeight="bold">
             RAW MILK INLET (Ø 51mm)
           </text>
           {/* Valve PV1 (horizontal opposing triangles centered on pipe at x=85, y=160) */}
@@ -256,7 +288,7 @@ export const PasteurizerMimic: React.FC = () => {
 
           {/* Water Infeed Line (passes through PV2, turns down directly into Balance Tank) */}
           <path d="M 40 200 L 110 200 L 110 240" fill="none" stroke="#38bdf8" strokeWidth="3" />
-          <text x="40" y="190" fill="#0284c7" fontSize="9">
+          <text x="40" y="178" fill="#0284c7" fontSize="9" fontWeight="bold">
             WATER INLET
           </text>
           {/* Valve PV2 (horizontal opposing triangles centered on pipe at x=75, y=200) */}
@@ -270,15 +302,15 @@ export const PasteurizerMimic: React.FC = () => {
             </text>
           </g>
 
-          {/* Diverted Recirculation Line (enters top of Balance Tank at x=150, y=240) */}
+          {/* Diverted Recirculation Line (routes above PHE, enters top of Balance Tank at x=150, y=240) */}
           <path
-            d="M 950 195 L 950 220 L 150 220 L 150 240"
+            d="M 950 195 L 950 112 L 150 112 L 150 240"
             fill="none"
             stroke={isDiverted ? '#dc2626' : '#cbd5e1'}
             strokeWidth="3.5"
             strokeDasharray={isDiverted ? '6 3' : 'none'}
           />
-          <text x="560" y="214" fill="#dc2626" fontSize="9" fontWeight="bold">
+          <text x="560" y="104" textAnchor="middle" fill={isDiverted ? '#dc2626' : '#94a3b8'} fontSize="9" fontWeight="bold">
             RECIRCULATION LINE TO BALANCE TANK (LEGAL DIVERT)
           </text>
 
@@ -391,61 +423,188 @@ export const PasteurizerMimic: React.FC = () => {
 
           {/* ============================================================== */}
           {/* ZONE 2: 4-SECTION PLATE HEAT EXCHANGER (Center: X = 410..770)  */}
+          {/* Interactive: Click to open live Dynamic Model Inspector        */}
           {/* ============================================================== */}
-          <g transform="translate(410, 140)">
-            <rect x="0" y="0" width="360" height="150" rx="4" fill="#ffffff" stroke="#1e293b" strokeWidth="2" />
+          <g
+            transform="translate(410, 140)"
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              setSelectedSectionId('ALL');
+              setIsPheDrawerOpen(true);
+            }}
+          >
+            {/* Outer Frame with Sanitary Border */}
+            <rect
+              x="0"
+              y="0"
+              width="360"
+              height="150"
+              rx="5"
+              fill="#ffffff"
+              stroke={pheStatus === 'FOULING_CRITICAL' || pheStatus === 'CONTAMINATED_LEAK' ? '#ef4444' : '#1e293b'}
+              strokeWidth="2"
+            />
 
-            {/* Section 1: Chilling */}
-            <rect x="6" y="6" width="80" height="138" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.2" />
-            <text x="46" y="24" textAnchor="middle" fill="#15803d" fontSize="10" fontWeight="800">
-              CHILLING
-            </text>
-            <text x="46" y="75" textAnchor="middle" fill="#15803d" fontSize="15" fontWeight="900" className="mono">
-              4.0 °C
-            </text>
-            <text x="46" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
-              PHE-CHILL
-            </text>
-
-            {/* Section 2: REG-01 */}
-            <rect x="94" y="6" width="80" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
-            <text x="134" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="800">
-              REG-01
-            </text>
-            <text x="134" y="75" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="700" className="mono">
-              28° - 45°C
-            </text>
-            <text x="134" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
-              PHE-REG01
-            </text>
-
-            {/* Section 3: REG-02 */}
-            <rect x="182" y="6" width="80" height="138" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
-            <text x="222" y="24" textAnchor="middle" fill="#334155" fontSize="10" fontWeight="800">
-              REG-02
-            </text>
-            <text x="222" y="75" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="700" className="mono">
-              65° - 70°C
-            </text>
-            <text x="222" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
-              PHE-REG02
-            </text>
-
-            {/* Section 4: Heating */}
-            <rect x="270" y="6" width="84" height="138" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.2" />
-            <text x="312" y="24" textAnchor="middle" fill="#b45309" fontSize="10" fontWeight="800">
-              HEATING
-            </text>
-            <text x="312" y="75" textAnchor="middle" fill="#b45309" fontSize="15" fontWeight="900" className="mono">
-              90.0 °C
-            </text>
-            <text x="312" y="125" textAnchor="middle" fill="#64748b" fontSize="8">
-              PHE-HEAT
-            </text>
-
-            <text x="180" y="-8" textAnchor="middle" fill="#0f172a" fontSize="12" fontWeight="900">
+            {/* Header Title Bar & Status Badge */}
+            <rect x="0" y="0" width="360" height="24" rx="4" fill="#0f172a" />
+            <text x="12" y="16" fill="#f8fafc" fontSize="10" fontWeight="900" letterSpacing="0.4">
               PLATE HEAT EXCHANGER (10 KLPH 4-SECTION)
             </text>
+            <rect
+              x="266"
+              y="5"
+              width="86"
+              height="15"
+              rx="3"
+              fill={pheStatus === 'NORMAL' ? '#166534' : pheStatus === 'LEAK_SAFE' ? '#ca8a04' : '#991b1b'}
+            />
+            <text x="309" y="16" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="900">
+              {pheStatus.replace('_', ' ')}
+            </text>
+
+            {/* Section 1: Chilling */}
+            <g
+              transform="translate(6, 28)"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedSectionId('CHILLING');
+                setIsPheDrawerOpen(true);
+              }}
+            >
+              <rect x="0" y="0" width="80" height="116" rx="3" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.2" />
+              <text x="40" y="16" textAnchor="middle" fill="#15803d" fontSize="9" fontWeight="800">
+                CHILLING
+              </text>
+              <text x="40" y="38" textAnchor="middle" fill="#15803d" fontSize="14" fontWeight="900" className="mono">
+                {chillThOut.toFixed(1)} °C
+              </text>
+              <text x="40" y="50" textAnchor="middle" fill="#166534" fontSize="7.5" fontWeight="600">
+                PRODUCT OUT
+              </text>
+
+              {/* Dynamic Port Temperatures */}
+              <g transform="translate(6, 64)" fontSize="7.5" className="mono">
+                <text x="0" y="0" fill="#0369a1">CW In: {chillTcIn.toFixed(1)}°C</text>
+                <text x="0" y="12" fill="#0369a1">CW Out: {chillTcOut.toFixed(1)}°C</text>
+                <text x="0" y="24" fill="#15803d">Milk In: {chillThIn.toFixed(1)}°C</text>
+              </g>
+
+              {/* Counterflow Arrows */}
+              <text x="70" y="108" fill="#86efac" fontSize="9">⇄</text>
+              <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
+                PHE-CHILL
+              </text>
+            </g>
+
+            {/* Section 2: REG-01 */}
+            <g
+              transform="translate(94, 28)"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedSectionId('REG-01');
+                setIsPheDrawerOpen(true);
+              }}
+            >
+              <rect x="0" y="0" width="80" height="116" rx="3" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
+              <text x="40" y="16" textAnchor="middle" fill="#334155" fontSize="9" fontWeight="800">
+                REG-01
+              </text>
+              <text x="40" y="38" textAnchor="middle" fill="#0f172a" fontSize="14" fontWeight="800" className="mono">
+                {reg1TcOut.toFixed(1)} °C
+              </text>
+              <text x="40" y="50" textAnchor="middle" fill="#475569" fontSize="7.5" fontWeight="600">
+                PRE-HEAT 1
+              </text>
+
+              {/* Dynamic Port Temperatures */}
+              <g transform="translate(6, 64)" fontSize="7.5" className="mono">
+                <text x="0" y="0" fill="#0284c7">Cold In: {reg1TcIn.toFixed(1)}°C</text>
+                <text x="0" y="12" fill="#059669">Cold Out: {reg1TcOut.toFixed(1)}°C</text>
+                <text x="0" y="24" fill="#d97706">Hot Out: {reg1ThOut.toFixed(1)}°C</text>
+              </g>
+
+              {/* Counterflow Arrows */}
+              <text x="70" y="108" fill="#94a3b8" fontSize="9">⇄</text>
+              <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
+                PHE-REG01
+              </text>
+            </g>
+
+            {/* Section 3: REG-02 */}
+            <g
+              transform="translate(182, 28)"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedSectionId('REG-02');
+                setIsPheDrawerOpen(true);
+              }}
+            >
+              <rect x="0" y="0" width="80" height="116" rx="3" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
+              <text x="40" y="16" textAnchor="middle" fill="#334155" fontSize="9" fontWeight="800">
+                REG-02
+              </text>
+              <text x="40" y="38" textAnchor="middle" fill="#0f172a" fontSize="14" fontWeight="800" className="mono">
+                {reg2TcOut.toFixed(1)} °C
+              </text>
+              <text x="40" y="50" textAnchor="middle" fill="#475569" fontSize="7.5" fontWeight="600">
+                PRE-HEAT 2
+              </text>
+
+              {/* Dynamic Port Temperatures */}
+              <g transform="translate(6, 64)" fontSize="7.5" className="mono">
+                <text x="0" y="0" fill="#0284c7">Cold In: {reg2TcIn.toFixed(1)}°C</text>
+                <text x="0" y="12" fill="#059669">Cold Out: {reg2TcOut.toFixed(1)}°C</text>
+                <text x="0" y="24" fill="#d97706">Hot: {reg2ThIn.toFixed(0)}°→{reg2ThOut.toFixed(0)}°</text>
+              </g>
+
+              {/* Counterflow Arrows */}
+              <text x="70" y="108" fill="#94a3b8" fontSize="9">⇄</text>
+              <text x="40" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
+                PHE-REG02
+              </text>
+            </g>
+
+            {/* Section 4: Heating */}
+            <g
+              transform="translate(270, 28)"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedSectionId('HEATING');
+                setIsPheDrawerOpen(true);
+              }}
+            >
+              <rect x="0" y="0" width="84" height="116" rx="3" fill="#fffbeb" stroke="#fde68a" strokeWidth="1.2" />
+              <text x="42" y="16" textAnchor="middle" fill="#b45309" fontSize="9" fontWeight="800">
+                HEATING
+              </text>
+              <text x="42" y="38" textAnchor="middle" fill="#b45309" fontSize="14" fontWeight="900" className="mono">
+                {heatTcOut.toFixed(1)} °C
+              </text>
+              <text x="42" y="50" textAnchor="middle" fill="#92400e" fontSize="7.5" fontWeight="600">
+                TARGET PAST.
+              </text>
+
+              {/* Dynamic Port Temperatures */}
+              <g transform="translate(6, 64)" fontSize="7.5" className="mono">
+                <text x="0" y="0" fill="#0284c7">Feed: {heatTcIn.toFixed(1)}°C</text>
+                <text x="0" y="12" fill="#b45309">Out: {heatTcOut.toFixed(1)}°C</text>
+                <text x="0" y="24" fill="#dc2626">HW: {heatThIn.toFixed(0)}°→{heatThOut.toFixed(0)}°</text>
+              </g>
+
+              {/* Counterflow Arrows */}
+              <text x="74" y="108" fill="#fde68a" fontSize="9">⇄</text>
+              <text x="42" y="108" textAnchor="middle" fill="#64748b" fontSize="7.5">
+                PHE-HEAT
+              </text>
+            </g>
+
+            {/* Click to Inspect Prompt Badge */}
+            <g transform="translate(230, -12)">
+              <rect x="0" y="0" width="124" height="18" rx="3" fill="#0284c7" />
+              <text x="62" y="12" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
+                🔍 CLICK TO INSPECT PHE
+              </text>
+            </g>
           </g>
 
           {/* ============================================================== */}
@@ -589,21 +748,24 @@ export const PasteurizerMimic: React.FC = () => {
           {/* Holding Coil (20s) */}
           <g transform="translate(820, 150)">
             <path d="M 0 0 Q 15 -15 30 0 Q 45 15 60 0 Q 75 -15 90 0" fill="none" stroke="#0f766e" strokeWidth="4" />
-            <text x="45" y="-18" textAnchor="middle" fill="#0f766e" fontSize="9" fontWeight="bold">
+            <text x="45" y="-22" textAnchor="middle" fill="#0f766e" fontSize="9" fontWeight="bold">
               HOLDING COIL (20s)
+            </text>
+            <text x="45" y="18" textAnchor="middle" fill="#0f766e" fontSize="8" className="mono">
+              τ = {holdingTimeS.toFixed(1)}s
             </text>
           </g>
 
           {/* Pipe from Holding Coil to Tee junction: (x=910, y=150) to (x=950, y=150) */}
           <path d="M 910 150 L 950 150" fill="none" stroke="#d97706" strokeWidth="4" />
           
-          {/* TT5 Sensor (Directly on line at x=925, y=150) */}
-          <g transform="translate(925, 150)">
+          {/* TT5 Sensor (Directly on line at x=932, y=150) */}
+          <g transform="translate(932, 150)">
             <circle cx="0" cy="0" r="10" fill={isAtLegalTemp ? '#dcfce7' : '#fee2e2'} stroke={isAtLegalTemp ? '#059669' : '#dc2626'} strokeWidth="2" />
             <text x="0" y="3" textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="bold">
               TT5
             </text>
-            <text x="0" y="-14" textAnchor="middle" fill={isAtLegalTemp ? '#059669' : '#dc2626'} fontSize="9" fontWeight="bold" className="mono">
+            <text x="0" y="-16" textAnchor="middle" fill={isAtLegalTemp ? '#059669' : '#dc2626'} fontSize="9" fontWeight="bold" className="mono">
               {tt5.toFixed(1)}°C
             </text>
           </g>
@@ -726,17 +888,51 @@ export const PasteurizerMimic: React.FC = () => {
             <div>
               <span style={{ color: 'var(--text-muted)' }}>PRODUCT OUT: </span>
               <strong className="mono" style={{ color: '#15803d' }}>
-                4.0°C (LEGAL)
+                {chillThOut.toFixed(1)}°C (LEGAL)
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>REGEN EFF: </span>
+              <strong className="mono" style={{ color: '#059669' }}>
+                {regenEff.toFixed(1)}%
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>DUTY (Q): </span>
+              <strong className="mono" style={{ color: '#b45309' }}>
+                {totalDutyKw.toFixed(0)} kW
               </strong>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => {
+                setSelectedSectionId('ALL');
+                setIsPheDrawerOpen(true);
+              }}
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: 4,
+                background: '#e0f2fe',
+                color: '#0369a1',
+                border: '1px solid #bae6fd',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                cursor: 'pointer',
+              }}
+            >
+              <Thermometer size={12} />
+              INSPECT PHE DYNAMICS
+            </button>
             <span
               style={{
                 fontSize: 10,
                 fontWeight: 700,
-                padding: '2px 8px',
+                padding: '3px 8px',
                 borderRadius: 4,
                 background: '#dcfce7',
                 color: '#15803d',
@@ -841,6 +1037,13 @@ export const PasteurizerMimic: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Dynamic Model Physical Inspection Drawer */}
+      <PheInspectorDrawer
+        isOpen={isPheDrawerOpen}
+        onClose={() => setIsPheDrawerOpen(false)}
+        initialSectionId={selectedSectionId}
+      />
     </div>
   );
 };

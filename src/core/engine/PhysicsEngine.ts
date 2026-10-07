@@ -17,6 +17,7 @@ import type {
   PumpConfig,
   HeatExchangerConfig,
 } from './types';
+import { PHEAssemblyModel } from './phe/index';
 
 export interface PlantTopology {
   tanks: TankConfig[];
@@ -38,6 +39,9 @@ export class PhysicsEngine {
   // Active flow on pipe connections (connectionId -> L/min)
   private connectionFlows: Map<string, number> = new Map();
 
+  // High-fidelity Plate Heat Exchanger assembly for pasteurizer skids
+  public pheAssembly?: PHEAssemblyModel;
+
   constructor(topology: PlantTopology) {
     this.topology = topology;
     this.reset();
@@ -48,6 +52,12 @@ export class PhysicsEngine {
     this.timeMs = 0;
     this.states.clear();
     this.connectionFlows.clear();
+
+    if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
+      this.pheAssembly = new PHEAssemblyModel();
+    } else {
+      this.pheAssembly = undefined;
+    }
 
     // Initialize tanks
     for (const tank of this.topology.tanks) {
@@ -357,44 +367,79 @@ export class PhysicsEngine {
       state.levelPct = Number(((newVol / tank.capacityL) * 100).toFixed(2));
     }
 
-    // Heat Exchangers: simple thermodynamic approach
-    for (const hx of this.topology.exchangers) {
-      const state = this.states.get(hx.id);
-      if (!state) continue;
+    // Heat Exchangers Integration
+    if (this.pheAssembly) {
+      const feedPump = this.states.get('P-FEED');
+      const hwPump = this.states.get('P-HOTWATER');
+      const scvValve = this.states.get('SCV-1');
+      const pv10Valve = this.states.get('PV-10');
+      const pv11Valve = this.states.get('PV-11');
+      const pv12Valve = this.states.get('PV-12');
+      const balTank = this.states.get('TK-BALANCE');
 
-      if (hx.id === 'PHE-HEATING') {
-        const hwPump = this.states.get('P-HOTWATER');
-        const scvValve = this.states.get('SCV-1');
-        const hwRunning = (hwPump?.speedPct ?? 0) > 10;
-        const steamOpening = (scvValve?.positionPct ?? 0) / 100;
+      const feedPumpSpd = (feedPump?.speedPct ?? 0) / 100.0;
+      const feedFlowLph = feedPumpSpd * 10000.0;
 
-        // If hot water pump is running and steam valve has opening
-        if (hwRunning && steamOpening > 0.05) {
-          const targetTemp = 75.0 + steamOpening * 20.0; // 75 - 95 °C target
-          const currentTemp = state.temperatureC ?? 20.0;
-          const heatRate = 0.65 * dt; // Responsive warm-up into pasteurizing zone in ~5 seconds
-          state.temperatureC = Number((currentTemp + (targetTemp - currentTemp) * heatRate).toFixed(2));
-        } else if (!hwRunning) {
-          // Slowly cool down toward ambient
-          const currentTemp = state.temperatureC ?? 20.0;
-          state.temperatureC = Number(Math.max(20.0, currentTemp - 0.5 * dt).toFixed(2));
+      const hwPumpSpeed = (hwPump?.speedPct ?? 0) / 100.0;
+      const steamOpening = (scvValve?.positionPct ?? 0) / 100.0;
+      const hwFlowLph = hwPumpSpeed * 12000.0;
+      const hwSupplyTemp = hwPumpSpeed > 0.05 ? (75.0 + steamOpening * 20.0) : 25.0;
+
+      const cwValveOpen = Boolean(pv10Valve?.isOpen ?? true);
+      const cwFlowLph = cwValveOpen ? 12000.0 : 0.0;
+      const cwSupplyTemp = 1.5;
+
+      const isForward = Boolean(pv11Valve?.isOpen) && !pv12Valve?.isOpen && feedFlowLph > 500;
+
+      // Extract fault states
+      const heatFault = this.faults.get('PHE-HEATING') || this.faults.get('PHE');
+      const foulingMult = heatFault?.mode === 'fouling' ? (heatFault.value ?? 3.0) : 1.0;
+      const leakPct = heatFault?.mode === 'plate_leak' ? (heatFault.value ?? 50) : 0;
+      const lossHw = heatFault?.mode === 'loss_of_hot_water' || hwPumpSpeed < 0.05;
+      const lossCw = heatFault?.mode === 'loss_of_chilled_water' || !cwValveOpen;
+
+      const metrics = this.pheAssembly.step(dt, {
+        feedFlowRateLph: feedFlowLph,
+        rawMilkTempC: balTank?.temperatureC ?? 4.0,
+        hotWaterFlowRateLph: hwFlowLph,
+        hotWaterSupplyTempC: hwSupplyTemp,
+        chilledWaterFlowRateLph: cwFlowLph,
+        chilledWaterSupplyTempC: cwSupplyTemp,
+        isForwardFlow: isForward,
+        foulingMultiplier: foulingMult,
+        plateLeakSizePct: leakPct,
+        lossOfHotWater: lossHw,
+        lossOfChilledWater: lossCw,
+      });
+
+      // Update simulated device states
+      const chillState = this.states.get('PHE-CHILLING');
+      if (chillState) chillState.temperatureC = metrics.chilling.tempHotOutC;
+
+      const reg1State = this.states.get('PHE-REG01');
+      if (reg1State) reg1State.temperatureC = metrics.reg01.tempColdOutC;
+
+      const reg2State = this.states.get('PHE-REG02');
+      if (reg2State) reg2State.temperatureC = metrics.reg02.tempColdOutC;
+
+      const heatState = this.states.get('PHE-HEATING');
+      if (heatState) heatState.temperatureC = metrics.heating.tempColdOutC;
+    } else {
+      // Fallback for non-pasteurizer topologies
+      for (const hx of this.topology.exchangers) {
+        const state = this.states.get(hx.id);
+        if (!state) continue;
+        let activeFlow = 0;
+        for (const conn of this.topology.connections) {
+          if (conn.toNode === hx.id || conn.fromNode === hx.id) {
+            activeFlow = Math.max(activeFlow, this.connectionFlows.get(conn.id) ?? 0);
+          }
         }
-        continue;
-      }
-
-      // If fluid is passing through, heat up toward steam temperature (e.g. 85°C)
-      let activeFlow = 0;
-      for (const conn of this.topology.connections) {
-        if (conn.toNode === hx.id || conn.fromNode === hx.id) {
-          activeFlow = Math.max(activeFlow, this.connectionFlows.get(conn.id) ?? 0);
+        if (activeFlow > 0) {
+          const steamTemp = 95.0;
+          const currentTemp = state.temperatureC ?? 20.0;
+          state.temperatureC = Number((currentTemp + (steamTemp - currentTemp) * 0.20 * dt).toFixed(2));
         }
-      }
-
-      if (activeFlow > 0) {
-        const steamTemp = 95.0; // steam header
-        const currentTemp = state.temperatureC ?? 20.0;
-        const heatRate = 0.20 * dt; // approach rate
-        state.temperatureC = Number((currentTemp + (steamTemp - currentTemp) * heatRate).toFixed(2));
       }
     }
 
@@ -475,44 +520,102 @@ export class PhysicsEngine {
       inputs[`${hx.tag}_TT`] = state?.temperatureC ?? 20.0;
     }
 
-    // Specialized Continuous Dairy Pasteurizer Tag Mapping (10 KLPH HTST)
+      // Specialized Continuous Dairy Pasteurizer Tag Mapping (10 KLPH HTST)
     if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
       const balState = this.states.get('TK-BALANCE');
       const feedState = this.states.get('P-FEED');
-      const boostState = this.states.get('P-BOOSTER');
       const hwState = this.states.get('P-HOTWATER');
-      const heatState = this.states.get('PHE-HEATING');
-      const chillState = this.states.get('PHE-CHILLING');
-      const reg2State = this.states.get('PHE-REG02');
 
       const balLevel = balState?.levelPct ?? 75;
       const feedSpd = feedState?.speedPct ?? 0;
-      const boostSpd = boostState?.speedPct ?? 0;
       const hwSpd = hwState?.speedPct ?? 0;
-      const heatFault = this.faults.get('PHE-HEATING');
+
+      const heatFault = this.faults.get('PHE-HEATING') || this.faults.get('PHE');
       const tempOffset = heatFault?.mode === 'sensor_offset' ? (heatFault.value ?? 0) : 0;
-      const holdingTemp = Math.max(0, (heatState?.temperatureC ?? 20.0) + tempOffset);
 
-      // 9 Temperature Transmitters
-      inputs['TT1'] = Number((balState?.temperatureC ?? 4.0).toFixed(1)); // Balance tank outlet
-      inputs['TT2'] = Number((reg2State?.temperatureC ? reg2State.temperatureC - 5.0 : 65.0).toFixed(1)); // Homogenizer inlet
-      inputs['TT3'] = Number((reg2State?.temperatureC ?? 70.0).toFixed(1)); // REG-02 exit
-      inputs['TT4'] = Number((reg2State?.temperatureC ?? 70.0).toFixed(1)); // Heating section entrance
-      inputs['TT5'] = Number(holdingTemp.toFixed(1)); // Holding coil exit (Critical safety interlock)
-      inputs['TT6'] = Number((hwSpd > 10 ? 95.0 : 25.0).toFixed(1)); // Hot water supply
-      inputs['TT7'] = Number((hwSpd > 10 ? 91.8 : 24.5).toFixed(1)); // Hot water return
-      inputs['TT8'] = Number((hwSpd > 10 ? 88.0 : 23.0).toFixed(1)); // Steam condensate recovery
-      inputs['TT9'] = Number((chillState?.temperatureC ? Math.max(4.0, chillState.temperatureC + 2.0) : 6.2).toFixed(1)); // Chilled water return
+      if (this.pheAssembly) {
+        const overall = this.pheAssembly.getOverallMetrics();
+        const mHeat = this.pheAssembly.heating.getMetrics();
+        const mReg1 = this.pheAssembly.reg01.getMetrics();
+        const mReg2 = this.pheAssembly.reg02.getMetrics();
+        const mChill = this.pheAssembly.chilling.getMetrics();
 
-      // 7 Pressure Transmitters & Gauge
-      inputs['PT1'] = Number((0.2 + (balLevel / 100) * 0.1).toFixed(2)); // Suction head (bar)
-      inputs['PT2'] = Number((feedSpd > 10 ? 2.5 * (feedSpd / 100) : 0.2).toFixed(2)); // Feed pump discharge (bar)
-      inputs['PT3'] = Number((feedSpd > 10 ? 180.0 : 0.0).toFixed(1)); // Homogenizer stage pressure (bar)
-      inputs['PT4'] = Number((boostSpd > 10 ? 4.1 : feedSpd > 10 ? 2.3 : 0.2).toFixed(2)); // Booster pump discharge (bar)
-      inputs['PT5'] = Number((hwSpd > 10 ? 2.1 : 0.0).toFixed(2)); // Hot water pump discharge (bar)
-      inputs['PT6'] = 3.0; // Chilled water supply header (bar)
-      inputs['PT7'] = 3.0; // Steam header supply (bar)
-      inputs['PG1'] = 3.0; // Steam pressure gauge (bar)
+        const holdingTemp = Math.max(0, overall.holdingTubeExitTempC + tempOffset);
+
+        // 9 Temperature Transmitters
+        inputs['TT1'] = Number((balState?.temperatureC ?? 4.0).toFixed(1)); // Balance tank outlet
+        inputs['TT2'] = Number(mReg1.tempColdOutC.toFixed(1)); // Exiting REG-01 (Homogenizer / Separator inlet)
+        inputs['TT3'] = Number(mReg2.tempColdOutC.toFixed(1)); // REG-02 cold exit
+        inputs['TT4'] = Number(mReg2.tempColdOutC.toFixed(1)); // Heating section entrance
+        inputs['TT5'] = Number(holdingTemp.toFixed(1));        // Holding coil exit (Critical safety interlock)
+        inputs['TT6'] = Number(mHeat.tempHotInC.toFixed(1));   // Hot water supply
+        inputs['TT7'] = Number(mHeat.tempHotOutC.toFixed(1));  // Hot water return
+        inputs['TT8'] = Number((mHeat.tempHotOutC > 30 ? mHeat.tempHotOutC - 3.8 : 22.0).toFixed(1)); // Condensate
+        inputs['TT9'] = Number(mChill.tempColdOutC.toFixed(1)); // Chilled water return
+
+        // 7 Pressure Transmitters & Gauge
+        inputs['PT1'] = Number((0.2 + (balLevel / 100) * 0.1).toFixed(2)); // Suction head (bar)
+        inputs['PT2'] = overall.rawPressurePT2Bar; // Feed pump discharge (bar)
+        inputs['PT3'] = Number((feedSpd > 10 ? 180.0 : 0.0).toFixed(1)); // Homogenizer stage pressure (bar)
+        inputs['PT4'] = overall.pasteurizedPressurePT4Bar; // Booster pump discharge (bar)
+        inputs['PT5'] = Number((hwSpd > 10 ? 2.1 : 0.0).toFixed(2)); // Hot water pump discharge (bar)
+        inputs['PT6'] = 3.0; // Chilled water supply header (bar)
+        inputs['PT7'] = 3.0; // Steam header supply (bar)
+        inputs['PG1'] = 3.0; // Steam pressure gauge (bar)
+
+        // Publish Full PHE Section Analytics Tags
+        const sections = [
+          { prefix: 'PHE_HEAT', m: mHeat },
+          { prefix: 'PHE_REG1', m: mReg1 },
+          { prefix: 'PHE_REG2', m: mReg2 },
+          { prefix: 'PHE_CHILL', m: mChill },
+        ];
+
+        for (const s of sections) {
+          inputs[`${s.prefix}_T_COLD_IN`] = s.m.tempColdInC;
+          inputs[`${s.prefix}_T_COLD_OUT`] = s.m.tempColdOutC;
+          inputs[`${s.prefix}_T_HOT_IN`] = s.m.tempHotInC;
+          inputs[`${s.prefix}_T_HOT_OUT`] = s.m.tempHotOutC;
+          inputs[`${s.prefix}_Q_KW`] = s.m.dutyAverageKW;
+          inputs[`${s.prefix}_EPSILON`] = s.m.effectivenessEpsilon;
+          inputs[`${s.prefix}_NTU`] = s.m.ntu;
+          inputs[`${s.prefix}_LMTD`] = s.m.lmtdC;
+          inputs[`${s.prefix}_U`] = s.m.uValue_W_per_m2_K;
+          inputs[`${s.prefix}_UA`] = s.m.uaValue_kW_per_K;
+          inputs[`${s.prefix}_DP_COLD`] = s.m.pressureDropColdBar;
+          inputs[`${s.prefix}_DP_HOT`] = s.m.pressureDropHotBar;
+          inputs[`${s.prefix}_FOULING_PCT`] = s.m.foulingPct;
+          inputs[`${s.prefix}_ENERGY_ERR`] = s.m.energyBalanceErrorPct;
+        }
+
+        // Overall Assembly KPIs
+        inputs['PHE_REGEN_EFF_PCT'] = overall.regenerationEfficiencyPct;
+        inputs['PHE_HOLDING_TIME_S'] = overall.holdingTubeResidenceTimeS;
+        inputs['PHE_DUTY_HEAT_KW'] = overall.totalHeatingDutyKW;
+        inputs['PHE_DUTY_CHILL_KW'] = overall.totalChillingDutyKW;
+        inputs['PHE_DUTY_REGEN_KW'] = overall.totalRegenerationDutyKW;
+        inputs['PHE_LEAK_RATE_LPM'] = overall.plateLeakFlowRateLpm;
+        inputs['PHE_CONTAMINATION_ALARM'] = overall.contaminationAlarm;
+      } else {
+        // Fallback static estimates if pheAssembly unattached
+        inputs['TT1'] = Number((balState?.temperatureC ?? 4.0).toFixed(1));
+        inputs['TT2'] = 45.0;
+        inputs['TT3'] = 70.0;
+        inputs['TT4'] = 70.0;
+        inputs['TT5'] = 88.0;
+        inputs['TT6'] = 95.0;
+        inputs['TT7'] = 91.8;
+        inputs['TT8'] = 88.0;
+        inputs['TT9'] = 6.2;
+        inputs['PT1'] = 0.25;
+        inputs['PT2'] = 2.5;
+        inputs['PT3'] = 180.0;
+        inputs['PT4'] = 4.1;
+        inputs['PT5'] = 2.1;
+        inputs['PT6'] = 3.0;
+        inputs['PT7'] = 3.0;
+        inputs['PG1'] = 3.0;
+      }
 
       // Flowmeter (0 - 12,000 LPH, rated 10,000 LPH)
       inputs['FM'] = Number(((feedSpd / 100) * 10000).toFixed(0)); // LPH
@@ -541,6 +644,16 @@ export class PhysicsEngine {
 
     for (const fault of this.faults.values()) {
       alarms.push(`FAULT_${fault.deviceId.toUpperCase()}_${fault.mode.toUpperCase()}`);
+    }
+
+    if (this.pheAssembly) {
+      const metrics = this.pheAssembly.getOverallMetrics();
+      if (metrics.contaminationAlarm) {
+        alarms.push('ALARM_CRITICAL_PASTEURIZER_CROSS_CONTAMINATION');
+      }
+      if (!metrics.isLegalHoldingTime && metrics.holdingTubeResidenceTimeS > 0) {
+        alarms.push('ALARM_LEGAL_UNDER_HOLDING_TIME');
+      }
     }
 
     return alarms;

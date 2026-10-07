@@ -64,6 +64,24 @@ export const FaultDeck: React.FC = () => {
       desc: 'Simulates sensor drift on Balance Tank transmitter LT1. Tests low level lockout IL-BAL-LOW (LS1).',
       fault: { deviceId: 'TK-BALANCE', mode: 'sensor_offset' as const, value: -40 },
     },
+    {
+      title: 'PHE Plate Defect / Gasket Rupture (Plate Leak)',
+      category: 'Plate Heat Exchanger',
+      desc: 'Simulates a perforated plate between streams. Tests sanitary cross-contamination differential pressure rule (PT4 > PT2).',
+      fault: { deviceId: 'PHE-HEATING', mode: 'plate_leak' as const, value: 65 },
+    },
+    {
+      title: 'PHE Severe Thermal Fouling (Protein Burn-On)',
+      category: 'Plate Heat Exchanger',
+      desc: 'Accelerates plate mineral/protein fouling (5x rate multiplier), degrading overall U-value and raising section pressure drop.',
+      fault: { deviceId: 'PHE-HEATING', mode: 'fouling' as const, value: 5.0 },
+    },
+    {
+      title: 'Total Loss of Hot Water Supply (Heater Cutoff)',
+      category: 'Thermal Utility',
+      desc: 'Cuts steam/hot water circulation to HEATING section. Observes holding tube transit delay and automated diversion response.',
+      fault: { deviceId: 'PHE-HEATING', mode: 'loss_of_hot_water' as const },
+    },
   ];
 
   const batchMixingFaults = [

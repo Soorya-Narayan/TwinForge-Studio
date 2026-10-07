@@ -68,7 +68,11 @@ export type FaultMode =
   | 'pump_trip'
   | 'pump_cavitation'
   | 'sensor_offset'
-  | 'wire_break';
+  | 'wire_break'
+  | 'plate_leak'
+  | 'fouling'
+  | 'loss_of_hot_water'
+  | 'loss_of_chilled_water';
 
 export interface DeviceFault {
   deviceId: string;
