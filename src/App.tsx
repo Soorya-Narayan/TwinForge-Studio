@@ -12,16 +12,7 @@ import { SiteTemplatesView } from './components/templates/SiteTemplatesView';
 import { SplashScreen } from './components/loading/SplashScreen';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useFatStore } from './store/useFatStore';
-import {
-  Activity,
-  ShieldCheck,
-  Sliders,
-  Network,
-  Zap,
-  TrendingUp,
-  Layers,
-  Factory,
-} from 'lucide-react';
+import { Factory } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
@@ -85,7 +76,6 @@ export function App() {
             className={`btn ${activeTab === 'MIMIC' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <Activity size={14} />
             PROCESS MIMIC
           </button>
           <button
@@ -93,7 +83,6 @@ export function App() {
             className={`btn ${activeTab === 'TRENDS' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <TrendingUp size={14} />
             TREND RECORDER
           </button>
           <button
@@ -101,7 +90,6 @@ export function App() {
             className={`btn ${activeTab === 'FAT' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <ShieldCheck size={14} />
             FAT SUITE {results.length > 0 && `(${results.filter((r) => r.passed).length}/${results.length})`}
           </button>
           <button
@@ -109,7 +97,6 @@ export function App() {
             className={`btn ${activeTab === 'FAULTS' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <Zap size={14} />
             FAULT DECK {faults.length > 0 && `(${faults.length})`}
           </button>
           <button
@@ -117,7 +104,6 @@ export function App() {
             className={`btn ${activeTab === 'TAGS' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <Sliders size={14} />
             TAG WATCH
           </button>
           <button
@@ -125,7 +111,6 @@ export function App() {
             className={`btn ${activeTab === 'MODELER' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <Network size={14} />
             P&ID MODELER
           </button>
           <button
@@ -133,7 +118,6 @@ export function App() {
             className={`btn ${activeTab === 'TEMPLATES' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ padding: '5px 12px', fontSize: 11 }}
           >
-            <Layers size={14} />
             SITE TEMPLATES
           </button>
         </div>
