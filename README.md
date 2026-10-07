@@ -21,15 +21,15 @@
 
 ---
 
-## 2. Competitive Superiority over Legacy Tools (e.g. Edge64 UnitFAT)
+## 2. Key Advantages over Legacy Commissioning Tools
 
-| Dimension | Legacy Tools (Edge64 UnitFAT) | TwinForge Studio |
+| Dimension | Legacy Commissioning Tools | TwinForge Studio |
 | :--- | :--- | :--- |
 | **P&ID Modeler & Physics** | Layout editor only changes SVG coordinates; zero effect on physics. Plants hardcoded in code. | Visual node-based topology canvas with live physical state indicators. |
 | **Process Trend Recorder** | None. No time-series strip chart or oscilloscope. | **Built-in Multi-Channel Oscilloscope** with cursor readouts, freeze mode, and CSV export. |
 | **Fault Injection** | Unbuilt in UI. Faults can only be scripted in TypeScript code by developers. | **Live Fault Injection Station** (Phase F) with 1-click runtime failure triggering. |
 | **FAT Evidence Reports** | No exportable legal report document. | **Audit-Ready Certified FAT Report** (Phase G) ready for regulatory sign-off. |
-| **Hardware Portability** | Siemens-only with fragile external Python sub-process bridge. | Universal protocol architecture (OPC UA, Modbus TCP, EtherNet/IP, S7). |
+| **Hardware Portability** | Single vendor lock-in with fragile external Python sub-process bridge. | Universal protocol architecture (OPC UA, Modbus TCP, EtherNet/IP, S7). |
 | **User Interface** | Split across multiple disconnected browser URLs. | Unified HMI workspace with seamless tabbed switching. |
 
 ---
