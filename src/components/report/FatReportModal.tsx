@@ -108,7 +108,7 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
             <div>
               <img
-                src="/goosebanner.png"
+                src="./goosebanner.png"
                 alt="Goose Industrial Solutions Banner"
                 style={{ height: 46, objectFit: 'contain', marginBottom: 8, display: 'block' }}
               />
