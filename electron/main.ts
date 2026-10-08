@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,10 +12,18 @@ const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('-
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 
+function getAppIcon() {
+  const prodIcon = path.join(__dirname, '../dist/gooselogo.png');
+  const devIcon = path.join(__dirname, '../public/gooselogo.png');
+  const iconPath = fsSync.existsSync(prodIcon) ? prodIcon : devIcon;
+  return nativeImage.createFromPath(iconPath);
+}
+
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 380,
     height: 320,
+    icon: getAppIcon(),
     frame: false,
     resizable: false,
     transparent: true,
@@ -50,6 +59,7 @@ function createMainWindow() {
     height: 900,
     minWidth: 1080,
     minHeight: 700,
+    icon: getAppIcon(),
     title: 'TwinForge Studio · Industrial Virtual Commissioning & FAT Suite',
     backgroundColor: '#0f172a',
     webPreferences: {
@@ -227,6 +237,14 @@ ipcMain.handle('app:getVersion', () => {
 
 // App lifecycle
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      app.dock.setIcon(getAppIcon());
+    } catch {
+      // Ignore if dock API not supported in environment
+    }
+  }
+
   createSplashWindow();
   createMainWindow();
 

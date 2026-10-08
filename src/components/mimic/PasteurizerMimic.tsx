@@ -329,20 +329,13 @@ export const PasteurizerMimic: React.FC = () => {
           {/* ============================================================== */}
           {/* ZONE 1: HOT WATER PREPARATION SET (Top Left: X=240..390, Y=30) */}
           {/* ============================================================== */}
-          {/* Steam Header Infeed (x=130..250, y=58) */}
-          <path d="M 130 58 L 250 58" fill="none" stroke="#d97706" strokeWidth="3" />
-          <text x="130" y="28" fill="#d97706" fontSize="8.5" fontWeight="bold">
+          {/* Steam Header Infeed (x=140..250, y=55) */}
+          <path d="M 140 55 L 250 55" fill="none" stroke="#d97706" strokeWidth="3" />
+          <text x="140" y="44" fill="#d97706" fontSize="9" fontWeight="bold">
             STEAM INLET 1.5"
           </text>
-          
-          {/* PT7 Transmitter */}
-          <circle cx="160" cy="40" r="7" fill="#ffffff" stroke="#d97706" strokeWidth="1" />
-          <text x="160" y="43" textAnchor="middle" fill="#d97706" fontSize="6.5" fontWeight="bold">PT7</text>
-          <text x="160" y="28" textAnchor="middle" fill="#b45309" fontSize="6.5" className="mono">{pt7.toFixed(1)}b</text>
-          <line x1="160" y1="47" x2="160" y2="58" stroke="#d97706" strokeWidth="1" />
-
           {/* SCV1 Modulating Control Valve */}
-          <g transform="translate(200, 58)">
+          <g transform="translate(205, 55)">
             <polygon points="-9,-6 0,0 -9,6" fill={scv1?.positionPct ? '#fed7aa' : '#fee2e2'} stroke="#b45309" strokeWidth="1.2" />
             <polygon points="9,-6 0,0 9,6" fill={scv1?.positionPct ? '#fed7aa' : '#fee2e2'} stroke="#b45309" strokeWidth="1.2" />
             <line x1="0" y1="0" x2="0" y2="-7" stroke="#b45309" strokeWidth="1.2" />
@@ -351,20 +344,24 @@ export const PasteurizerMimic: React.FC = () => {
               SCV1
             </text>
           </g>
+          {/* PT7 & PG1 */}
+          <circle cx="165" cy="40" r="7" fill="#ffffff" stroke="#d97706" strokeWidth="1" />
+          <text x="165" y="43" textAnchor="middle" fill="#d97706" fontSize="6.5" fontWeight="bold">PT7</text>
+          <text x="165" y="28" textAnchor="middle" fill="#b45309" fontSize="6.5" className="mono">{pt7.toFixed(1)}b</text>
+          <line x1="165" y1="47" x2="165" y2="55" stroke="#d97706" strokeWidth="1" />
 
-          {/* PG1 Pressure Gauge */}
           <circle cx="235" cy="40" r="7" fill="#ffffff" stroke="#d97706" strokeWidth="1" />
           <text x="235" y="43" textAnchor="middle" fill="#d97706" fontSize="6.5" fontWeight="bold">PG1</text>
           <text x="235" y="28" textAnchor="middle" fill="#b45309" fontSize="6.5" className="mono">{pg1.toFixed(1)}b</text>
-          <line x1="235" y1="47" x2="235" y2="58" stroke="#d97706" strokeWidth="1" />
+          <line x1="235" y1="47" x2="235" y2="55" stroke="#d97706" strokeWidth="1" />
 
-          {/* Makeup Water Inlet (x=330, y=28 -> y=58) */}
-          <path d="M 330 28 L 330 58" fill="none" stroke="#0284c7" strokeWidth="2.5" />
-          <text x="330" y="22" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
+          {/* Makeup Water Inlet (x=330, y=25 -> y=55) */}
+          <path d="M 330 25 L 330 55" fill="none" stroke="#0284c7" strokeWidth="2.5" />
+          <text x="330" y="18" textAnchor="middle" fill="#0284c7" fontSize="8" fontWeight="bold">
             WATER INLET Ø 25mm
           </text>
           {/* PV8 Valve */}
-          <g transform="translate(330, 42)">
+          <g transform="translate(330, 40)">
             <polygon points="-6,-6 0,0 -6,6" fill={pv8?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1" transform="rotate(90)" />
             <polygon points="6,-6 0,0 6,6" fill={pv8?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1" transform="rotate(90)" />
             <text x="12" y="3" fill="#0f172a" fontSize="7" fontWeight="bold">PV8</text>
@@ -385,15 +382,15 @@ export const PasteurizerMimic: React.FC = () => {
             </text>
           </g>
 
-          {/* Hot Water Pump 3 HP VFD (Text placed on left to avoid touching return line) */}
+          {/* Hot Water Pump 3 HP VFD */}
           <path d="M 285 145 L 285 160" fill="none" stroke="#f97316" strokeWidth="3" />
           <g transform="translate(285, 175)">
             <circle cx="0" cy="0" r="13" fill="#f8fafc" stroke="#b45309" strokeWidth="1.5" />
             <polygon points="0,-7 7,0 0,7" fill={(pHw?.speedPct ?? 0) > 0 ? '#ea580c' : '#94a3b8'} transform="rotate(90)" />
-            <text x="-18" y="2" textAnchor="end" fill="#b45309" fontSize="7.5" fontWeight="bold">
+            <text x="20" y="2" fill="#b45309" fontSize="7.5" fontWeight="bold">
               HOT WATER PUMP 3 HP
             </text>
-            <text x="-18" y="12" textAnchor="end" fill="#ea580c" fontSize="7" className="mono">
+            <text x="20" y="12" fill="#ea580c" fontSize="7" className="mono">
               PT5: {pt5.toFixed(1)}b
             </text>
           </g>
@@ -577,34 +574,36 @@ export const PasteurizerMimic: React.FC = () => {
           <circle cx="210" cy="260" r="7" fill="#ffffff" stroke="#d97706" strokeWidth="1.2" />
           <text x="210" y="263" textAnchor="middle" fill="#d97706" fontSize="6.5" fontWeight="bold">TT6</text>
 
-          {/* Holding Coil (Vertical Serpentine on the left: X=110..140, Y=255..365) */}
-          <g transform="translate(125, 255)">
+          {/* Holding Coil (Vertical Serpentine on the left: X=110..150, Y=260..370) */}
+          <g transform="translate(130, 260)">
             <path
-              d="M 15 0 L 0 0 L 0 25 L 15 25 L 15 50 L 0 50 L 0 75 L 15 75 L 15 100 L 0 100 L 0 120"
+              d="M 20 0 L 0 0 L 0 30 L 20 30 L 20 60 L 0 60 L 0 90 L 20 90 L 20 120 L 0 120"
               fill="none"
               stroke="#0f766e"
               strokeWidth="4"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <text x="8" y="-12" textAnchor="middle" fill="#0f766e" fontSize="8" fontWeight="bold">
-              HOLDING COIL 20 SEC
+            <text x="-40" y="55" textAnchor="middle" fill="#0f766e" fontSize="8.5" fontWeight="bold">
+              HOLDING COIL
             </text>
-            <text x="8" y="136" textAnchor="middle" fill="#0f766e" fontSize="7.5" className="mono">
-              τ = {holdingTimeS.toFixed(1)}s (Ø 63mm)
+            <text x="-40" y="68" textAnchor="middle" fill="#0f766e" fontSize="8" fontWeight="bold">
+              20 SEC (Ø 63mm)
+            </text>
+            <text x="-40" y="80" textAnchor="middle" fill="#0f766e" fontSize="7.5" className="mono">
+              τ = {holdingTimeS.toFixed(1)}s
             </text>
           </g>
 
-          {/* Leaves holding coil at (125, 375) -> turns to riser at (55, 375) -> Rises to top header at y=115 */}
-          <path d="M 125 375 L 55 375 L 55 115" fill="none" stroke="#d97706" strokeWidth="4" />
-          
+          {/* Leaves holding coil at (130, 380) -> PT3 -> TT5 -> Rises to top header */}
+          <path d="M 130 380 L 80 380 L 80 115" fill="none" stroke="#d97706" strokeWidth="4" />
           {/* PT3 */}
-          <circle cx="55" cy="320" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
-          <text x="55" y="323" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">PT3</text>
-          <text x="42" y="323" textAnchor="end" fill="#0284c7" fontSize="6.5" className="mono">{pt3.toFixed(0)}b</text>
+          <circle cx="80" cy="330" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+          <text x="80" y="333" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">PT3</text>
+          <text x="96" y="333" fill="#0284c7" fontSize="6.5" className="mono">{pt3.toFixed(0)}b</text>
 
           {/* TT5 (Critical Safety Interlock) */}
-          <g transform="translate(55, 220)">
+          <g transform="translate(80, 230)">
             <circle cx="0" cy="0" r="10" fill={isAtLegalTemp ? '#dcfce7' : '#fee2e2'} stroke={isAtLegalTemp ? '#059669' : '#dc2626'} strokeWidth="2" />
             <text x="0" y="3" textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="bold">TT5</text>
             <text x="-16" y="3" textAnchor="end" fill={isAtLegalTemp ? '#059669' : '#dc2626'} fontSize="9" fontWeight="bold" className="mono">
@@ -613,7 +612,7 @@ export const PasteurizerMimic: React.FC = () => {
           </g>
 
           {/* Top Run: Pasteurized Milk Header across to Flow Diversion Valve & REG return */}
-          <path d="M 55 115 L 770 115" fill="none" stroke={isForwardFlow ? '#059669' : '#d97706'} strokeWidth="4" />
+          <path d="M 80 115 L 770 115" fill="none" stroke={isForwardFlow ? '#059669' : '#d97706'} strokeWidth="4" />
           <text x="440" y="106" textAnchor="middle" fill={isForwardFlow ? '#059669' : '#b45309'} fontSize="9" fontWeight="bold">
             PASTEURIZED MILK LINE (90°C)
           </text>
@@ -821,13 +820,13 @@ export const PasteurizerMimic: React.FC = () => {
           {/* ZONE 7: SEPARATOR & HOMOGENIZER (Bottom Left: X=100..480)      */}
           {/* ============================================================== */}
           {/* Raw milk heats in REG-01 (to ~55°C), exits bottom at (545, 360) -> TT2, PV4 -> Separator */}
-          <path d="M 545 360 L 545 445 L 340 445 L 340 470" fill="none" stroke="#0284c7" strokeWidth="3" />
-          <circle cx="500" cy="445" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
-          <text x="500" y="448" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT2</text>
-          <text x="500" y="435" textAnchor="middle" fill="#0284c7" fontSize="6.5" className="mono">{tt2.toFixed(1)}°</text>
+          <path d="M 545 360 L 545 425 L 340 425 L 340 470" fill="none" stroke="#0284c7" strokeWidth="3" />
+          <circle cx="500" cy="425" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1.2" />
+          <text x="500" y="428" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT2</text>
+          <text x="500" y="415" textAnchor="middle" fill="#0284c7" fontSize="6.5" className="mono">{tt2.toFixed(1)}°</text>
 
           {/* Valve PV4 */}
-          <g transform="translate(420, 445)">
+          <g transform="translate(420, 425)">
             <polygon points="-8,-6 0,0 -8,6" fill={pv4?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
             <polygon points="8,-6 0,0 8,6" fill={pv4?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.2" />
             <text x="0" y="16" textAnchor="middle" fill="#0f172a" fontSize="7.5" fontWeight="bold">PV4</text>
@@ -875,21 +874,21 @@ export const PasteurizerMimic: React.FC = () => {
 
           {/* Seal Cooling Water Line to Homogenizer (from bottom left) */}
           <path d="M 60 515 L 140 515" fill="none" stroke="#0ea5e9" strokeWidth="2" />
-          <text x="95" y="538" fill="#0ea5e9" fontSize="7" fontWeight="bold">
+          <text x="95" y="530" fill="#0ea5e9" fontSize="7" fontWeight="bold">
             SEAL WATER Ø 25mm
           </text>
 
           {/* Milk leaves Homogenizer -> enters REG-02 cold inlet (to heat to 70°C) */}
-          <path d="M 185 470 L 185 415 L 435 415 L 435 360" fill="none" stroke="#0284c7" strokeWidth="3" />
+          <path d="M 185 470 L 185 410 L 435 410 L 435 360" fill="none" stroke="#0284c7" strokeWidth="3" />
 
           {/* Preheated milk leaves REG-02 at (465, 360) -> TT3 -> Booster Pump -> HEATING section */}
-          <path d="M 465 360 L 465 390 L 394 390" fill="none" stroke="#0284c7" strokeWidth="3.5" />
-          <circle cx="465" cy="375" r="6" fill="#ffffff" stroke="#0284c7" strokeWidth="1" />
-          <text x="465" y="378" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT3</text>
-          <text x="476" y="378" textAnchor="start" fill="#0284c7" fontSize="6.5" className="mono">{tt3.toFixed(1)}°</text>
+          <path d="M 465 360 L 465 440 L 360 440" fill="none" stroke="#0284c7" strokeWidth="3.5" />
+          <circle cx="465" cy="390" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1" />
+          <text x="465" y="393" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT3</text>
+          <text x="478" y="393" textAnchor="start" fill="#0284c7" fontSize="6.5" className="mono">{tt3.toFixed(1)}°</text>
 
           {/* Booster Pump (5 HP VFD) */}
-          <g transform="translate(380, 390)">
+          <g transform="translate(360, 440)">
             <circle cx="0" cy="0" r="14" fill="#f8fafc" stroke="#334155" strokeWidth="1.8" />
             <polygon points="0,-8 -8,0 0,8" fill={(pBoost?.speedPct ?? 0) > 0 ? '#0284c7' : '#94a3b8'} />
             <text x="0" y="24" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
@@ -901,10 +900,10 @@ export const PasteurizerMimic: React.FC = () => {
           </g>
 
           {/* Booster Pump Discharge enters bottom of HEATING section at (340, 360) with TT4 */}
-          <path d="M 366 390 L 340 390 L 340 360" fill="none" stroke="#0284c7" strokeWidth="3.5" />
-          <circle cx="340" cy="375" r="6" fill="#ffffff" stroke="#0284c7" strokeWidth="1" />
-          <text x="340" y="378" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT4</text>
-          <text x="328" y="378" textAnchor="end" fill="#0284c7" fontSize="6.5" className="mono">{tt4.toFixed(1)}°</text>
+          <path d="M 346 440 L 340 440 L 340 360" fill="none" stroke="#0284c7" strokeWidth="3.5" />
+          <circle cx="340" cy="390" r="7" fill="#ffffff" stroke="#0284c7" strokeWidth="1" />
+          <text x="340" y="393" textAnchor="middle" fill="#0284c7" fontSize="6.5" fontWeight="bold">TT4</text>
+          <text x="325" y="393" textAnchor="end" fill="#0284c7" fontSize="6.5" className="mono">{tt4.toFixed(1)}°</text>
         </svg>
 
         {/* Live Process Telemetry Strip */}
