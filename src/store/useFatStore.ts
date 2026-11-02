@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getFatScenarios } from '../core/testgen/scenarios';
-import type { TestCase, TestResult, ScanHistoryRecord, TestDriverInfo } from '../core/testgen/types';
+import type { TestCase, TestResult, TestAssertion, ScanHistoryRecord, TestDriverInfo } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
 import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
@@ -161,7 +161,7 @@ export const useFatStore = create<FatStore>()(
   runSingleTest: async (testId: string) => {
     const simStore = useSimulationStore.getState();
     const currentSkid = simStore.activeSkid;
-    const scenarios = getFatScenarios(currentSkid);
+    const scenarios = get().scenarios.length > 0 ? get().scenarios : getFatScenarios(currentSkid);
     const test = scenarios.find((s) => s.id === testId);
     if (!test) return;
 
@@ -267,7 +267,46 @@ export const useFatStore = create<FatStore>()(
       set((state) => ({
         results: [...state.results.filter((r) => r.testId !== test.id), result],
         executionDriverInfo: driverInfo,
-        isRunningSuite: false,
+      }));
+    } catch (err: any) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`Error executing scenario [${test.id}]:`, err);
+
+      const failedAssertion: TestAssertion = {
+        tag: 'SCENARIO_EXECUTION',
+        expected: 'COMPLETED_WITHOUT_ERROR',
+        actual: `ERROR: ${errorMsg}`,
+        passed: false,
+        message: `Scenario aborted with runtime exception: ${errorMsg}`,
+      };
+
+      get().addJournalEntry({
+        scan: history[history.length - 1]?.scan ?? 0,
+        timeFormatted: new Date().toLocaleTimeString(),
+        source: 'TEST_GEN',
+        eventType: 'ASSERTION',
+        description: `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
+        tag: 'EXCEPTION',
+        value: errorMsg,
+        status: 'FAIL',
+      });
+
+      const failedResult: TestResult = {
+        testId: test.id,
+        phase: test.phase,
+        title: test.title,
+        clause: test.clause,
+        passed: false,
+        assertions: [failedAssertion],
+        timestamp: new Date().toISOString(),
+        durationMs: Math.round(performance.now() - startTime),
+        scansExecuted: history.length,
+        driver: driverInfo,
+      };
+
+      set((state) => ({
+        results: [...state.results.filter((r) => r.testId !== test.id), failedResult],
+        executionDriverInfo: driverInfo,
       }));
     } finally {
       // Guaranteed teardown: clear all injected faults after each test
@@ -280,6 +319,7 @@ export const useFatStore = create<FatStore>()(
         }
       }
       engine.clearAllFaults();
+      set({ isRunningSuite: false });
     }
   },
 
@@ -289,14 +329,26 @@ export const useFatStore = create<FatStore>()(
     const scenarios = get().scenarios;
     set({ isRunningSuite: true });
 
-    for (let i = 0; i < scenarios.length; i++) {
-      set({ currentTestIndex: i });
-      await runSingleTest(scenarios[i].id);
-      // Wait brief 400ms pause for visual feedback
-      await new Promise((resolve) => setTimeout(resolve, 400));
-    }
+    try {
+      for (let i = 0; i < scenarios.length; i++) {
+        set({ currentTestIndex: i, isRunningSuite: true });
+        try {
+          await runSingleTest(scenarios[i].id);
+        } catch (singleErr) {
+          console.error(`Suite runner caught unexpected error on test [${scenarios[i].id}]:`, singleErr);
+        }
+        // Maintain isRunningSuite state across inter-test pauses
+        if (i < scenarios.length - 1) {
+          set({ isRunningSuite: true });
+        }
+        // Wait brief 400ms pause for visual feedback
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
 
-    set({ isRunningSuite: false, currentTestIndex: -1, showReportModal: true });
+      set({ showReportModal: true });
+    } finally {
+      set({ isRunningSuite: false, currentTestIndex: -1 });
+    }
   },
     }),
     {
