@@ -128,11 +128,13 @@ export const useFatStore = create<FatStore>()(
       },
 
       syncScenarios: (skid: SkidId) => {
+        journalEntrySequence = 0;
         set({
           scenarios: getFatScenarios(skid),
           currentTestIndex: -1,
           isRunningSuite: false,
           results: [],
+          journal: [],
           executionDriverInfo: null,
         });
       },
@@ -157,7 +159,7 @@ export const useFatStore = create<FatStore>()(
         journalEntrySequence += 1;
         const id = `J-${entry.scan}-${journalEntrySequence}`;
         set((state) => ({
-          journal: [{ id, ...entry }, ...state.journal].slice(0, 300), // Keep recent 300 entries
+          journal: [{ id, ...entry }, ...state.journal],
         }));
       },
 
