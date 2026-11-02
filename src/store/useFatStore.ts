@@ -8,6 +8,12 @@ import { persist } from 'zustand/middleware';
 import { getFatScenarios } from '../core/testgen/scenarios';
 import type { TestCase, TestResult, ScanHistoryRecord } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
+import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
+import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
+import { MockPlcDriver } from '../core/driver/MockPlcDriver';
+import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
+import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
+import { defaultMixingSkid } from '../core/templates/defaultPlant';
 
 export interface ScanJournalEntry {
   id: string;
@@ -56,6 +62,31 @@ const generateAutoReportRef = (): string => {
 };
 
 let journalEntrySequence = 0;
+
+export const createIsolatedTestHarness = (
+  skid: SkidId,
+  customTopology?: PlantTopology | null
+): {
+  engine: PhysicsEngine;
+  plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
+} => {
+  let engine: PhysicsEngine;
+  let plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
+
+  if (skid === 'PASTEURIZER_10KLPH') {
+    engine = new PhysicsEngine(milkPasteurizerSkid);
+    plc = new PasteurizerPlcDriver();
+  } else if (skid === 'BATCH_MIXING') {
+    engine = new PhysicsEngine(defaultMixingSkid);
+    plc = new MockPlcDriver();
+  } else {
+    const topology = customTopology || milkPasteurizerSkid;
+    engine = new PhysicsEngine(topology);
+    plc = new GenericPlcDriver(topology);
+  }
+
+  return { engine, plc };
+};
 
 export const useFatStore = create<FatStore>()(
   persist(
@@ -121,17 +152,20 @@ export const useFatStore = create<FatStore>()(
           reportTimestamp: null,
           projectSettings: state.projectSettings,
         }));
-        useSimulationStore.getState().reset();
       },
 
   runSingleTest: async (testId: string) => {
-    const currentSkid = useSimulationStore.getState().activeSkid;
+    const simStore = useSimulationStore.getState();
+    const currentSkid = simStore.activeSkid;
     const scenarios = getFatScenarios(currentSkid);
     const test = scenarios.find((s) => s.id === testId);
     if (!test) return;
 
     set({ isRunningSuite: true });
-    const simStore = useSimulationStore.getState();
+
+    // Isolate each test with a fresh engine and PLC instance instead of live UI instances
+    const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology);
+
     const startTime = performance.now();
     const totalScans = test.durationScans ?? 20;
     const dtMs = test.dtMs ?? 100;
@@ -139,31 +173,31 @@ export const useFatStore = create<FatStore>()(
 
     // Log start in journal
     get().addJournalEntry({
-      scan: simStore.snapshot?.scan ?? 0,
+      scan: 0,
       timeFormatted: new Date().toLocaleTimeString(),
       source: 'TEST_GEN',
       eventType: 'COMMAND',
-      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms)`,
+      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Isolated Instance)`,
       status: 'INFO',
     });
 
     // Optional setup hook before stepped execution
     if (test.setup) {
-      test.setup(simStore.engine, simStore.plc);
+      test.setup(engine, plc);
     }
 
     // Step engine and PLC across totalScans
     for (let step = 0; step < totalScans; step++) {
-      test.stimulus(simStore.engine, simStore.plc, step, history);
+      test.stimulus(engine, plc, step, history);
 
-      simStore.plc.tick(dtMs);
-      const outputs = simStore.plc.readOutputs();
-      const snap = simStore.engine.tick(outputs);
-      simStore.plc.writeInputs(snap.tags.inputs);
+      plc.tick(dtMs);
+      const outputs = plc.readOutputs();
+      const snap = engine.tick(outputs);
+      plc.writeInputs(snap.tags.inputs);
 
       const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
-      if (simStore.plc.interlocks) {
-        for (const [k, v] of simStore.plc.interlocks.entries()) {
+      if (plc.interlocks) {
+        for (const [k, v] of plc.interlocks.entries()) {
           interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
         }
       }
@@ -174,30 +208,21 @@ export const useFatStore = create<FatStore>()(
         timeMs: snap.timeMs,
         inputs: { ...snap.tags.inputs },
         outputs: { ...outputs },
-        plcState: (simStore.plc as any).state,
+        plcState: (plc as any).state,
         interlocks,
         snapshot: snap,
       });
     }
 
-    // Update simulation store snapshot with final state from stepped run
-    if (history.length > 0) {
-      const finalSnap = history[history.length - 1].snapshot;
-      useSimulationStore.setState({
-        snapshot: finalSnap,
-        faults: simStore.engine.getFaults(),
-      });
-    }
-
     // Evaluate assertions on the full resulting history
-    const assertions = test.assertions(simStore.engine, simStore.plc, history);
+    const assertions = test.assertions(engine, plc, history);
     const passed = assertions.every((a) => a.passed);
 
     // Log assertions in journal with timing metadata
     for (const a of assertions) {
       const timingBadge = a.responseTimeMs !== undefined ? ` [Response Time: ${a.responseTimeMs}ms]` : '';
       get().addJournalEntry({
-        scan: simStore.snapshot?.scan ?? 0,
+        scan: history[history.length - 1]?.scan ?? totalScans,
         timeFormatted: new Date().toLocaleTimeString(),
         source: 'TEST_GEN',
         eventType: 'ASSERTION',
