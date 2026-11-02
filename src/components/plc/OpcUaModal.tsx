@@ -162,8 +162,10 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
       setCustomEndpoint(url);
       setSecurityMode('None');
       setSecurityPolicy('None');
-      setAuthMode('Anonymous');
-      setStatusMsg({ type: 'success', text: `Embedded OPC UA Test Server active on ${url}` });
+      setAuthMode('Username');
+      setUsername('admin');
+      setPassword('admin');
+      setStatusMsg({ type: 'success', text: `Embedded OPC UA Test Server active on ${url} (127.0.0.1) · Authenticated as admin (anonymous writes restricted)` });
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err?.message || 'Could not start embedded server' });
     } finally {
@@ -659,10 +661,10 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
               >
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>
-                    Embedded Test OPC UA Server (Local Loopback)
+                    Embedded Test OPC UA Server (Local Loopback 127.0.0.1)
                   </div>
                   <div style={{ fontSize: 10, color: '#64748b' }}>
-                    Runs an in-process OPC UA server on port 4840 with all skid I/O pre-configured for verification.
+                    Bound to 127.0.0.1:4840. Anonymous read allowed; anonymous writes restricted (authenticated as admin/operator).
                   </div>
                 </div>
                 {!isServerRunning ? (

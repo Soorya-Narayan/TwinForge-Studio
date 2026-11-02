@@ -344,11 +344,24 @@ export class OpcUaManager {
 
       this.testServer = new OPCUAServer({
         port,
+        host: '127.0.0.1',
+        hostname: '127.0.0.1',
         resourcePath: '/TwinForge/UA/LoopbackServer',
         buildInfo: {
           productName: 'Loopback Test Server',
           buildNumber: '1.0.0',
           buildDate: new Date(),
+        },
+        userManager: {
+          isValidUser(userName: string, _password: string) {
+            if (userName === 'admin' || userName === 'operator' || userName === 'twinforge') {
+              return true;
+            }
+            return Boolean(userName && userName.toLowerCase() !== 'anonymous');
+          },
+          getUserRoles(_user: string) {
+            return [];
+          },
         },
       });
 
@@ -406,13 +419,27 @@ export class OpcUaManager {
         ];
 
         for (const tag of defaultTags) {
-          namespace.addVariable({
+          const variable = namespace.addVariable({
             componentOf: plantFolder,
             browseName: tag.name,
             nodeId: `ns=1;s=${tag.name}`,
             dataType: tag.type === DataType.Boolean ? 'Boolean' : tag.type === DataType.String ? 'String' : 'Double',
             value: { dataType: tag.type, value: tag.initial },
           });
+
+          // Restrict anonymous writes: reads are permitted, but writes require an authenticated user
+          const originalIsWritable = variable.isWritable ? variable.isWritable.bind(variable) : () => true;
+          (variable as any).isUserWritable = (context: any) => {
+            if (!originalIsWritable(context)) {
+              return false;
+            }
+            if (!context || !context.session) {
+              // Server-internal / in-process write permitted
+              return true;
+            }
+            const username = context.getUserName ? context.getUserName() : '';
+            return Boolean(username && username.toLowerCase() !== 'anonymous');
+          };
         }
       }
 

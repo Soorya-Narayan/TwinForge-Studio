@@ -229,18 +229,28 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     startLocalOpcUaServer: async (port = 4840) => {
       const { plc } = get();
+      const authOpts: OpcUaConnectionOptions = {
+        endpointUrl: `opc.tcp://127.0.0.1:${port}`,
+        securityMode: 'None',
+        securityPolicy: 'None',
+        authMode: 'Username',
+        username: 'admin',
+        password: 'password',
+      };
       if (plc instanceof OpcUaPlcDriver) {
         const endpoint = await plc.startLocalServer(port);
-        await plc.connect(endpoint);
-        set({ opcuaEndpoint: endpoint });
+        authOpts.endpointUrl = endpoint;
+        await plc.connect(authOpts);
+        set({ opcuaEndpoint: endpoint, opcuaSecurityOptions: authOpts });
         return endpoint;
       } else {
-        const opcDriver = new OpcUaPlcDriver();
+        const opcDriver = new OpcUaPlcDriver(authOpts);
         const endpoint = await opcDriver.startLocalServer(port);
-        await opcDriver.connect(endpoint);
+        authOpts.endpointUrl = endpoint;
+        await opcDriver.connect(authOpts);
         const snap = get().engine.tick(opcDriver.readOutputs());
         opcDriver.writeInputs(snap.tags.inputs);
-        set({ driverMode: 'OPCUA', plc: opcDriver, opcuaEndpoint: endpoint, snapshot: snap });
+        set({ driverMode: 'OPCUA', plc: opcDriver, opcuaEndpoint: endpoint, opcuaSecurityOptions: authOpts, snapshot: snap });
         return endpoint;
       }
     },
