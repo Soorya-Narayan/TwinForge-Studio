@@ -327,7 +327,13 @@ export const FatReportModal: React.FC = () => {
             <input
               type="text"
               value={projectSettings.certificateRef}
-              onChange={(e) => setProjectSettings({ certificateRef: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                setProjectSettings({
+                  certificateRef: val,
+                  isCustomRef: val.trim().length > 0,
+                });
+              }}
               placeholder="e.g. FAT-2026-001"
               style={{
                 padding: '3px 8px',

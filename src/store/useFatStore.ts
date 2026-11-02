@@ -32,7 +32,14 @@ export interface ReportProjectSettings {
   customerName: string;
   commissioningLead?: string;
   clientAuthority?: string;
+  isCustomRef?: boolean;
 }
+
+export const generateAutoReportRef = (): string => {
+  const year = new Date().getFullYear();
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase().padStart(4, '0');
+  return `FAT-${year}-${rand}`;
+};
 
 interface FatStore {
   scenarios: TestCase[];
@@ -55,12 +62,6 @@ interface FatStore {
   addJournalEntry: (entry: Omit<ScanJournalEntry, 'id'>) => void;
   setProjectSettings: (settings: Partial<ReportProjectSettings>) => void;
 }
-
-const generateAutoReportRef = (): string => {
-  const year = new Date().getFullYear();
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `FAT-${year}-${rand}`;
-};
 
 let journalEntrySequence = 0;
 
@@ -103,15 +104,27 @@ export const useFatStore = create<FatStore>()(
       executionDriverInfo: null,
       projectSettings: {
         certificateRef: generateAutoReportRef(),
+        isCustomRef: false,
         customerName: '',
         commissioningLead: 'Commissioning Lead Engineer',
         clientAuthority: 'Client Acceptance Authority',
       },
 
       setProjectSettings: (settings) => {
-        set((state) => ({
-          projectSettings: { ...state.projectSettings, ...settings },
-        }));
+        set((state) => {
+          const isExplicitCustom = settings.isCustomRef !== undefined
+            ? settings.isCustomRef
+            : (settings.certificateRef !== undefined
+                ? settings.certificateRef.trim().length > 0
+                : state.projectSettings.isCustomRef);
+          return {
+            projectSettings: {
+              ...state.projectSettings,
+              ...settings,
+              isCustomRef: isExplicitCustom,
+            },
+          };
+        });
       },
 
       syncScenarios: (skid: SkidId) => {
@@ -125,14 +138,19 @@ export const useFatStore = create<FatStore>()(
       },
 
       openReportModal: () =>
-        set((state) => ({
-          showReportModal: true,
-          reportTimestamp: new Date().toISOString(),
-          projectSettings: {
-            ...state.projectSettings,
-            certificateRef: state.projectSettings.certificateRef || generateAutoReportRef(),
-          },
-        })),
+        set((state) => {
+          const isCustom = state.projectSettings.isCustomRef;
+          return {
+            showReportModal: true,
+            reportTimestamp: state.reportTimestamp || new Date().toISOString(),
+            projectSettings: {
+              ...state.projectSettings,
+              certificateRef: isCustom && state.projectSettings.certificateRef
+                ? state.projectSettings.certificateRef
+                : (state.reportTimestamp ? state.projectSettings.certificateRef : generateAutoReportRef()),
+            },
+          };
+        }),
       closeReportModal: () => set({ showReportModal: false }),
 
       addJournalEntry: (entry) => {
@@ -146,6 +164,7 @@ export const useFatStore = create<FatStore>()(
       resetSuite: () => {
         journalEntrySequence = 0;
         const currentSkid = useSimulationStore.getState().activeSkid;
+        const isCustom = get().projectSettings.isCustomRef;
         set((state) => ({
           scenarios: getFatScenarios(currentSkid),
           currentTestIndex: -1,
@@ -155,7 +174,12 @@ export const useFatStore = create<FatStore>()(
           showReportModal: false,
           reportTimestamp: null,
           executionDriverInfo: null,
-          projectSettings: state.projectSettings,
+          projectSettings: {
+            ...state.projectSettings,
+            certificateRef: isCustom && state.projectSettings.certificateRef
+              ? state.projectSettings.certificateRef
+              : generateAutoReportRef(),
+          },
         }));
       },
 
@@ -347,7 +371,17 @@ export const useFatStore = create<FatStore>()(
         await new Promise((resolve) => setTimeout(resolve, 400));
       }
 
-      set({ showReportModal: true });
+      const isCustom = get().projectSettings.isCustomRef;
+      set((state) => ({
+        showReportModal: true,
+        reportTimestamp: new Date().toISOString(),
+        projectSettings: {
+          ...state.projectSettings,
+          certificateRef: isCustom && state.projectSettings.certificateRef
+            ? state.projectSettings.certificateRef
+            : (state.projectSettings.certificateRef || generateAutoReportRef()),
+        },
+      }));
     } finally {
       set({ isRunningSuite: false, currentTestIndex: -1 });
     }
@@ -356,15 +390,31 @@ export const useFatStore = create<FatStore>()(
     {
       name: 'twinforge-fat-project-settings',
       partialize: (state) => ({
-        projectSettings: state.projectSettings,
+        projectSettings: {
+          customerName: state.projectSettings.customerName,
+          commissioningLead: state.projectSettings.commissioningLead,
+          clientAuthority: state.projectSettings.clientAuthority,
+          ...(state.projectSettings.isCustomRef
+            ? {
+                certificateRef: state.projectSettings.certificateRef,
+                isCustomRef: true,
+              }
+            : {}),
+        },
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<FatStore> | undefined;
+        const persistedSettings = persisted?.projectSettings;
+        const isCustom = Boolean(persistedSettings?.isCustomRef);
         return {
           ...currentState,
           projectSettings: {
             ...currentState.projectSettings,
-            ...(persisted?.projectSettings || {}),
+            ...(persistedSettings || {}),
+            certificateRef: isCustom && persistedSettings?.certificateRef
+              ? persistedSettings.certificateRef
+              : generateAutoReportRef(),
+            isCustomRef: isCustom,
           },
         };
       },
