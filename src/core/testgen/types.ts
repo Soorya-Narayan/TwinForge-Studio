@@ -49,6 +49,13 @@ export interface TestCase {
   teardown?: (sim: any, plc: any) => void;
 }
 
+export interface TestDriverInfo {
+  driverName: string;
+  driverType: 'mock' | 'opcua' | 's7' | 'modbus';
+  details: string;
+  endpoint?: string | null;
+}
+
 export interface TestResult {
   testId: string;
   phase: TestPhase;
@@ -59,4 +66,6 @@ export interface TestResult {
   timestamp: string;
   durationMs: number;
   scansExecuted?: number;
+  driver?: TestDriverInfo;
 }
+

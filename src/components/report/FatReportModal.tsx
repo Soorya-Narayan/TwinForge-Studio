@@ -15,6 +15,7 @@ export const FatReportModal: React.FC = () => {
   const journal = useFatStore((s) => s.journal);
   const projectSettings = useFatStore((s) => s.projectSettings);
   const setProjectSettings = useFatStore((s) => s.setProjectSettings);
+  const executionDriverInfo = useFatStore((s) => s.executionDriverInfo);
   const plc = useSimulationStore((s) => s.plc);
   const activeSkid = useSimulationStore((s) => s.activeSkid);
   const engine = useSimulationStore((s) => s.engine);
@@ -25,6 +26,19 @@ export const FatReportModal: React.FC = () => {
   const [rawPayload, setRawPayload] = React.useState<string>('');
   const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
   const [pdfSuccessMessage, setPdfSuccessMessage] = React.useState<string | null>(null);
+
+  // Resolve the actual harness driver tests were executed on
+  const harnessDriver = React.useMemo(() => {
+    return (
+      executionDriverInfo ||
+      results.find((r) => r.driver)?.driver || {
+        driverName: 'MockPlcDriver',
+        driverType: 'mock' as const,
+        details: 'In-Process Mock Driver',
+        endpoint: null,
+      }
+    );
+  }, [executionDriverInfo, results]);
 
   const reportDate = React.useMemo(() => {
     if (!reportTimestamp) return '—';
@@ -56,9 +70,10 @@ export const FatReportModal: React.FC = () => {
         commissioningLead: projectSettings.commissioningLead,
         clientAuthority: projectSettings.clientAuthority,
         plcPlatform: {
-          driverType: plc.status.driverType,
-          endpoint: (plc as any).endpointUrl || null,
-          details: plc.status.driverType === 'opcua' ? 'Real PLC via node-opcua (IEC 62541)' : 'In-Process Mock Driver',
+          driverName: harnessDriver.driverName,
+          driverType: harnessDriver.driverType,
+          endpoint: harnessDriver.endpoint || null,
+          details: harnessDriver.details,
         },
         results,
         journal: normalizedJournal,
@@ -97,7 +112,7 @@ export const FatReportModal: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings, plc]);
+  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings, harnessDriver]);
 
   if (!showReportModal) return null;
 
@@ -400,10 +415,8 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>PLC Controller Platform:</span>
-              <strong style={{ fontSize: 12, color: plc.status.driverType === 'opcua' ? '#0284c7' : '#0f172a' }}>
-                {plc.status.driverType === 'opcua'
-                  ? `Live OPC UA PLC (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'}) · node-opcua`
-                  : 'TwinForge Deterministic Mock Engine'}
+              <strong style={{ fontSize: 12, color: harnessDriver.driverType === 'opcua' ? '#0284c7' : '#0f172a' }}>
+                {harnessDriver.details}
               </strong>
             </div>
             <div>
@@ -572,7 +585,7 @@ export const FatReportModal: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {Array.from(plc.interlocks.values()).map((il) => (
+                {Array.from(plc?.interlocks?.values?.() || []).map((il) => (
                   <tr key={il.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td className="mono" style={{ padding: '6px 8px', fontWeight: 700 }}>{il.id}</td>
                     <td style={{ padding: '6px 8px' }}>{il.condition}</td>

@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getFatScenarios } from '../core/testgen/scenarios';
-import type { TestCase, TestResult, ScanHistoryRecord } from '../core/testgen/types';
+import type { TestCase, TestResult, ScanHistoryRecord, TestDriverInfo } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
 import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
@@ -43,6 +43,7 @@ interface FatStore {
   showReportModal: boolean;
   reportTimestamp: string | null;
   projectSettings: ReportProjectSettings;
+  executionDriverInfo: TestDriverInfo | null;
 
   // Actions
   syncScenarios: (skid: SkidId) => void;
@@ -98,6 +99,7 @@ export const useFatStore = create<FatStore>()(
       journal: [],
       showReportModal: false,
       reportTimestamp: null,
+      executionDriverInfo: null,
       projectSettings: {
         certificateRef: generateAutoReportRef(),
         customerName: '',
@@ -117,6 +119,7 @@ export const useFatStore = create<FatStore>()(
           currentTestIndex: -1,
           isRunningSuite: false,
           results: [],
+          executionDriverInfo: null,
         });
       },
 
@@ -150,6 +153,7 @@ export const useFatStore = create<FatStore>()(
           journal: [],
           showReportModal: false,
           reportTimestamp: null,
+          executionDriverInfo: null,
           projectSettings: state.projectSettings,
         }));
       },
@@ -166,6 +170,19 @@ export const useFatStore = create<FatStore>()(
     // Isolate each test with a fresh engine and PLC instance instead of live UI instances
     const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology);
 
+    const driverName = plc.constructor?.name || 'MockPlcDriver';
+    const driverType = plc.status.driverType;
+    const driverDetails = driverType === 'opcua'
+      ? `Real PLC via node-opcua (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
+      : `In-Process Mock Driver (${driverName})`;
+
+    const driverInfo: TestDriverInfo = {
+      driverName,
+      driverType,
+      details: driverDetails,
+      endpoint: (plc as any).endpointUrl || null,
+    };
+
     const startTime = performance.now();
     const totalScans = test.durationScans ?? 20;
     const dtMs = test.dtMs ?? 100;
@@ -177,7 +194,7 @@ export const useFatStore = create<FatStore>()(
       timeFormatted: new Date().toLocaleTimeString(),
       source: 'TEST_GEN',
       eventType: 'COMMAND',
-      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Isolated Instance)`,
+      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Harness: ${driverDetails})`,
       status: 'INFO',
     });
 
@@ -244,10 +261,12 @@ export const useFatStore = create<FatStore>()(
         timestamp: new Date().toISOString(),
         durationMs: Math.round(performance.now() - startTime),
         scansExecuted: totalScans,
+        driver: driverInfo,
       };
 
       set((state) => ({
         results: [...state.results.filter((r) => r.testId !== test.id), result],
+        executionDriverInfo: driverInfo,
         isRunningSuite: false,
       }));
     } finally {
