@@ -27,7 +27,6 @@
   - Native Node.js communication stack executing in Electron main process using `node-opcua-client`.
   - Bidirectional cyclic I/O synchronization: feeds physical simulation sensor telemetry to PLC inputs and captures real-time PLC commands/interlocks.
   - Embedded local test OPC UA server via `node-opcua-server` (port 4840) with standard plant address space for instant zero-hardware loopback testing.
-  - Hardware-in-the-Loop Automated FAT: test scenarios stimulate and assert against the actual external PLC over the wire.
 - **In-Process Mock PLC Driver Architecture**:
   - Unified `Driver` boundary (`readOutputs()` / `writeInputs()`) decoupling plant physics from control logic.
   - Built-in TypeScript PLC controllers:
