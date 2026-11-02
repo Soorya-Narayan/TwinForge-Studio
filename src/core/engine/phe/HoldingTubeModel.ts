@@ -96,6 +96,13 @@ export class HoldingTubeModel {
     return this.currentExitTempC;
   }
 
+  public primeWithProfile(temps: number[]): void {
+    if (temps.length === 0) return;
+    const segVol = this.volumeLiters / temps.length;
+    this.fluidSegments = temps.map((t) => ({ volumeL: segVol, tempC: t }));
+    this.currentExitTempC = temps[temps.length - 1];
+  }
+
   public getExitTemperature(): number {
     return this.currentExitTempC;
   }

@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getFatScenarios } from '../core/testgen/scenarios';
-import type { TestCase, TestResult } from '../core/testgen/types';
+import type { TestCase, TestResult, ScanHistoryRecord } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
 
 export interface ScanJournalEntry {
@@ -133,6 +133,9 @@ export const useFatStore = create<FatStore>()(
     set({ isRunningSuite: true });
     const simStore = useSimulationStore.getState();
     const startTime = performance.now();
+    const totalScans = test.durationScans ?? 20;
+    const dtMs = test.dtMs ?? 100;
+    const history: ScanHistoryRecord[] = [];
 
     // Log start in journal
     get().addJournalEntry({
@@ -140,25 +143,65 @@ export const useFatStore = create<FatStore>()(
       timeFormatted: new Date().toLocaleTimeString(),
       source: 'TEST_GEN',
       eventType: 'COMMAND',
-      description: `Starting Test [${test.id}]: ${test.title}`,
+      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms)`,
       status: 'INFO',
     });
 
-    // Execute stimulus
-    test.stimulus(simStore.engine, simStore.plc);
+    // Optional setup hook before stepped execution
+    if (test.setup) {
+      test.setup(simStore.engine, simStore.plc);
+    }
 
-    // Evaluate assertions
-    const assertions = test.assertions(simStore.engine, simStore.plc);
+    // Step engine and PLC across totalScans
+    for (let step = 0; step < totalScans; step++) {
+      test.stimulus(simStore.engine, simStore.plc, step, history);
+
+      simStore.plc.tick(dtMs);
+      const outputs = simStore.plc.readOutputs();
+      const snap = simStore.engine.tick(outputs);
+      simStore.plc.writeInputs(snap.tags.inputs);
+
+      const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
+      if (simStore.plc.interlocks) {
+        for (const [k, v] of simStore.plc.interlocks.entries()) {
+          interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
+        }
+      }
+
+      history.push({
+        step,
+        scan: snap.scan,
+        timeMs: snap.timeMs,
+        inputs: { ...snap.tags.inputs },
+        outputs: { ...outputs },
+        plcState: (simStore.plc as any).state,
+        interlocks,
+        snapshot: snap,
+      });
+    }
+
+    // Update simulation store snapshot with final state from stepped run
+    if (history.length > 0) {
+      const finalSnap = history[history.length - 1].snapshot;
+      useSimulationStore.setState({
+        snapshot: finalSnap,
+        faults: simStore.engine.getFaults(),
+      });
+    }
+
+    // Evaluate assertions on the full resulting history
+    const assertions = test.assertions(simStore.engine, simStore.plc, history);
     const passed = assertions.every((a) => a.passed);
 
-    // Log assertions
+    // Log assertions in journal with timing metadata
     for (const a of assertions) {
+      const timingBadge = a.responseTimeMs !== undefined ? ` [Response Time: ${a.responseTimeMs}ms]` : '';
       get().addJournalEntry({
         scan: simStore.snapshot?.scan ?? 0,
         timeFormatted: new Date().toLocaleTimeString(),
         source: 'TEST_GEN',
         eventType: 'ASSERTION',
-        description: `${a.message} (Tag: ${a.tag}, Expected: ${a.expected}, Actual: ${a.actual})`,
+        description: `${a.message}${timingBadge} (Tag: ${a.tag}, Expected: ${a.expected}, Actual: ${a.actual})`,
         tag: a.tag,
         value: String(a.actual),
         status: a.passed ? 'PASS' : 'FAIL',
@@ -174,6 +217,7 @@ export const useFatStore = create<FatStore>()(
       assertions,
       timestamp: new Date().toISOString(),
       durationMs: Math.round(performance.now() - startTime),
+      scansExecuted: totalScans,
     };
 
     set((state) => ({

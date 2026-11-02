@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
-import { Play, CheckCircle2, XCircle, FileText, Activity } from 'lucide-react';
+import { Play, CheckCircle2, XCircle, FileText, Activity, Clock } from 'lucide-react';
 
 export const FatSuitePanel: React.FC = () => {
   const scenarios = useFatStore((s) => s.scenarios);
@@ -30,7 +30,7 @@ export const FatSuitePanel: React.FC = () => {
               Automated FAT Execution Station
             </h3>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, marginTop: 2 }}>
-              Deterministic test sequence generator mapped to Functional Design Specification (FDS).
+              Deterministic time-based test sequences with scan history & response time assertions.
             </p>
           </div>
 
@@ -79,6 +79,9 @@ export const FatSuitePanel: React.FC = () => {
           {scenarios.map((tc, idx) => {
             const result = results.find((r) => r.testId === tc.id);
             const isCurrent = currentTestIndex === idx;
+            const scans = tc.durationScans ?? 20;
+            const durationSec = ((scans * (tc.dtMs ?? 100)) / 1000).toFixed(1);
+            const timingAssertion = result?.assertions.find((a) => a.responseTimeMs !== undefined);
 
             return (
               <div
@@ -95,7 +98,7 @@ export const FatSuitePanel: React.FC = () => {
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                     <span className="mono badge badge-neutral" style={{ fontSize: 10 }}>
                       {tc.id}
                     </span>
@@ -105,10 +108,53 @@ export const FatSuitePanel: React.FC = () => {
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       [{tc.clause}]
                     </span>
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 10,
+                        padding: '1px 6px',
+                        borderRadius: 3,
+                        background: '#f1f5f9',
+                        color: '#475569',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      <Clock size={10} />
+                      {scans} scans ({durationSec}s)
+                    </span>
                   </div>
+
                   <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
                     {tc.description}
                   </p>
+
+                  {/* Measured timing feedback chip */}
+                  {timingAssertion && (
+                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '2px 7px',
+                          borderRadius: 3,
+                          background: timingAssertion.passed ? '#f0fdf4' : '#fef2f2',
+                          color: timingAssertion.passed ? '#15803d' : '#b91c1c',
+                          border: `1px solid ${timingAssertion.passed ? '#bbf7d0' : '#fecaca'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <span>⏱ Measured: {timingAssertion.responseTimeMs} ms</span>
+                        {timingAssertion.timingLimitMs && (
+                          <span style={{ opacity: 0.8 }}>(limit: &lt;= {timingAssertion.timingLimitMs} ms)</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
