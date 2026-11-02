@@ -266,10 +266,22 @@ export const useFatStore = create<FatStore>()(
   },
 
   runAllTests: async () => {
+    // Reset the plant to a known baseline state before running the suite
+    useSimulationStore.getState().reset();
+
     const { resetSuite, runSingleTest } = get();
     resetSuite();
     const scenarios = get().scenarios;
     set({ isRunningSuite: true });
+
+    get().addJournalEntry({
+      scan: 0,
+      timeFormatted: new Date().toLocaleTimeString(),
+      source: 'TEST_GEN',
+      eventType: 'COMMAND',
+      description: 'Reset plant and controller to known baseline state before FAT suite execution',
+      status: 'INFO',
+    });
 
     for (let i = 0; i < scenarios.length; i++) {
       set({ currentTestIndex: i });
