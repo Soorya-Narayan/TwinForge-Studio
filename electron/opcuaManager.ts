@@ -227,9 +227,9 @@ export class OpcUaManager {
 
       this.testServer = new OPCUAServer({
         port,
-        resourcePath: '/TwinForge/UA/PLC',
+        resourcePath: '/TwinForge/UA/LoopbackServer',
         buildInfo: {
-          productName: 'TwinForge Industrial Virtual PLC',
+          productName: 'Loopback Test Server',
           buildNumber: '1.0.0',
           buildDate: new Date(),
         },
