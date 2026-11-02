@@ -21,7 +21,7 @@ export const FatReportModal: React.FC = () => {
   const customMeta = useSimulationStore((s) => s.customMeta);
 
   const reportTimestamp = useFatStore((s) => s.reportTimestamp);
-  const [auditHash, setAuditHash] = React.useState<string>('');
+  const [runFingerprint, setRunFingerprint] = React.useState<string>('');
   const [rawPayload, setRawPayload] = React.useState<string>('');
 
   const reportDate = React.useMemo(() => {
@@ -72,16 +72,16 @@ export const FatReportModal: React.FC = () => {
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
           if (isMounted) {
-            setAuditHash(hex);
+            setRunFingerprint(hex);
           }
         } else {
           // Fallback if Web Crypto is unavailable
           if (isMounted) {
-            setAuditHash('UNAVAILABLE');
+            setRunFingerprint('UNAVAILABLE');
           }
         }
       } catch (err) {
-        console.error('Failed to compute audit hash:', err);
+        console.error('Failed to compute run fingerprint:', err);
       }
     };
 
@@ -344,7 +344,7 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, color: '#64748b' }}>Audit Hash Verification (SHA-256):</span>
+                <span style={{ fontSize: 10, color: '#64748b' }}>Run Fingerprint (SHA-256):</span>
                 <button
                   onClick={handleExportEvidence}
                   className="no-print"
@@ -373,7 +373,7 @@ export const FatReportModal: React.FC = () => {
                   marginTop: 2,
                 }}
               >
-                {auditHash || 'Computing...'}
+                {runFingerprint || 'Computing...'}
               </span>
             </div>
           </div>
