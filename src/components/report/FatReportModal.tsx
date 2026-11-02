@@ -20,7 +20,8 @@ export const FatReportModal: React.FC = () => {
   const engine = useSimulationStore((s) => s.engine);
   const customMeta = useSimulationStore((s) => s.customMeta);
 
-  const [timestamp] = React.useState(() => new Date().toISOString());
+  const reportTimestamp = useFatStore((s) => s.reportTimestamp);
+  const timestamp = reportTimestamp || new Date().toISOString();
   const [auditHash, setAuditHash] = React.useState<string>('');
 
   const reportDate = React.useMemo(() => {
@@ -80,7 +81,7 @@ export const FatReportModal: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [showReportModal, results, journal, activeSkid, engine, customMeta, timestamp, projectSettings]);
+  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings]);
 
   if (!showReportModal) return null;
 

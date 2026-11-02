@@ -34,6 +34,7 @@ interface FatStore {
   results: TestResult[];
   journal: ScanJournalEntry[];
   showReportModal: boolean;
+  reportTimestamp: string | null;
   projectSettings: ReportProjectSettings;
 
   // Actions
@@ -54,6 +55,7 @@ export const useFatStore = create<FatStore>((set, get) => ({
   results: [],
   journal: [],
   showReportModal: false,
+  reportTimestamp: null,
   projectSettings: {
     certificateRef: 'FAT-2026-SCM-001',
     customerName: 'Goose Industrial Solutions',
@@ -76,7 +78,7 @@ export const useFatStore = create<FatStore>((set, get) => ({
     });
   },
 
-  openReportModal: () => set({ showReportModal: true }),
+  openReportModal: () => set({ showReportModal: true, reportTimestamp: new Date().toISOString() }),
   closeReportModal: () => set({ showReportModal: false }),
 
   addJournalEntry: (entry) => {
@@ -95,6 +97,7 @@ export const useFatStore = create<FatStore>((set, get) => ({
       results: [],
       journal: [],
       showReportModal: false,
+      reportTimestamp: null,
     });
     useSimulationStore.getState().reset();
   },
