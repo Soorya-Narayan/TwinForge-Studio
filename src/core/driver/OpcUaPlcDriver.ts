@@ -268,6 +268,44 @@ export class OpcUaPlcDriver implements Driver {
     }
   }
 
+  public startBatch(): void {
+    if (this.status.connected && window.electronAPI?.opcua) {
+      window.electronAPI.opcua.writeTags({
+        START_PB: { value: true, dataType: 'Boolean' },
+        P100_START: { value: true, dataType: 'Boolean' },
+      });
+    }
+  }
+
+  public dischargeBatch(): void {
+    if (this.status.connected && window.electronAPI?.opcua) {
+      window.electronAPI.opcua.writeTags({
+        V400_PROD_CMD: { value: true, dataType: 'Boolean' },
+      });
+    }
+  }
+
+  public abortBatch(): void {
+    if (this.status.connected && window.electronAPI?.opcua) {
+      window.electronAPI.opcua.writeTags({
+        ABORT_PB: { value: true, dataType: 'Boolean' },
+        P100_START: { value: false, dataType: 'Boolean' },
+        V101_CMD: { value: false, dataType: 'Boolean' },
+        V400_PROD_CMD: { value: false, dataType: 'Boolean' },
+      });
+    }
+  }
+
+  public clearAllOutputs(): void {
+    for (const tag of Object.keys(this.outputs)) {
+      if (typeof this.outputs[tag] === 'boolean') {
+        this.outputs[tag] = false;
+      } else if (typeof this.outputs[tag] === 'number') {
+        this.outputs[tag] = 0;
+      }
+    }
+  }
+
   public emergencyStop(): void {
     if (this.status.connected && window.electronAPI?.opcua) {
       window.electronAPI.opcua.writeTags({

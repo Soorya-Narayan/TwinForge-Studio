@@ -12,8 +12,11 @@ import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine'
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
+import { OpcUaPlcDriver } from '../core/driver/OpcUaPlcDriver';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
+
+export type HarnessPlcDriver = PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver | OpcUaPlcDriver;
 
 export interface ScanJournalEntry {
   id: string;
@@ -70,23 +73,34 @@ let journalEntrySequence = 0;
 export const createIsolatedTestHarness = (
   skid: SkidId,
   customTopology?: PlantTopology | null,
-  stepMs: number = 100
+  stepMs: number = 100,
+  driverOverride?: HarnessPlcDriver
 ): {
   engine: PhysicsEngine;
-  plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
+  plc: HarnessPlcDriver;
 } => {
   let engine: PhysicsEngine;
-  let plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
+  let plc: HarnessPlcDriver;
 
   if (skid === 'PASTEURIZER_10KLPH') {
     engine = new PhysicsEngine(milkPasteurizerSkid, stepMs);
-    plc = new PasteurizerPlcDriver();
   } else if (skid === 'BATCH_MIXING') {
     engine = new PhysicsEngine(defaultMixingSkid, stepMs);
-    plc = new MockPlcDriver();
   } else {
     const topology = customTopology || milkPasteurizerSkid;
     engine = new PhysicsEngine(topology, stepMs);
+  }
+
+  // Wire live connected OPC UA driver for real Hardware-in-the-Loop (HIL) testing
+  const liveCandidate = driverOverride ?? (typeof useSimulationStore !== 'undefined' ? useSimulationStore.getState()?.plc : undefined);
+  if (liveCandidate && liveCandidate.status?.driverType === 'opcua' && liveCandidate.status?.connected) {
+    plc = liveCandidate as OpcUaPlcDriver;
+  } else if (skid === 'PASTEURIZER_10KLPH') {
+    plc = new PasteurizerPlcDriver();
+  } else if (skid === 'BATCH_MIXING') {
+    plc = new MockPlcDriver();
+  } else {
+    const topology = customTopology || milkPasteurizerSkid;
     plc = new GenericPlcDriver(topology);
   }
 
