@@ -45,13 +45,16 @@ export const FatReportModal: React.FC = () => {
         customMeta,
       };
 
+      // Exclude volatile/UI-only keys (like id) from journal entries for deterministic hashing
+      const normalizedJournal = journal.map(({ id: _id, ...rest }) => rest);
+
       const payloadObject = {
         certificateRef: projectSettings.certificateRef,
         customerName: projectSettings.customerName,
         commissioningLead: projectSettings.commissioningLead,
         clientAuthority: projectSettings.clientAuthority,
         results,
-        journal,
+        journal: normalizedJournal,
         plantConfig,
         timestamp: reportTimestamp || '',
       };

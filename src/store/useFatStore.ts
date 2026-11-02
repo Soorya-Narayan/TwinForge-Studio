@@ -54,6 +54,8 @@ const generateAutoReportRef = (): string => {
   return `FAT-${year}-${rand}`;
 };
 
+let journalEntrySequence = 0;
+
 export const useFatStore = create<FatStore>((set, get) => ({
   scenarios: getFatScenarios('PASTEURIZER_10KLPH'),
   currentTestIndex: -1,
@@ -95,13 +97,15 @@ export const useFatStore = create<FatStore>((set, get) => ({
   closeReportModal: () => set({ showReportModal: false }),
 
   addJournalEntry: (entry) => {
-    const id = `J-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    journalEntrySequence += 1;
+    const id = `J-${entry.scan}-${journalEntrySequence}`;
     set((state) => ({
       journal: [{ id, ...entry }, ...state.journal].slice(0, 300), // Keep recent 300 entries
     }));
   },
 
   resetSuite: () => {
+    journalEntrySequence = 0;
     const currentSkid = useSimulationStore.getState().activeSkid;
     set({
       scenarios: getFatScenarios(currentSkid),
