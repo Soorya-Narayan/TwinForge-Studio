@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { getFatScenarios } from '../core/testgen/scenarios';
 import type { TestCase, TestResult } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
@@ -56,59 +57,10 @@ const generateAutoReportRef = (): string => {
 
 let journalEntrySequence = 0;
 
-export const useFatStore = create<FatStore>((set, get) => ({
-  scenarios: getFatScenarios('PASTEURIZER_10KLPH'),
-  currentTestIndex: -1,
-  isRunningSuite: false,
-  results: [],
-  journal: [],
-  showReportModal: false,
-  reportTimestamp: null,
-  projectSettings: {
-    certificateRef: generateAutoReportRef(),
-    customerName: '',
-    commissioningLead: 'Commissioning Lead Engineer',
-    clientAuthority: 'Client Acceptance Authority',
-  },
-
-  setProjectSettings: (settings) => {
-    set((state) => ({
-      projectSettings: { ...state.projectSettings, ...settings },
-    }));
-  },
-
-  syncScenarios: (skid: SkidId) => {
-    set({
-      scenarios: getFatScenarios(skid),
-      currentTestIndex: -1,
-      isRunningSuite: false,
-      results: [],
-    });
-  },
-
-  openReportModal: () => set((state) => ({
-    showReportModal: true,
-    reportTimestamp: new Date().toISOString(),
-    projectSettings: {
-      ...state.projectSettings,
-      certificateRef: state.projectSettings.certificateRef || generateAutoReportRef(),
-    },
-  })),
-  closeReportModal: () => set({ showReportModal: false }),
-
-  addJournalEntry: (entry) => {
-    journalEntrySequence += 1;
-    const id = `J-${entry.scan}-${journalEntrySequence}`;
-    set((state) => ({
-      journal: [{ id, ...entry }, ...state.journal].slice(0, 300), // Keep recent 300 entries
-    }));
-  },
-
-  resetSuite: () => {
-    journalEntrySequence = 0;
-    const currentSkid = useSimulationStore.getState().activeSkid;
-    set({
-      scenarios: getFatScenarios(currentSkid),
+export const useFatStore = create<FatStore>()(
+  persist(
+    (set, get) => ({
+      scenarios: getFatScenarios('PASTEURIZER_10KLPH'),
       currentTestIndex: -1,
       isRunningSuite: false,
       results: [],
@@ -121,9 +73,56 @@ export const useFatStore = create<FatStore>((set, get) => ({
         commissioningLead: 'Commissioning Lead Engineer',
         clientAuthority: 'Client Acceptance Authority',
       },
-    });
-    useSimulationStore.getState().reset();
-  },
+
+      setProjectSettings: (settings) => {
+        set((state) => ({
+          projectSettings: { ...state.projectSettings, ...settings },
+        }));
+      },
+
+      syncScenarios: (skid: SkidId) => {
+        set({
+          scenarios: getFatScenarios(skid),
+          currentTestIndex: -1,
+          isRunningSuite: false,
+          results: [],
+        });
+      },
+
+      openReportModal: () =>
+        set((state) => ({
+          showReportModal: true,
+          reportTimestamp: new Date().toISOString(),
+          projectSettings: {
+            ...state.projectSettings,
+            certificateRef: state.projectSettings.certificateRef || generateAutoReportRef(),
+          },
+        })),
+      closeReportModal: () => set({ showReportModal: false }),
+
+      addJournalEntry: (entry) => {
+        journalEntrySequence += 1;
+        const id = `J-${entry.scan}-${journalEntrySequence}`;
+        set((state) => ({
+          journal: [{ id, ...entry }, ...state.journal].slice(0, 300), // Keep recent 300 entries
+        }));
+      },
+
+      resetSuite: () => {
+        journalEntrySequence = 0;
+        const currentSkid = useSimulationStore.getState().activeSkid;
+        set((state) => ({
+          scenarios: getFatScenarios(currentSkid),
+          currentTestIndex: -1,
+          isRunningSuite: false,
+          results: [],
+          journal: [],
+          showReportModal: false,
+          reportTimestamp: null,
+          projectSettings: state.projectSettings,
+        }));
+        useSimulationStore.getState().reset();
+      },
 
   runSingleTest: async (testId: string) => {
     const currentSkid = useSimulationStore.getState().activeSkid;
@@ -198,4 +197,23 @@ export const useFatStore = create<FatStore>((set, get) => ({
 
     set({ isRunningSuite: false, currentTestIndex: -1, showReportModal: true });
   },
-}));
+    }),
+    {
+      name: 'twinforge-fat-project-settings',
+      partialize: (state) => ({
+        projectSettings: state.projectSettings,
+      }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<FatStore> | undefined;
+        return {
+          ...currentState,
+          projectSettings: {
+            ...currentState.projectSettings,
+            ...(persisted?.projectSettings || {}),
+          },
+        };
+      },
+    }
+  )
+);
+
