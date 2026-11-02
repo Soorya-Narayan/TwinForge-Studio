@@ -235,6 +235,38 @@ ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('print:toPDF', async (event, options?: { defaultPath?: string }) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+  if (!win) return { canceled: true };
+
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Export FAT Verification Report as PDF',
+    defaultPath: options?.defaultPath || 'FAT-Verification-Report.pdf',
+    filters: [
+      { name: 'PDF Document', extensions: ['pdf'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+
+  if (canceled || !filePath) {
+    return { canceled: true };
+  }
+
+  try {
+    const pdfBuffer = await event.sender.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+    });
+
+    await fs.writeFile(filePath, pdfBuffer);
+    return { canceled: false, filePath };
+  } catch (err: any) {
+    console.error('Failed to generate PDF via printToPDF:', err);
+    return { canceled: false, error: err?.message || 'Failed to generate PDF' };
+  }
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) {

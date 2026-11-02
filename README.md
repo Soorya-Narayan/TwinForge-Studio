@@ -42,9 +42,9 @@
   - Automated scenario runner executing sequences mapped to Functional Design Specification (FDS) clauses.
   - Step-by-step stimulus injection and scan-by-scan assertion validation.
   - Live execution telemetry, failure diagnostics, and pass/fail reporting.
-- **FAT Inspection & Print Report**:
-  - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation SHA-256 run hash.
-  - Browser and system print export via `window.print()`.
+- **FAT Inspection & Export Report**:
+  - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation Run Fingerprint (SHA-256).
+  - Native PDF document generation via Electron's `webContents.printToPDF` (with web browser print fallback).
 - **Visual P&ID Process Modeler & Mimics**:
   - Interactive SVG-based skid mimics with animated fluid flows, device states, and telemetry inspection drawers.
   - Drag-and-drop node graph canvas built on `@xyflow/react` for visual process topology inspection and layout design.

@@ -23,6 +23,8 @@ export const FatReportModal: React.FC = () => {
   const reportTimestamp = useFatStore((s) => s.reportTimestamp);
   const [runFingerprint, setRunFingerprint] = React.useState<string>('');
   const [rawPayload, setRawPayload] = React.useState<string>('');
+  const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
+  const [pdfSuccessMessage, setPdfSuccessMessage] = React.useState<string | null>(null);
 
   const reportDate = React.useMemo(() => {
     if (!reportTimestamp) return '—';
@@ -98,7 +100,33 @@ export const FatReportModal: React.FC = () => {
   const failedCount = results.length - passedCount;
   const allTestsPassed = passedCount === results.length && results.length > 0;
 
-  const handlePrint = () => {
+  const handleExportPDF = async () => {
+    if (window.electronAPI?.printToPDF) {
+      setIsGeneratingPdf(true);
+      setPdfSuccessMessage(null);
+      try {
+        const safeRef = (projectSettings.certificateRef || 'FAT-REPORT').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const dateStr = reportTimestamp ? reportTimestamp.slice(0, 10) : 'latest';
+        const defaultPdfName = `twinforge_fat_report_${safeRef}_${dateStr}.pdf`;
+
+        const result = await window.electronAPI.printToPDF({
+          defaultPath: defaultPdfName,
+        });
+
+        if (!result.canceled && result.filePath) {
+          const fileName = result.filePath.split(/[/\\]/).pop();
+          setPdfSuccessMessage(`Saved ${fileName}`);
+          setTimeout(() => setPdfSuccessMessage(null), 4000);
+        }
+      } catch (err) {
+        console.error('Failed to export PDF via printToPDF:', err);
+      } finally {
+        setIsGeneratingPdf(false);
+      }
+      return;
+    }
+
+    // Web browser fallback when Electron printToPDF IPC is unavailable
     window.print();
   };
 
@@ -199,9 +227,36 @@ export const FatReportModal: React.FC = () => {
               <Download size={13} />
               EXPORT EVIDENCE JSON
             </button>
-            <button onClick={handlePrint} className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 11 }}>
+            {pdfSuccessMessage && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: 'var(--color-success)',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginRight: 4,
+                }}
+              >
+                <CheckCircle size={12} />
+                {pdfSuccessMessage}
+              </span>
+            )}
+            <button
+              onClick={handleExportPDF}
+              disabled={isGeneratingPdf}
+              className="btn btn-primary"
+              style={{
+                padding: '5px 12px',
+                fontSize: 11,
+                opacity: isGeneratingPdf ? 0.75 : 1,
+                cursor: isGeneratingPdf ? 'wait' : 'pointer',
+              }}
+              title="Generate a real PDF report using Electron webContents.printToPDF"
+            >
               <Printer size={13} />
-              PRINT / EXPORT PDF
+              {isGeneratingPdf ? 'GENERATING PDF...' : 'EXPORT PDF'}
             </button>
             <button onClick={closeReportModal} className="btn btn-ghost" style={{ padding: '5px 8px' }}>
               <X size={15} />

@@ -10,6 +10,9 @@ export interface ElectronBridge {
   }) => Promise<{ canceled: boolean; filePath?: string; content?: string }>;
   showItemInFolder: (filePath: string) => Promise<void>;
   getVersion: () => Promise<string>;
+  printToPDF?: (options?: {
+    defaultPath?: string;
+  }) => Promise<{ canceled: boolean; filePath?: string; error?: string }>;
 }
 
 declare global {

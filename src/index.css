@@ -235,12 +235,17 @@ body {
 
 /* Print Media Styles for FAT Compliance Reports */
 @media print {
-  .no-print {
+  .no-print, header, main {
     display: none !important;
   }
 
-  body {
+  html, body, #root, #root > div {
     background: #ffffff !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   #fat-report-modal-backdrop {
@@ -256,11 +261,14 @@ body {
     border: none !important;
     box-shadow: none !important;
     max-height: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: visible !important;
   }
 
   #fat-report-printable-area {
     padding: 0 !important;
     overflow: visible !important;
+    max-height: none !important;
   }
 }

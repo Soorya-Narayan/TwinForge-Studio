@@ -36,7 +36,7 @@ export function App() {
 
       {/* Industrial HMI Header Bar */}
       <header
-        className="industrial-card"
+        className="industrial-card no-print"
         style={{
           margin: '10px 14px 0 14px',
           padding: '8px 16px',
@@ -171,7 +171,7 @@ export function App() {
       </header>
 
       {/* Main SCADA Workspace */}
-      <main style={{ flex: 1, padding: '10px 14px 14px 14px', overflow: 'hidden' }}>
+      <main className="no-print" style={{ flex: 1, padding: '10px 14px 14px 14px', overflow: 'hidden' }}>
         {activeTab === 'MIMIC' && (
           activeSkid === 'PASTEURIZER_10KLPH' ? (
             <PasteurizerMimic />

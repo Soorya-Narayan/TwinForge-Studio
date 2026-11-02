@@ -12,6 +12,9 @@ export interface ElectronAPI {
   }) => Promise<{ canceled: boolean; filePath?: string; content?: string }>;
   showItemInFolder: (filePath: string) => Promise<void>;
   getVersion: () => Promise<string>;
+  printToPDF: (options?: {
+    defaultPath?: string;
+  }) => Promise<{ canceled: boolean; filePath?: string; error?: string }>;
 }
 
 const api: ElectronAPI = {
@@ -20,6 +23,7 @@ const api: ElectronAPI = {
   openFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  printToPDF: (options) => ipcRenderer.invoke('print:toPDF', options),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
