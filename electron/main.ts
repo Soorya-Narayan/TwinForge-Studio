@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { OpcUaManager } from './opcuaManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('-
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
+const opcuaManager = new OpcUaManager();
 
 function getAppIcon() {
   const prodIcon = path.join(__dirname, '../dist/gooselogo.png');
@@ -267,6 +269,35 @@ ipcMain.handle('print:toPDF', async (event, options?: { defaultPath?: string }) 
   }
 });
 
+// OPC UA (node-opcua) IPC Handlers for real industrial PLC communication
+ipcMain.handle('opcua:connect', async (_event, endpointUrl?: string) => {
+  return opcuaManager.connect(endpointUrl);
+});
+
+ipcMain.handle('opcua:disconnect', async () => {
+  return opcuaManager.disconnect();
+});
+
+ipcMain.handle('opcua:getStatus', () => {
+  return opcuaManager.getStatus();
+});
+
+ipcMain.handle('opcua:readTags', async (_event, tags: string[]) => {
+  return opcuaManager.readTags(tags);
+});
+
+ipcMain.handle('opcua:writeTags', async (_event, tags: Record<string, { value: any; dataType?: string }>) => {
+  return opcuaManager.writeTags(tags);
+});
+
+ipcMain.handle('opcua:startLocalServer', async (_event, port?: number) => {
+  return opcuaManager.startLocalServer(port);
+});
+
+ipcMain.handle('opcua:stopLocalServer', async () => {
+  return opcuaManager.stopLocalServer();
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) {
@@ -285,6 +316,10 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on('before-quit', async () => {
+  await opcuaManager.destroy();
 });
 
 app.on('window-all-closed', () => {

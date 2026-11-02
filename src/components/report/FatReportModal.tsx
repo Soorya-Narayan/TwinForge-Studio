@@ -55,6 +55,11 @@ export const FatReportModal: React.FC = () => {
         customerName: projectSettings.customerName,
         commissioningLead: projectSettings.commissioningLead,
         clientAuthority: projectSettings.clientAuthority,
+        plcPlatform: {
+          driverType: plc.status.driverType,
+          endpoint: (plc as any).endpointUrl || null,
+          details: plc.status.driverType === 'opcua' ? 'Real PLC via node-opcua (IEC 62541)' : 'In-Process Mock Driver',
+        },
         results,
         journal: normalizedJournal,
         plantConfig,
@@ -92,7 +97,7 @@ export const FatReportModal: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings]);
+  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings, plc]);
 
   if (!showReportModal) return null;
 
@@ -395,7 +400,11 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>PLC Controller Platform:</span>
-              <strong style={{ fontSize: 12, color: '#0f172a' }}>TwinForge Deterministic Engine</strong>
+              <strong style={{ fontSize: 12, color: plc.status.driverType === 'opcua' ? '#0284c7' : '#0f172a' }}>
+                {plc.status.driverType === 'opcua'
+                  ? `Live OPC UA PLC (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'}) · node-opcua`
+                  : 'TwinForge Deterministic Mock Engine'}
+              </strong>
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

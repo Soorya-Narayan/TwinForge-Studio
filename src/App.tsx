@@ -8,19 +8,22 @@ import { TagWatchTable } from './components/tags/TagWatchTable';
 import { PidCanvas } from './components/canvas/PidCanvas';
 import { TrendOscilloscope } from './components/trend/TrendOscilloscope';
 import { FatReportModal } from './components/report/FatReportModal';
+import { OpcUaModal } from './components/plc/OpcUaModal';
 import { SiteTemplatesView } from './components/templates/SiteTemplatesView';
 import { SplashScreen } from './components/loading/SplashScreen';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useFatStore } from './store/useFatStore';
-import { Factory } from 'lucide-react';
+import { Factory, Server } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [showOpcUaModal, setShowOpcUaModal] = useState(false);
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
   const customMeta = useSimulationStore((s) => s.customMeta);
   const plc = useSimulationStore((s) => s.plc);
+  const driverMode = useSimulationStore((s) => s.driverMode);
   const faults = useSimulationStore((s) => s.faults);
   const openReportModal = useFatStore((s) => s.openReportModal);
   const results = useFatStore((s) => s.results);
@@ -153,6 +156,31 @@ export function App() {
             </span>
           </button>
 
+          {/* PLC Driver & OPC UA Status Chip */}
+          <button
+            onClick={() => setShowOpcUaModal(true)}
+            className="btn btn-ghost"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 11,
+              background: driverMode === 'OPCUA' ? '#f0fdf4' : '#f8fafc',
+              border: `1px solid ${driverMode === 'OPCUA' ? '#bbf7d0' : 'var(--border-subtle)'}`,
+              borderRadius: 4,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+            }}
+            title="Configure PLC Driver & OPC UA Hardware Connection"
+          >
+            <Server size={13} color={driverMode === 'OPCUA' ? 'var(--color-success)' : 'var(--text-secondary)'} />
+            <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>PLC:</span>
+            <span style={{ fontWeight: 700, color: driverMode === 'OPCUA' ? '#15803d' : '#334155' }}>
+              {driverMode === 'OPCUA' ? 'Real PLC (OPC UA)' : 'Mock Driver'}
+            </span>
+          </button>
+
           {hasTrippedInterlock && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, background: '#fee2e2', padding: '4px 8px', borderRadius: 4, border: '1px solid #fca5a5' }}>
               <span className="led led-alarm" />
@@ -191,6 +219,9 @@ export function App() {
 
       {/* FAT Verification & Compliance Report Modal */}
       <FatReportModal />
+
+      {/* PLC Driver & OPC UA Hardware Connection Modal */}
+      <OpcUaModal isOpen={showOpcUaModal} onClose={() => setShowOpcUaModal(false)} />
     </div>
   );
 }

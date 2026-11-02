@@ -8,12 +8,14 @@ import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine'
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
 import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
+import { OpcUaPlcDriver } from '../core/driver/OpcUaPlcDriver';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
 
 export type SkidId = 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
+export type DriverMode = 'MOCK' | 'OPCUA';
 
 export interface TrendDataPoint {
   timeSec: number;
@@ -32,7 +34,9 @@ interface SimulationStore {
   customMeta: CustomSkidMeta | null;
   customTopology: PlantTopology | null;
   engine: PhysicsEngine;
-  plc: MockPlcDriver | PasteurizerPlcDriver | GenericPlcDriver;
+  plc: MockPlcDriver | PasteurizerPlcDriver | GenericPlcDriver | OpcUaPlcDriver;
+  driverMode: DriverMode;
+  opcuaEndpoint: string;
   running: boolean;
   speed: number; // 1x, 2x, 5x, 10x
   snapshot: SimulationSnapshot | null;
@@ -43,6 +47,11 @@ interface SimulationStore {
   setSkid: (skid: SkidId) => void;
   setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => void;
   deleteCustomSkid: () => void;
+  setDriverMode: (mode: DriverMode, endpointUrl?: string) => Promise<void>;
+  connectOpcUa: (endpointUrl?: string) => Promise<void>;
+  disconnectOpcUa: () => Promise<void>;
+  startLocalOpcUaServer: (port?: number) => Promise<string>;
+  stopLocalOpcUaServer: () => Promise<void>;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -152,17 +161,95 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     customTopology: null,
     engine: initialEngine,
     plc: initialPlc,
+    driverMode: 'MOCK',
+    opcuaEndpoint: 'opc.tcp://127.0.0.1:4840',
     running: false,
     speed: 1,
     snapshot: initialSnap,
     faults: [],
     trendHistory: [],
 
+    setDriverMode: async (mode, endpointUrl) => {
+      stopLoop();
+      const endpoint = endpointUrl || get().opcuaEndpoint;
+      if (mode === 'OPCUA') {
+        const opcDriver = new OpcUaPlcDriver(endpoint);
+        try {
+          await opcDriver.connect(endpoint);
+        } catch (err) {
+          console.warn('Initial OPC UA connection attempt:', err);
+        }
+        const snap = get().engine.tick(opcDriver.readOutputs());
+        opcDriver.writeInputs(snap.tags.inputs);
+        set({ driverMode: 'OPCUA', opcuaEndpoint: endpoint, plc: opcDriver, snapshot: snap });
+      } else {
+        const { activeSkid, customTopology } = get();
+        let newPlc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
+        if (activeSkid === 'PASTEURIZER_10KLPH') {
+          newPlc = new PasteurizerPlcDriver();
+        } else if (activeSkid === 'BATCH_MIXING') {
+          newPlc = new MockPlcDriver();
+        } else {
+          newPlc = new GenericPlcDriver(customTopology || milkPasteurizerSkid);
+        }
+        const snap = get().engine.tick(newPlc.readOutputs());
+        newPlc.writeInputs(snap.tags.inputs);
+        set({ driverMode: 'MOCK', plc: newPlc, snapshot: snap });
+      }
+    },
+
+    connectOpcUa: async (endpointUrl) => {
+      const endpoint = endpointUrl || get().opcuaEndpoint;
+      const { plc, driverMode } = get();
+      if (driverMode === 'OPCUA' && plc instanceof OpcUaPlcDriver) {
+        await plc.connect(endpoint);
+        set({ opcuaEndpoint: endpoint });
+      } else {
+        await get().setDriverMode('OPCUA', endpoint);
+      }
+    },
+
+    disconnectOpcUa: async () => {
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        await plc.disconnect();
+      }
+    },
+
+    startLocalOpcUaServer: async (port = 4840) => {
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        const endpoint = await plc.startLocalServer(port);
+        await plc.connect(endpoint);
+        set({ opcuaEndpoint: endpoint });
+        return endpoint;
+      } else {
+        const opcDriver = new OpcUaPlcDriver();
+        const endpoint = await opcDriver.startLocalServer(port);
+        await opcDriver.connect(endpoint);
+        const snap = get().engine.tick(opcDriver.readOutputs());
+        opcDriver.writeInputs(snap.tags.inputs);
+        set({ driverMode: 'OPCUA', plc: opcDriver, opcuaEndpoint: endpoint, snapshot: snap });
+        return endpoint;
+      }
+    },
+
+    stopLocalOpcUaServer: async () => {
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        await plc.stopLocalServer();
+      }
+    },
+
     setSkid: (skid) => {
       stopLoop();
       const topology = skid === 'PASTEURIZER_10KLPH' ? milkPasteurizerSkid : defaultMixingSkid;
       const newEngine = new PhysicsEngine(topology);
-      const newPlc = skid === 'PASTEURIZER_10KLPH' ? new PasteurizerPlcDriver() : new MockPlcDriver();
+      const { driverMode, plc } = get();
+      let newPlc = plc;
+      if (driverMode === 'MOCK' || !(plc instanceof OpcUaPlcDriver)) {
+        newPlc = skid === 'PASTEURIZER_10KLPH' ? new PasteurizerPlcDriver() : new MockPlcDriver();
+      }
       const snap = newEngine.tick(newPlc.readOutputs());
       newPlc.writeInputs(snap.tags.inputs);
       set({ activeSkid: skid, engine: newEngine, plc: newPlc, snapshot: snap, faults: [], trendHistory: [] });
@@ -171,7 +258,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => {
       stopLoop();
       const newEngine = new PhysicsEngine(topology);
-      const newPlc = new GenericPlcDriver(topology);
+      const { driverMode, plc } = get();
+      let newPlc = plc;
+      if (driverMode === 'MOCK' || !(plc instanceof OpcUaPlcDriver)) {
+        newPlc = new GenericPlcDriver(topology);
+      }
       const snap = newEngine.tick(newPlc.readOutputs());
       newPlc.writeInputs(snap.tags.inputs);
       set({
@@ -200,7 +291,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     start: () => {
       const { plc, activeSkid } = get();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.startProduction();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         const pastPlc = plc as PasteurizerPlcDriver;
         if (pastPlc.state === 'STOPPED') {
           pastPlc.startProduction();
@@ -232,7 +325,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       stopLoop();
       const { engine, plc, activeSkid } = get();
       engine.reset();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.resetBatch();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).resetSystem();
       } else if (activeSkid === 'BATCH_MIXING') {
         (plc as MockPlcDriver).resetBatch();
@@ -271,7 +366,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     startPlcBatch: () => {
       const { plc, activeSkid } = get();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.startProduction();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).startProduction();
       } else {
         (plc as MockPlcDriver).startBatch();
@@ -281,7 +378,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     holdPlcBatch: () => {
       const { plc, activeSkid } = get();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.divertManually();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).divertManually();
       } else {
         (plc as MockPlcDriver).holdBatch();
@@ -291,7 +390,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     resumePlcBatch: () => {
       const { plc, activeSkid } = get();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.startProduction();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).startProduction();
       } else {
         (plc as MockPlcDriver).resumeBatch();
@@ -301,7 +402,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     abortPlcBatch: () => {
       const { plc, activeSkid } = get();
-      if (activeSkid === 'PASTEURIZER_10KLPH') {
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.emergencyStop();
+      } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).emergencyStop();
       } else {
         (plc as MockPlcDriver).abortBatch();

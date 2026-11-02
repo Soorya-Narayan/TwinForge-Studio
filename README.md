@@ -22,6 +22,12 @@
     - **Plate Heat Exchanger (PHE) Pasteurizer Skid**: Detailed thermal modeling across Regenerative, Heating, and Cooling sections, holding tube residence time calculation, hot water loop, and automated Flow Diversion Valve (FDV) diversion logic.
     - **Three-Solution Batch Mixing Skid**: Multi-vessel transfer, variable dosing rates, and agitation dynamics.
     - **Custom Process Skid Builder**: Configurable vessels, pumps, valves, and transmitter definitions.
+- **Real Industrial PLC Driver (OPC UA via node-opcua)**:
+  - Real-time connection over standard `opc.tcp://` protocol to live industrial PLCs (Siemens S7-1500/1200, Beckhoff TwinCAT, CODESYS, Rockwell, B&R, Omron).
+  - Native Node.js communication stack executing in Electron main process using `node-opcua-client`.
+  - Bidirectional cyclic I/O synchronization: feeds physical simulation sensor telemetry to PLC inputs and captures real-time PLC commands/interlocks.
+  - Embedded local test OPC UA server via `node-opcua-server` (port 4840) with standard plant address space for instant zero-hardware loopback testing.
+  - Hardware-in-the-Loop Automated FAT: test scenarios stimulate and assert against the actual external PLC over the wire.
 - **In-Process Mock PLC Driver Architecture**:
   - Unified `Driver` boundary (`readOutputs()` / `writeInputs()`) decoupling plant physics from control logic.
   - Built-in TypeScript PLC controllers:
@@ -61,7 +67,6 @@
 ### Planned (Roadmap)
 
 - **External Hardware & Fieldbus Protocol Drivers**:
-  - **OPC UA Client Driver**: Direct connection to external PLC runtimes and industrial edge servers with tag browsing and subscription monitoring.
   - **Modbus TCP Driver**: Fieldbus communication via standard holding register and coil polling.
   - **Siemens S7 Protocol Driver**: Native S7 communication (DB block reading/writing for S7-1200 / S7-1500 controllers).
   - **EtherNet/IP Driver**: CIP tag-based integration for Rockwell / Allen-Bradley ControlLogix and CompactLogix PLCs.
