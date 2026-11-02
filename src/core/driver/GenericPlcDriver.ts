@@ -5,14 +5,9 @@
 
 import type { Driver, DriverStatus } from './Driver';
 import type { PlantTopology } from '../engine/PhysicsEngine';
+import type { InterlockStatus } from './interlockConfig';
 
-export interface InterlockStatus {
-  id: string;
-  name: string;
-  condition: string;
-  isOk: boolean;
-  tripped: boolean;
-}
+export type { InterlockStatus };
 
 export class GenericPlcDriver implements Driver {
   public status: DriverStatus = {

@@ -15,13 +15,14 @@ export type PasteurizerState =
   | 'CIP_CLEANING' 
   | 'EMERGENCY_STOP';
 
-export interface InterlockStatus {
-  id: string;
-  name: string;
-  condition: string;
-  isOk: boolean;
-  tripped: boolean;
-}
+import {
+  createInterlocksMapForSkid,
+  loadStoredInterlockDefinitions,
+  type InterlockStatus,
+  type InterlockDefinition,
+} from './interlockConfig';
+
+export type { InterlockStatus, InterlockDefinition };
 
 export class PasteurizerPlcDriver implements Driver {
   public status: DriverStatus = {
@@ -47,59 +48,36 @@ export class PasteurizerPlcDriver implements Driver {
     ratedFlowLph: 10000.0, // 10 KLPH
   };
 
-  // Interlocks mirroring P&ID Drawing Sheet-1
-  public interlocks: Map<string, InterlockStatus> = new Map([
-    [
-      'IL-FDV',
-      {
-        id: 'IL-FDV',
-        name: 'Legal Flow Diversion Interlock (PV11 / PV12)',
-        condition: 'Holding tube temp TT5 must be >= 88.0°C for forward flow to product out; else divert to Balance Tank',
-        isOk: false,
-        tripped: false,
-      },
-    ],
-    [
-      'IL-DP',
-      {
-        id: 'IL-DP',
-        name: 'Regenerator Differential Pressure (PT4 - PT2)',
-        condition: 'Booster discharge PT4 must exceed raw feed PT2 by >= 0.5 bar to prevent raw-to-pasteurized contamination',
-        isOk: true,
-        tripped: false,
-      },
-    ],
-    [
-      'IL-BAL-LOW',
-      {
-        id: 'IL-BAL-LOW',
-        name: 'Balance Tank Low Level Lockout (LS1 / LT1)',
-        condition: 'Feed Pump trips if Balance Tank level < 15% to protect pump mechanical seal from cavitation',
-        isOk: true,
-        tripped: false,
-      },
-    ],
-    [
-      'IL-BAL-HIGH',
-      {
-        id: 'IL-BAL-HIGH',
-        name: 'Balance Tank High Level Protection (LS2)',
-        condition: 'Raw milk transfer and inlet valve PV1 trip if Balance Tank level > 95% to prevent tank overflow',
-        isOk: true,
-        tripped: false,
-      },
-    ],
-    [
-      'IL-SEAL',
-      {
-        id: 'IL-SEAL',
-        name: 'Homogenizer Seal Water Interlock',
-        condition: 'Homogenizer locked out if Ø 25 mm seal cooling water line is unproved',
-        isOk: true,
-        tripped: false,
-      },
-    ],
-  ]);
+  // Interlocks loaded from centralized configuration (PMO/FDA Sheet-1)
+  public interlocks: Map<string, InterlockStatus>;
+  public interlockDefinitions: InterlockDefinition[];
+
+  constructor(customDefinitions?: InterlockDefinition[]) {
+    this.interlockDefinitions = customDefinitions
+      ? [...customDefinitions]
+      : loadStoredInterlockDefinitions();
+    this.interlocks = createInterlocksMapForSkid('PASTEURIZER_10KLPH', this.interlockDefinitions);
+  }
+
+  /**
+   * Update interlock definitions from configuration
+   */
+  public setInterlockDefinitions(definitions: InterlockDefinition[]): void {
+    this.interlockDefinitions = [...definitions];
+    const newMap = createInterlocksMapForSkid('PASTEURIZER_10KLPH', this.interlockDefinitions);
+    for (const [id, current] of this.interlocks.entries()) {
+      const next = newMap.get(id);
+      if (next) {
+        next.isOk = current.isOk;
+        next.tripped = current.tripped;
+      }
+    }
+    this.interlocks = newMap;
+  }
+
+  public getInterlockDefinitions(): InterlockDefinition[] {
+    return [...this.interlockDefinitions];
+  }
 
   public async connect(): Promise<void> {
     this.status.connected = true;
@@ -133,49 +111,57 @@ export class PasteurizerPlcDriver implements Driver {
     const pt2 = Number(this.inputs['PT2'] ?? 2.5);
 
     // 1. IL-FDV: Flow Diversion Valve Safety Lockout
-    const ilFdv = this.interlocks.get('IL-FDV')!;
+    const ilFdv = this.interlocks.get('IL-FDV');
     const isAtLegalTemp = holdingTemp >= this.setpoints.divertThresholdTempC;
-    ilFdv.isOk = isAtLegalTemp;
+    if (ilFdv) {
+      ilFdv.isOk = isAtLegalTemp;
+    }
 
     if (!isAtLegalTemp && this.state === 'PASTEURIZING_FORWARD') {
-      ilFdv.tripped = true;
+      if (ilFdv) ilFdv.tripped = true;
       this.state = 'DIVERTED_TO_BALANCE';
       this.outputs['PV11_CMD'] = false; // Forward closed
       this.outputs['PV12_CMD'] = true;  // Divert open to Balance Tank!
     }
 
     // 2. IL-DP: Differential Pressure
-    const ilDp = this.interlocks.get('IL-DP')!;
+    const ilDp = this.interlocks.get('IL-DP') ?? this.interlocks.get('IL-DIFF');
     const dp = pt4 - pt2;
-    ilDp.isOk = dp >= this.setpoints.differentialPressureBar;
-    if (!ilDp.isOk && this.state === 'PASTEURIZING_FORWARD') {
-      ilDp.tripped = true;
-      // Safety divert on loss of positive pressure differential
-      this.state = 'DIVERTED_TO_BALANCE';
-      this.outputs['PV11_CMD'] = false;
-      this.outputs['PV12_CMD'] = true;
+    if (ilDp) {
+      ilDp.isOk = dp >= this.setpoints.differentialPressureBar;
+      if (!ilDp.isOk && this.state === 'PASTEURIZING_FORWARD') {
+        ilDp.tripped = true;
+        // Safety divert on loss of positive pressure differential
+        this.state = 'DIVERTED_TO_BALANCE';
+        this.outputs['PV11_CMD'] = false;
+        this.outputs['PV12_CMD'] = true;
+      }
     }
 
     // 3. IL-BAL-LOW: Balance Tank Low Level
-    const ilBalLow = this.interlocks.get('IL-BAL-LOW')!;
-    if (balLevel < 15) {
-      ilBalLow.isOk = false;
-      ilBalLow.tripped = true;
-      this.outputs['P_FEED_START'] = false; // Trip feed pump
-      this.outputs['P_BOOST_START'] = false;
-    } else {
-      ilBalLow.isOk = true;
+    const ilBalLow = this.interlocks.get('IL-BAL-LOW');
+    if (ilBalLow) {
+      if (balLevel < 15) {
+        ilBalLow.isOk = false;
+        ilBalLow.tripped = true;
+        this.outputs['P_FEED_START'] = false; // Trip feed pump
+        this.outputs['P_BOOST_START'] = false;
+      } else {
+        ilBalLow.isOk = true;
+      }
     }
 
     // 4. IL-BAL-HIGH: Balance Tank Overfill
-    const ilBalHigh = this.interlocks.get('IL-BAL-HIGH')!;
-    if (balLevel > 95) {
-      ilBalHigh.isOk = false;
-      ilBalHigh.tripped = true;
-      this.outputs['PV1_CMD'] = false; // Close milk inlet
-      this.outputs['P_RAW_START'] = false; // Stop raw milk pump
-    } else {
-      ilBalHigh.isOk = true;
+    const ilBalHigh = this.interlocks.get('IL-BAL-HIGH');
+    if (ilBalHigh) {
+      if (balLevel > 95) {
+        ilBalHigh.isOk = false;
+        ilBalHigh.tripped = true;
+        this.outputs['PV1_CMD'] = false; // Close milk inlet
+        this.outputs['P_RAW_START'] = false; // Stop raw milk pump
+      } else {
+        ilBalHigh.isOk = true;
+      }
     }
   }
 

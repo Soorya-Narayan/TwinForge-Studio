@@ -7,6 +7,14 @@
 
 import type { Driver, DriverStatus } from './Driver';
 import { loadStoredTagMap, getOutputTagsForSkid, DEFAULT_OPCUA_TAGS } from './opcuaTagMap';
+import {
+  createInterlocksMapForSkid,
+  loadStoredInterlockDefinitions,
+  type InterlockStatus,
+  type InterlockDefinition,
+} from './interlockConfig';
+
+export type { InterlockStatus, InterlockDefinition };
 
 export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
 export type OpcUaSecurityPolicy =
@@ -28,14 +36,7 @@ export interface OpcUaConnectionOptions {
   privateKeyPath?: string;
   tagMap?: Record<string, string>;
   activeSkid?: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
-}
-
-export interface InterlockStatus {
-  id: string;
-  name: string;
-  condition: string;
-  isOk: boolean;
-  tripped: boolean;
+  interlockDefinitions?: InterlockDefinition[];
 }
 
 function getElectronOpcUa() {
@@ -65,19 +66,14 @@ export class OpcUaPlcDriver implements Driver {
   public state: string = 'OFFLINE';
   public tagMap: Record<string, string> = {};
   public activeSkid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM' = 'PASTEURIZER_10KLPH';
+  public interlockDefinitions: InterlockDefinition[] = [];
 
   // Live I/O mirrors matching industrial PLC register tags
   public inputs: Record<string, boolean | number> = {};
   public outputs: Record<string, boolean | number> = {};
 
-  // Interlock status parsed from real PLC
-  public interlocks: Map<string, InterlockStatus> = new Map([
-    ['IL-01', { id: 'IL-01', name: 'Suction Valve Interlock (OPC UA)', condition: 'Pump P-100 locked out unless V-101 is open', isOk: true, tripped: false }],
-    ['IL-02', { id: 'IL-02', name: 'Low Level Permissive (OPC UA)', condition: 'TK-100 inventory must be > 50%', isOk: true, tripped: false }],
-    ['IL-03', { id: 'IL-03', name: 'High Temperature Safety (OPC UA)', condition: 'TT-100 must be <= 95°C', isOk: true, tripped: false }],
-    ['IL-FDV', { id: 'IL-FDV', name: 'Legal Flow Diversion (OPC UA)', condition: 'TT5 >= 88.0°C for forward product flow', isOk: true, tripped: false }],
-    ['IL-DIFF', { id: 'IL-DIFF', name: 'Sanitary Differential Pressure (OPC UA)', condition: 'PT4 - PT2 >= 0.5 bar', isOk: true, tripped: false }],
-  ]);
+  // Interlock status parsed from configuration and updated from real PLC
+  public interlocks: Map<string, InterlockStatus> = new Map();
 
   // Output tags read cyclically from the real PLC (split per skid)
   public outputTags: string[] = [];
@@ -91,24 +87,47 @@ export class OpcUaPlcDriver implements Driver {
       this.securityOptions.endpointUrl = endpointOrOptions;
       this.tagMap = loadStoredTagMap();
       this.activeSkid = 'PASTEURIZER_10KLPH';
+      this.interlockDefinitions = loadStoredInterlockDefinitions();
     } else if (endpointOrOptions) {
       this.securityOptions = { ...this.securityOptions, ...endpointOrOptions };
       this.endpointUrl = endpointOrOptions.endpointUrl || this.endpointUrl;
       this.tagMap = endpointOrOptions.tagMap ? { ...endpointOrOptions.tagMap } : loadStoredTagMap();
       this.activeSkid = endpointOrOptions.activeSkid || 'PASTEURIZER_10KLPH';
+      this.interlockDefinitions = endpointOrOptions.interlockDefinitions
+        ? [...endpointOrOptions.interlockDefinitions]
+        : loadStoredInterlockDefinitions();
     } else {
       this.tagMap = loadStoredTagMap();
       this.activeSkid = 'PASTEURIZER_10KLPH';
+      this.interlockDefinitions = loadStoredInterlockDefinitions();
     }
+
     this.outputTags = this.getActiveOutputTags();
+    this.interlocks = createInterlocksMapForSkid(this.activeSkid, this.interlockDefinitions);
   }
 
   /**
-   * Set the active plant skid to read only relevant tags during cyclic scans
+   * Set the active plant skid to read only relevant tags and interlocks during cyclic scans
    */
   public setSkid(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM'): void {
     this.activeSkid = skid;
     this.outputTags = this.getActiveOutputTags();
+    this.interlocks = createInterlocksMapForSkid(skid, this.interlockDefinitions);
+  }
+
+  /**
+   * Update interlock definitions from configuration
+   */
+  public setInterlockDefinitions(definitions: InterlockDefinition[]): void {
+    this.interlockDefinitions = [...definitions];
+    this.interlocks = createInterlocksMapForSkid(this.activeSkid, this.interlockDefinitions);
+  }
+
+  /**
+   * Get active interlock definitions
+   */
+  public getInterlockDefinitions(): InterlockDefinition[] {
+    return [...this.interlockDefinitions];
   }
 
   /**

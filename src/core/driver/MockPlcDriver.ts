@@ -22,13 +22,14 @@ export type BatchState =
   | 'HOLD' 
   | 'ABORTED';
 
-export interface InterlockStatus {
-  id: string;
-  name: string;
-  condition: string;
-  isOk: boolean;
-  tripped: boolean;
-}
+import {
+  createInterlocksMapForSkid,
+  loadStoredInterlockDefinitions,
+  type InterlockStatus,
+  type InterlockDefinition,
+} from './interlockConfig';
+
+export type { InterlockStatus, InterlockDefinition };
 
 export class MockPlcDriver implements Driver {
   public status: DriverStatus = {
@@ -55,14 +56,36 @@ export class MockPlcDriver implements Driver {
     mixTimerS: 0,
   };
 
-  // Interlocks
-  public interlocks: Map<string, InterlockStatus> = new Map([
-    ['IL-01', { id: 'IL-01', name: 'Suction Valve Interlock', condition: 'Pump cannot run if Suction Valve V-101 is not OPEN', isOk: true, tripped: false }],
-    ['IL-02', { id: 'IL-02', name: 'Low Level Runaway Trip', condition: 'Trip pump if source tank level < 8%', isOk: true, tripped: false }],
-    ['IL-03', { id: 'IL-03', name: 'Overfill Protection', condition: 'Cut dosing if destination tank level > 90%', isOk: true, tripped: false }],
-    ['IL-04', { id: 'IL-04', name: 'Thermal Limit Trip', condition: 'Cut steam valve if temperature > 88°C', isOk: true, tripped: false }],
-    ['IL-05', { id: 'IL-05', name: 'Agitator Dry-Run Protection', condition: 'Inhibit agitator unless tank volume > 50L', isOk: true, tripped: false }],
-  ]);
+  // Interlocks loaded from centralized configuration
+  public interlocks: Map<string, InterlockStatus>;
+  public interlockDefinitions: InterlockDefinition[];
+
+  constructor(customDefinitions?: InterlockDefinition[]) {
+    this.interlockDefinitions = customDefinitions
+      ? [...customDefinitions]
+      : loadStoredInterlockDefinitions();
+    this.interlocks = createInterlocksMapForSkid('BATCH_MIXING', this.interlockDefinitions);
+  }
+
+  /**
+   * Update interlock definitions from configuration
+   */
+  public setInterlockDefinitions(definitions: InterlockDefinition[]): void {
+    this.interlockDefinitions = [...definitions];
+    const newMap = createInterlocksMapForSkid('BATCH_MIXING', this.interlockDefinitions);
+    for (const [id, current] of this.interlocks.entries()) {
+      const next = newMap.get(id);
+      if (next) {
+        next.isOk = current.isOk;
+        next.tripped = current.tripped;
+      }
+    }
+    this.interlocks = newMap;
+  }
+
+  public getInterlockDefinitions(): InterlockDefinition[] {
+    return [...this.interlockDefinitions];
+  }
 
   public async connect(): Promise<void> {
     this.status.connected = true;
@@ -99,47 +122,55 @@ export class MockPlcDriver implements Driver {
     // IL-01: P100 requires V101_ZSO == true
     const v101Open = Boolean(this.inputs['V101_ZSO']);
     const p100Cmd = Boolean(this.outputs['P100_START']);
-    const il01 = this.interlocks.get('IL-01')!;
-    if (p100Cmd && !v101Open) {
-      il01.isOk = false;
-      il01.tripped = true;
-      this.outputs['P100_START'] = false; // Interlock trip action!
-    } else {
-      il01.isOk = v101Open;
+    const il01 = this.interlocks.get('IL-01');
+    if (il01) {
+      if (p100Cmd && !v101Open) {
+        il01.isOk = false;
+        il01.tripped = true;
+        this.outputs['P100_START'] = false; // Interlock trip action!
+      } else {
+        il01.isOk = v101Open;
+      }
     }
 
     // IL-02: Source tank level low trip
     const tk100Level = Number(this.inputs['TK100_LT'] ?? 100);
-    const il02 = this.interlocks.get('IL-02')!;
-    if (tk100Level < 8 && p100Cmd) {
-      il02.isOk = false;
-      il02.tripped = true;
-      this.outputs['P100_START'] = false;
-    } else {
-      il02.isOk = tk100Level >= 8;
+    const il02 = this.interlocks.get('IL-02');
+    if (il02) {
+      if (tk100Level < 8 && p100Cmd) {
+        il02.isOk = false;
+        il02.tripped = true;
+        this.outputs['P100_START'] = false;
+      } else {
+        il02.isOk = tk100Level >= 8;
+      }
     }
 
     // IL-03: Destination overfill cut
     const tk400Level = Number(this.inputs['TK400_LT'] ?? 0);
-    const il03 = this.interlocks.get('IL-03')!;
-    if (tk400Level > 90) {
-      il03.isOk = false;
-      il03.tripped = true;
-      this.outputs['P100_START'] = false;
-      this.outputs['V101_CMD'] = false;
-    } else {
-      il03.isOk = tk400Level <= 90;
+    const il03 = this.interlocks.get('IL-03');
+    if (il03) {
+      if (tk400Level > 90) {
+        il03.isOk = false;
+        il03.tripped = true;
+        this.outputs['P100_START'] = false;
+        this.outputs['V101_CMD'] = false;
+      } else {
+        il03.isOk = tk400Level <= 90;
+      }
     }
 
     // IL-04: Thermal safety cut
     const hx100Temp = Number(this.inputs['HX100_TT'] ?? 20);
-    const il04 = this.interlocks.get('IL-04')!;
-    if (hx100Temp > 88) {
-      il04.isOk = false;
-      il04.tripped = true;
-      this.outputs['TCV100_CMD'] = 0; // Cut steam
-    } else {
-      il04.isOk = hx100Temp <= 88;
+    const il04 = this.interlocks.get('IL-04');
+    if (il04) {
+      if (hx100Temp > 88) {
+        il04.isOk = false;
+        il04.tripped = true;
+        this.outputs['TCV100_CMD'] = 0; // Cut steam
+      } else {
+        il04.isOk = hx100Temp <= 88;
+      }
     }
   }
 
