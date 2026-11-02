@@ -6,7 +6,7 @@
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { Printer, CheckCircle, ShieldCheck, X, Settings2 } from 'lucide-react';
+import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle } from 'lucide-react';
 
 export const FatReportModal: React.FC = () => {
   const showReportModal = useFatStore((s) => s.showReportModal);
@@ -86,6 +86,7 @@ export const FatReportModal: React.FC = () => {
   if (!showReportModal) return null;
 
   const passedCount = results.filter((r) => r.passed).length;
+  const failedCount = results.length - passedCount;
   const allTestsPassed = passedCount === results.length && results.length > 0;
 
   const handlePrint = () => {
@@ -311,19 +312,47 @@ export const FatReportModal: React.FC = () => {
               1. Executive Test Findings
             </h3>
             <p style={{ fontSize: 11, color: '#334155', lineHeight: 1.5, margin: 0 }}>
-              The control program logic was subjected to an automated suite of {results.length} functional acceptance tests including nominal recipe execution, abnormal condition handling, and critical safety interlock verification. All physical devices and process parameters were simulated deterministically.
+              {results.length === 0
+                ? 'No functional acceptance test procedures have been executed for this session yet.'
+                : `The control program logic was subjected to an automated suite of ${results.length} functional acceptance tests including nominal recipe execution, abnormal condition handling, and critical safety interlock verification. All physical devices and process parameters were simulated deterministically.`}
             </p>
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: allTestsPassed ? '#f0fdf4' : '#fef2f2', border: `1px solid ${allTestsPassed ? '#bbf7d0' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <CheckCircle size={18} color={allTestsPassed ? '#16a34a' : '#dc2626'} />
-              <div>
-                <strong style={{ fontSize: 12, color: allTestsPassed ? '#15803d' : '#991b1b' }}>
-                  {allTestsPassed ? 'ACCEPTED & VERIFIED' : 'TESTS FAILED - ACTION REQUIRED'}
-                </strong>
-                <p style={{ fontSize: 10, color: allTestsPassed ? '#166534' : '#b91c1c', margin: 0 }}>
-                  {passedCount} of {results.length} test procedures completed with zero non-conformances.
-                </p>
+            {results.length === 0 ? (
+              <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <AlertCircle size={18} color="#64748b" />
+                <div>
+                  <strong style={{ fontSize: 12, color: '#475569' }}>
+                    NO TESTS EXECUTED
+                  </strong>
+                  <p style={{ fontSize: 10, color: '#64748b', margin: 0 }}>
+                    No tests executed
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : allTestsPassed ? (
+              <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckCircle size={18} color="#16a34a" />
+                <div>
+                  <strong style={{ fontSize: 12, color: '#15803d' }}>
+                    ACCEPTED & VERIFIED
+                  </strong>
+                  <p style={{ fontSize: 10, color: '#166534', margin: 0 }}>
+                    {passedCount} of {results.length} test procedures completed with zero non-conformances.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <XCircle size={18} color="#dc2626" />
+                <div>
+                  <strong style={{ fontSize: 12, color: '#991b1b' }}>
+                    TESTS FAILED - ACTION REQUIRED
+                  </strong>
+                  <p style={{ fontSize: 10, color: '#b91c1c', margin: 0 }}>
+                    {passedCount} of {results.length} test procedures passed. {failedCount} {failedCount === 1 ? 'failure' : 'failures'} recorded.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Test Case Breakdown Table */}
@@ -341,21 +370,29 @@ export const FatReportModal: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {results.map((r) => (
-                  <tr key={r.testId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td className="mono" style={{ padding: '6px 8px', fontWeight: 700 }}>{r.testId}</td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <div style={{ fontWeight: 600 }}>{r.title}</div>
-                      <div style={{ color: '#64748b', fontSize: 9 }}>Ref: {r.clause}</div>
-                    </td>
-                    <td style={{ padding: '6px 8px' }}>{r.assertions.length} verification checks</td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <span style={{ fontWeight: 700, color: r.passed ? '#15803d' : '#dc2626' }}>
-                        {r.passed ? 'PASS' : 'FAIL'}
-                      </span>
+                {results.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '16px 8px', textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>
+                      No tests executed
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  results.map((r) => (
+                    <tr key={r.testId} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td className="mono" style={{ padding: '6px 8px', fontWeight: 700 }}>{r.testId}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <div style={{ fontWeight: 600 }}>{r.title}</div>
+                        <div style={{ color: '#64748b', fontSize: 9 }}>Ref: {r.clause}</div>
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>{r.assertions.length} verification checks</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <span style={{ fontWeight: 700, color: r.passed ? '#15803d' : '#dc2626' }}>
+                          {r.passed ? 'PASS' : 'FAIL'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
