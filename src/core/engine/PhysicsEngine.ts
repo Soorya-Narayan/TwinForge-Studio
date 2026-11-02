@@ -28,7 +28,7 @@ export interface PlantTopology {
 }
 
 export class PhysicsEngine {
-  private readonly stepMs: number = 100;
+  private stepMs: number = 100;
   private scan: number = 0;
   private timeMs: number = 0;
 
@@ -42,9 +42,18 @@ export class PhysicsEngine {
   // High-fidelity Plate Heat Exchanger assembly for pasteurizer skids
   public pheAssembly?: PHEAssemblyModel;
 
-  constructor(topology: PlantTopology) {
+  constructor(topology: PlantTopology, stepMs: number = 100) {
     this.topology = topology;
+    this.stepMs = stepMs;
     this.reset();
+  }
+
+  public getStepMs(): number {
+    return this.stepMs;
+  }
+
+  public setStepMs(stepMs: number): void {
+    this.stepMs = stepMs;
   }
 
   public getTopology(): PlantTopology {
@@ -123,12 +132,14 @@ export class PhysicsEngine {
   /**
    * Main scan tick
    * @param plcCommands Map of PLC output tag values (commands to devices)
+   * @param dtMs Optional scan time step in milliseconds (defaults to engine's stepMs)
    * @returns SimulationSnapshot
    */
-  public tick(plcCommands: Record<string, boolean | number>): SimulationSnapshot {
+  public tick(plcCommands: Record<string, boolean | number>, dtMs?: number): SimulationSnapshot {
+    const actualStepMs = dtMs ?? this.stepMs;
     this.scan += 1;
-    this.timeMs += this.stepMs;
-    const dtSeconds = this.stepMs / 1000.0;
+    this.timeMs += actualStepMs;
+    const dtSeconds = actualStepMs / 1000.0;
 
     // 1. INGEST & ADVANCE: Move actuator mechanical states
     this.advanceValves(plcCommands, dtSeconds);

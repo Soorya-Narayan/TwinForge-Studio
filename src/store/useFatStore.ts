@@ -66,7 +66,8 @@ let journalEntrySequence = 0;
 
 export const createIsolatedTestHarness = (
   skid: SkidId,
-  customTopology?: PlantTopology | null
+  customTopology?: PlantTopology | null,
+  stepMs: number = 100
 ): {
   engine: PhysicsEngine;
   plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
@@ -75,14 +76,14 @@ export const createIsolatedTestHarness = (
   let plc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
 
   if (skid === 'PASTEURIZER_10KLPH') {
-    engine = new PhysicsEngine(milkPasteurizerSkid);
+    engine = new PhysicsEngine(milkPasteurizerSkid, stepMs);
     plc = new PasteurizerPlcDriver();
   } else if (skid === 'BATCH_MIXING') {
-    engine = new PhysicsEngine(defaultMixingSkid);
+    engine = new PhysicsEngine(defaultMixingSkid, stepMs);
     plc = new MockPlcDriver();
   } else {
     const topology = customTopology || milkPasteurizerSkid;
-    engine = new PhysicsEngine(topology);
+    engine = new PhysicsEngine(topology, stepMs);
     plc = new GenericPlcDriver(topology);
   }
 
@@ -167,8 +168,12 @@ export const useFatStore = create<FatStore>()(
 
     set({ isRunningSuite: true });
 
-    // Isolate each test with a fresh engine and PLC instance instead of live UI instances
-    const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology);
+    const totalScans = test.durationScans ?? 20;
+    const dtMs = test.dtMs ?? 100;
+    const history: ScanHistoryRecord[] = [];
+
+    // Isolate each test with a fresh engine and PLC instance calibrated to test dtMs
+    const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology, dtMs);
 
     const driverName = plc.constructor?.name || 'MockPlcDriver';
     const driverType = plc.status.driverType;
@@ -184,9 +189,6 @@ export const useFatStore = create<FatStore>()(
     };
 
     const startTime = performance.now();
-    const totalScans = test.durationScans ?? 20;
-    const dtMs = test.dtMs ?? 100;
-    const history: ScanHistoryRecord[] = [];
 
     // Log start in journal
     get().addJournalEntry({
@@ -210,7 +212,7 @@ export const useFatStore = create<FatStore>()(
 
         plc.tick(dtMs);
         const outputs = plc.readOutputs();
-        const snap = engine.tick(outputs);
+        const snap = engine.tick(outputs, dtMs);
         plc.writeInputs(snap.tags.inputs);
 
         const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
