@@ -221,11 +221,27 @@ export const useFatStore = create<FatStore>()(
       },
 
   runSingleTest: async (testId: string, driverOverride?: HarnessPlcDriver) => {
+    const isPartOfSuite = get().currentTestIndex >= 0;
     const simStore = useSimulationStore.getState();
+    const wasLiveRunning = isPartOfSuite ? false : simStore.running;
+    if (!isPartOfSuite) {
+      simStore.setFatRunning(true);
+    }
+
     const currentSkid = simStore.activeSkid;
     const scenarios = get().scenarios.length > 0 ? get().scenarios : getFatScenarios(currentSkid);
-    const test = scenarios.find((s) => s.id === testId);
-    if (!test) return;
+    const test = scenarios.find((s) => {
+      return s.id === testId;
+    });
+    if (!test) {
+      if (!isPartOfSuite) {
+        simStore.setFatRunning(false);
+        if (wasLiveRunning) {
+          simStore.start();
+        }
+      }
+      return;
+    }
 
     set({ isRunningSuite: true });
 
@@ -475,7 +491,13 @@ export const useFatStore = create<FatStore>()(
         }
       }
       engine.clearAllFaults();
-      set({ isRunningSuite: false });
+      if (!isPartOfSuite) {
+        set({ isRunningSuite: false });
+        useSimulationStore.getState().setFatRunning(false);
+        if (wasLiveRunning) {
+          useSimulationStore.getState().start();
+        }
+      }
     }
   },
 
@@ -484,6 +506,10 @@ export const useFatStore = create<FatStore>()(
     resetSuite();
     const scenarios = get().scenarios;
     set({ isRunningSuite: true });
+
+    const simStore = useSimulationStore.getState();
+    const wasLiveRunning = simStore.running;
+    simStore.setFatRunning(true);
 
     try {
       for (let i = 0; i < scenarios.length; i++) {
@@ -514,6 +540,10 @@ export const useFatStore = create<FatStore>()(
       }));
     } finally {
       set({ isRunningSuite: false, currentTestIndex: -1 });
+      useSimulationStore.getState().setFatRunning(false);
+      if (wasLiveRunning) {
+        useSimulationStore.getState().start();
+      }
     }
   },
     }),

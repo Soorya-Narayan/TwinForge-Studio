@@ -48,6 +48,7 @@ interface SimulationStore {
   opcuaTagMap: Record<string, string>;
   interlockDefinitions: InterlockDefinition[];
   running: boolean;
+  isFatRunning: boolean;
   speed: number; // 1x, 2x, 5x, 10x
   snapshot: SimulationSnapshot | null;
   faults: DeviceFault[];
@@ -66,6 +67,7 @@ interface SimulationStore {
   resetOpcuaTagMap: () => void;
   setInterlockDefinitions: (defs: InterlockDefinition[]) => void;
   resetInterlockDefinitions: () => void;
+  setFatRunning: (active: boolean) => void;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -92,6 +94,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
   let timerId: number | null = null;
 
   const tickOnce = () => {
+    if (get().isFatRunning) return;
     const { engine, plc, trendHistory, activeSkid } = get();
 
     // 1. PLC reads its inputs and evaluates its internal state machine
@@ -150,6 +153,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
   };
 
   const startLoop = () => {
+    if (get().isFatRunning) return;
     if (timerId !== null) clearInterval(timerId);
     const interval = Math.max(10, Math.floor(100 / get().speed));
     timerId = setInterval(() => {
@@ -181,6 +185,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     opcuaTagMap: loadStoredTagMap(),
     interlockDefinitions: initialInterlockDefs,
     running: false,
+    isFatRunning: false,
     speed: 1,
     snapshot: initialSnap,
     faults: [],
@@ -321,6 +326,13 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       set({ interlockDefinitions: DEFAULT_INTERLOCK_DEFINITIONS });
     },
 
+    setFatRunning: (active: boolean) => {
+      if (active) {
+        stopLoop();
+      }
+      set({ isFatRunning: active });
+    },
+
     setSkid: (skid) => {
       stopLoop();
       const topology = skid === 'PASTEURIZER_10KLPH' ? milkPasteurizerSkid : defaultMixingSkid;
@@ -376,6 +388,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     start: () => {
+      if (get().isFatRunning) {
+        console.warn('Cannot start live simulation while FAT test run is in progress.');
+        return;
+      }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
         plc.startProduction();
@@ -403,6 +419,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     step: () => {
+      if (get().isFatRunning) {
+        console.warn('Cannot step live simulation while FAT test run is in progress.');
+        return;
+      }
       stopLoop();
       tickOnce();
     },
@@ -451,6 +471,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     startPlcBatch: () => {
+      if (get().isFatRunning) {
+        console.warn('Cannot start live batch while FAT test run is in progress.');
+        return;
+      }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
         plc.startProduction();
@@ -475,6 +499,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     resumePlcBatch: () => {
+      if (get().isFatRunning) {
+        console.warn('Cannot resume live batch while FAT test run is in progress.');
+        return;
+      }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
         plc.startProduction();
@@ -507,6 +535,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     manualOverrideOutput: (tag, value) => {
+      if (get().isFatRunning) {
+        console.warn('Cannot override output while FAT test run is in progress.');
+        return;
+      }
       const { plc } = get();
       plc.outputs[tag] = value;
       tickOnce();

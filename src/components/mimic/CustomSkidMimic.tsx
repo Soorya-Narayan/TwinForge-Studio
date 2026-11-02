@@ -10,6 +10,7 @@ import { Play, Pause, RotateCcw, Activity, Power } from 'lucide-react';
 export const CustomSkidMimic: React.FC = () => {
   const snapshot = useSimulationStore((s) => s.snapshot);
   const running = useSimulationStore((s) => s.running);
+  const isFatRunning = useSimulationStore((s) => s.isFatRunning);
   const speed = useSimulationStore((s) => s.speed);
   const start = useSimulationStore((s) => s.start);
   const pause = useSimulationStore((s) => s.pause);
@@ -54,9 +55,14 @@ export const CustomSkidMimic: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={running ? pause : start} className={`btn ${running ? 'btn-ghost' : 'btn-primary'}`}>
+          <button
+            onClick={running ? pause : start}
+            disabled={isFatRunning}
+            title={isFatRunning ? 'Live simulation paused during FAT execution' : undefined}
+            className={`btn ${running ? 'btn-ghost' : 'btn-primary'}`}
+          >
             {running ? <Pause size={14} /> : <Play size={14} />}
-            {running ? 'PAUSE' : 'RUN SIMULATION'}
+            {isFatRunning ? 'FAT RUNNING (PAUSED)' : running ? 'PAUSE' : 'RUN SIMULATION'}
           </button>
           <button onClick={reset} className="btn btn-ghost" title="Reset Simulation">
             <RotateCcw size={14} />
