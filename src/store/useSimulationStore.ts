@@ -13,6 +13,7 @@ import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
+import { loadStoredTagMap, saveStoredTagMap, getDefaultTagMap } from '../core/driver/opcuaTagMap';
 
 export type SkidId = 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
 export type DriverMode = 'MOCK' | 'OPCUA';
@@ -38,6 +39,7 @@ interface SimulationStore {
   driverMode: DriverMode;
   opcuaEndpoint: string;
   opcuaSecurityOptions?: OpcUaConnectionOptions;
+  opcuaTagMap: Record<string, string>;
   running: boolean;
   speed: number; // 1x, 2x, 5x, 10x
   snapshot: SimulationSnapshot | null;
@@ -53,6 +55,8 @@ interface SimulationStore {
   disconnectOpcUa: () => Promise<void>;
   startLocalOpcUaServer: (port?: number) => Promise<string>;
   stopLocalOpcUaServer: () => Promise<void>;
+  setOpcuaTagMap: (map: Record<string, string>) => void;
+  resetOpcuaTagMap: () => void;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -164,6 +168,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     plc: initialPlc,
     driverMode: 'MOCK',
     opcuaEndpoint: 'opc.tcp://127.0.0.1:4840',
+    opcuaTagMap: loadStoredTagMap(),
     running: false,
     speed: 1,
     snapshot: initialSnap,
@@ -173,8 +178,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     setDriverMode: async (mode, endpointOrOptions) => {
       stopLoop();
       const opts: OpcUaConnectionOptions = typeof endpointOrOptions === 'string'
-        ? { endpointUrl: endpointOrOptions }
-        : endpointOrOptions || { endpointUrl: get().opcuaEndpoint };
+        ? { endpointUrl: endpointOrOptions, tagMap: get().opcuaTagMap }
+        : endpointOrOptions
+        ? { tagMap: get().opcuaTagMap, ...endpointOrOptions }
+        : { endpointUrl: get().opcuaEndpoint, tagMap: get().opcuaTagMap };
       const endpoint = opts.endpointUrl || get().opcuaEndpoint;
       opts.endpointUrl = endpoint;
 
@@ -260,6 +267,25 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       if (plc instanceof OpcUaPlcDriver) {
         await plc.stopLocalServer();
       }
+    },
+
+    setOpcuaTagMap: (newMap: Record<string, string>) => {
+      saveStoredTagMap(newMap);
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.setTagMap(newMap);
+      }
+      set({ opcuaTagMap: newMap });
+    },
+
+    resetOpcuaTagMap: () => {
+      const defaultMap = getDefaultTagMap();
+      saveStoredTagMap(defaultMap);
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.setTagMap(defaultMap);
+      }
+      set({ opcuaTagMap: defaultMap });
     },
 
     setSkid: (skid) => {

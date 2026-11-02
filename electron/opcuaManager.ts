@@ -240,7 +240,13 @@ export class OpcUaManager {
    * Format NodeId string (defaults to ns=1;s=TAG if raw tag name is given)
    */
   private formatNodeId(tagOrNodeId: string): string {
-    if (tagOrNodeId.startsWith('ns=') || tagOrNodeId.startsWith('i=')) {
+    if (
+      tagOrNodeId.startsWith('ns=') ||
+      tagOrNodeId.startsWith('i=') ||
+      tagOrNodeId.startsWith('s=') ||
+      tagOrNodeId.startsWith('g=') ||
+      tagOrNodeId.startsWith('b=')
+    ) {
       return tagOrNodeId;
     }
     return `ns=${this.defaultNamespaceIndex};s=${tagOrNodeId}`;

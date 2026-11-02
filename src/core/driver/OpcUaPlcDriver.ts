@@ -6,6 +6,7 @@
  */
 
 import type { Driver, DriverStatus } from './Driver';
+import { loadStoredTagMap } from './opcuaTagMap';
 
 export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
 export type OpcUaSecurityPolicy =
@@ -25,6 +26,7 @@ export interface OpcUaConnectionOptions {
   password?: string;
   certificatePath?: string;
   privateKeyPath?: string;
+  tagMap?: Record<string, string>;
 }
 
 export interface InterlockStatus {
@@ -60,6 +62,7 @@ export class OpcUaPlcDriver implements Driver {
   };
   public serverRunning: boolean = false;
   public state: string = 'OFFLINE';
+  public tagMap: Record<string, string> = {};
 
   // Live I/O mirrors matching industrial PLC register tags
   public inputs: Record<string, boolean | number> = {};
@@ -106,10 +109,35 @@ export class OpcUaPlcDriver implements Driver {
     if (typeof endpointOrOptions === 'string') {
       this.endpointUrl = endpointOrOptions;
       this.securityOptions.endpointUrl = endpointOrOptions;
+      this.tagMap = loadStoredTagMap();
     } else if (endpointOrOptions) {
       this.securityOptions = { ...this.securityOptions, ...endpointOrOptions };
       this.endpointUrl = endpointOrOptions.endpointUrl || this.endpointUrl;
+      this.tagMap = endpointOrOptions.tagMap ? { ...endpointOrOptions.tagMap } : loadStoredTagMap();
+    } else {
+      this.tagMap = loadStoredTagMap();
     }
+  }
+
+  /**
+   * Set or update tag mapping (internal simulator tag -> real PLC NodeId)
+   */
+  public setTagMap(tagMap: Record<string, string>): void {
+    this.tagMap = { ...this.tagMap, ...tagMap };
+  }
+
+  /**
+   * Get active tag mapping table
+   */
+  public getTagMap(): Record<string, string> {
+    return { ...this.tagMap };
+  }
+
+  /**
+   * Translate internal tag name to real PLC NodeId
+   */
+  public resolvePlcNodeId(internalTag: string): string {
+    return this.tagMap[internalTag] || internalTag;
   }
 
   /**
@@ -206,7 +234,8 @@ export class OpcUaPlcDriver implements Driver {
     const writePayload: Record<string, { value: any; dataType?: string }> = {};
 
     for (const [tag, value] of Object.entries(inputs)) {
-      writePayload[tag] = {
+      const plcNodeId = this.resolvePlcNodeId(tag);
+      writePayload[plcNodeId] = {
         value,
         dataType: typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double',
       };
@@ -253,22 +282,27 @@ export class OpcUaPlcDriver implements Driver {
     const startTime = performance.now();
 
     try {
-      const readResult = await api.readTags(this.outputTags);
+      // Map internal output tag names to configured real PLC NodeIds
+      const nodesToRead = this.outputTags.map((tag) => this.resolvePlcNodeId(tag));
+      const readResult = await api.readTags(nodesToRead);
       this.status.latencyMs = Math.round(performance.now() - startTime);
 
-      for (const [tag, val] of Object.entries(readResult)) {
+      for (const internalTag of this.outputTags) {
+        const plcNodeId = this.resolvePlcNodeId(internalTag);
+        const val = readResult[plcNodeId] ?? readResult[internalTag];
+
         if (val !== null && val !== undefined) {
           if (typeof val === 'boolean' || typeof val === 'number') {
-            this.outputs[tag] = val;
-          } else if (typeof val === 'string' && tag === 'PLC_STATE') {
+            this.outputs[internalTag] = val;
+          } else if (typeof val === 'string' && internalTag === 'PLC_STATE') {
             this.state = val;
           }
 
           // Parse live interlock tags from PLC
-          if (this.interlocks.has(tag)) {
-            const il = this.interlocks.get(tag)!;
+          if (this.interlocks.has(internalTag)) {
+            const il = this.interlocks.get(internalTag)!;
             const isOk = Boolean(val);
-            this.interlocks.set(tag, {
+            this.interlocks.set(internalTag, {
               ...il,
               isOk,
               tripped: !isOk,
@@ -302,9 +336,9 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        START_CMD: { value: true, dataType: 'Boolean' },
-        P100_START: { value: true, dataType: 'Boolean' },
-        P_FEED_CMD: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('START_CMD')]: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('P100_START')]: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('P_FEED_CMD')]: { value: true, dataType: 'Boolean' },
       });
     }
   }
@@ -313,8 +347,8 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        PV11_CMD: { value: false, dataType: 'Boolean' },
-        PV12_CMD: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('PV11_CMD')]: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('PV12_CMD')]: { value: true, dataType: 'Boolean' },
       });
     }
   }
@@ -323,8 +357,8 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        START_PB: { value: true, dataType: 'Boolean' },
-        P100_START: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('START_PB')]: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('P100_START')]: { value: true, dataType: 'Boolean' },
       });
     }
   }
@@ -333,7 +367,7 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        V400_PROD_CMD: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('V400_PROD_CMD')]: { value: true, dataType: 'Boolean' },
       });
     }
   }
@@ -342,10 +376,10 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        ABORT_PB: { value: true, dataType: 'Boolean' },
-        P100_START: { value: false, dataType: 'Boolean' },
-        V101_CMD: { value: false, dataType: 'Boolean' },
-        V400_PROD_CMD: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('ABORT_PB')]: { value: true, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('P100_START')]: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('V101_CMD')]: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('V400_PROD_CMD')]: { value: false, dataType: 'Boolean' },
       });
     }
   }
@@ -364,8 +398,8 @@ export class OpcUaPlcDriver implements Driver {
     const api = getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
-        E_STOP_PB: { value: false, dataType: 'Boolean' },
-        E_STOP: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('E_STOP_PB')]: { value: false, dataType: 'Boolean' },
+        [this.resolvePlcNodeId('E_STOP')]: { value: false, dataType: 'Boolean' },
       });
     }
   }
