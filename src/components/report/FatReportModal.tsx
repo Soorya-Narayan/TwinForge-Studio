@@ -74,6 +74,7 @@ export const FatReportModal: React.FC = () => {
           driverType: harnessDriver.driverType,
           endpoint: harnessDriver.endpoint || null,
           details: harnessDriver.details,
+          scanMode: harnessDriver.scanMode || 'lockstep',
         },
         results,
         journal: normalizedJournal,

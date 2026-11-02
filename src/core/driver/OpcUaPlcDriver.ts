@@ -147,7 +147,7 @@ export class OpcUaPlcDriver implements Driver {
   /**
    * Writes physical sensor and feedback states to the real PLC
    */
-  public writeInputs(inputs: Record<string, boolean | number>): void {
+  public async writeInputs(inputs: Record<string, boolean | number>): Promise<void> {
     this.inputs = { ...inputs };
 
     if (!this.status.connected || this.isWriting || !window.electronAPI?.opcua) {
@@ -164,28 +164,32 @@ export class OpcUaPlcDriver implements Driver {
       };
     }
 
-    window.electronAPI.opcua
-      .writeTags(writePayload)
-      .catch((err) => {
-        console.warn('OPC UA write error:', err);
-      })
-      .finally(() => {
-        this.isWriting = false;
-      });
+    try {
+      await window.electronAPI.opcua.writeTags(writePayload);
+    } catch (err) {
+      console.warn('OPC UA write error:', err);
+    } finally {
+      this.isWriting = false;
+    }
   }
 
   /**
-   * Cyclic scan tick called by the simulation engine loop
+   * Cyclic scan tick called by the simulation engine loop / lockstep runner
    */
-  public tick(dtMs: number): void {
+  public async tick(dtMs: number): Promise<void> {
     this.status.lastScanMs = dtMs;
 
     if (!this.status.connected) {
       return;
     }
 
-    // Trigger async poll of PLC outputs
-    this.syncOutputsFromPlc();
+    // In lockstep scan mode, wait for the PLC scan cycle duration
+    if (dtMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, dtMs));
+    }
+
+    // Poll latest outputs produced by the PLC during its scan
+    await this.syncOutputsFromPlc();
   }
 
   /**

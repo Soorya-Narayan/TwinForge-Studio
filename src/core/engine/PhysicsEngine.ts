@@ -492,7 +492,7 @@ export class PhysicsEngine {
     }
   }
 
-  private generatePlcInputs(): Record<string, boolean | number> {
+  public generatePlcInputs(): Record<string, boolean | number> {
     const inputs: Record<string, boolean | number> = {};
 
     // Valves -> Open & Closed feedback (ZSO & ZSC)

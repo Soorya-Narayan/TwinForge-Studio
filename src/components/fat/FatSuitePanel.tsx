@@ -12,6 +12,8 @@ export const FatSuitePanel: React.FC = () => {
   const results = useFatStore((s) => s.results);
   const currentTestIndex = useFatStore((s) => s.currentTestIndex);
   const isRunningSuite = useFatStore((s) => s.isRunningSuite);
+  const scanMode = useFatStore((s) => s.scanMode);
+  const setScanMode = useFatStore((s) => s.setScanMode);
   const journal = useFatStore((s) => s.journal);
   const runAllTests = useFatStore((s) => s.runAllTests);
   const runSingleTest = useFatStore((s) => s.runSingleTest);
@@ -34,7 +36,40 @@ export const FatSuitePanel: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                background: '#f8fafc',
+                padding: '4px 8px',
+                borderRadius: 4,
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>SCAN MODE:</span>
+              <button
+                type="button"
+                onClick={() => setScanMode(scanMode === 'lockstep' ? 'classic' : 'lockstep')}
+                disabled={isRunningSuite}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  borderRadius: 3,
+                  border: 'none',
+                  cursor: isRunningSuite ? 'not-allowed' : 'pointer',
+                  background: scanMode === 'lockstep' ? '#0284c7' : '#94a3b8',
+                  color: '#ffffff',
+                }}
+                title="Lockstep: Write inputs -> Wait PLC scan -> Read outputs -> Tick engine"
+              >
+                {scanMode === 'lockstep' ? 'LOCKSTEP' : 'CLASSIC'}
+              </button>
+            </div>
+
             <button
               onClick={runAllTests}
               className="btn btn-primary"

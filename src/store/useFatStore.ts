@@ -51,8 +51,10 @@ interface FatStore {
   reportTimestamp: string | null;
   projectSettings: ReportProjectSettings;
   executionDriverInfo: TestDriverInfo | null;
+  scanMode: 'lockstep' | 'classic';
 
   // Actions
+  setScanMode: (mode: 'lockstep' | 'classic') => void;
   syncScenarios: (skid: SkidId) => void;
   runAllTests: () => Promise<void>;
   runSingleTest: (testId: string) => Promise<void>;
@@ -102,6 +104,10 @@ export const useFatStore = create<FatStore>()(
       showReportModal: false,
       reportTimestamp: null,
       executionDriverInfo: null,
+      scanMode: 'lockstep',
+
+      setScanMode: (mode) => set({ scanMode: mode }),
+
       projectSettings: {
         certificateRef: generateAutoReportRef(),
         isCustomRef: false,
@@ -207,11 +213,13 @@ export const useFatStore = create<FatStore>()(
       ? `Real PLC via node-opcua (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
       : `In-Process Mock Driver (${driverName})`;
 
+    const scanMode = get().scanMode;
     const driverInfo: TestDriverInfo = {
       driverName,
       driverType,
-      details: driverDetails,
+      details: `${driverDetails} [${scanMode.toUpperCase()} SCAN]`,
       endpoint: (plc as any).endpointUrl || null,
+      scanMode,
     };
 
     const startTime = performance.now();
@@ -222,7 +230,7 @@ export const useFatStore = create<FatStore>()(
       timeFormatted: new Date().toLocaleTimeString(),
       source: 'TEST_GEN',
       eventType: 'COMMAND',
-      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Harness: ${driverDetails})`,
+      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Scan Mode: ${scanMode.toUpperCase()} · Harness: ${driverDetails})`,
       status: 'INFO',
     });
 
@@ -232,32 +240,81 @@ export const useFatStore = create<FatStore>()(
         test.setup(engine, plc);
       }
 
-      // Step engine and PLC across totalScans
-      for (let step = 0; step < totalScans; step++) {
-        test.stimulus(engine, plc, step, history);
+      if (scanMode === 'lockstep') {
+        // Lockstep Scan Mode:
+        // 1. Initial inputs from engine merged with setup overrides
+        let currentInputs = { ...engine.generatePlcInputs(), ...plc.inputs };
+        await plc.writeInputs(currentInputs);
 
-        plc.tick(dtMs);
-        const outputs = plc.readOutputs();
-        const snap = engine.tick(outputs, dtMs);
-        plc.writeInputs(snap.tags.inputs);
+        // Step engine and PLC in lockstep across totalScans
+        for (let step = 0; step < totalScans; step++) {
+          test.stimulus(engine, plc, step, history);
 
-        const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
-        if (plc.interlocks) {
-          for (const [k, v] of plc.interlocks.entries()) {
-            interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
+          // Step 1: Write inputs to PLC
+          await plc.writeInputs(currentInputs);
+
+          // Step 2: Wait for PLC scan
+          if (typeof plc.tick === 'function') {
+            await plc.tick(dtMs);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, dtMs));
           }
-        }
 
-        history.push({
-          step,
-          scan: snap.scan,
-          timeMs: snap.timeMs,
-          inputs: { ...snap.tags.inputs },
-          outputs: { ...outputs },
-          plcState: (plc as any).state,
-          interlocks,
-          snapshot: snap,
-        });
+          // Step 3: Read outputs from PLC
+          const outputs = await plc.readOutputs();
+
+          // Step 4: Then tick the engine
+          const snap = engine.tick(outputs, dtMs);
+          currentInputs = { ...snap.tags.inputs };
+
+          const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
+          if (plc.interlocks) {
+            for (const [k, v] of plc.interlocks.entries()) {
+              interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
+            }
+          }
+
+          history.push({
+            step,
+            scan: snap.scan,
+            timeMs: snap.timeMs,
+            inputs: { ...snap.tags.inputs },
+            outputs: { ...outputs },
+            plcState: (plc as any).state,
+            interlocks,
+            snapshot: snap,
+          });
+        }
+      } else {
+        // Classic Scan Mode:
+        for (let step = 0; step < totalScans; step++) {
+          test.stimulus(engine, plc, step, history);
+
+          if (typeof plc.tick === 'function') {
+            await plc.tick(dtMs);
+          }
+          const outputs = await plc.readOutputs();
+          const snap = engine.tick(outputs, dtMs);
+          await plc.writeInputs(snap.tags.inputs);
+
+          const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
+          if (plc.interlocks) {
+            for (const [k, v] of plc.interlocks.entries()) {
+              interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
+            }
+          }
+
+          history.push({
+            step,
+            scan: snap.scan,
+            timeMs: snap.timeMs,
+            inputs: { ...snap.tags.inputs },
+            outputs: { ...outputs },
+            plcState: (plc as any).state,
+            interlocks,
+            snapshot: snap,
+          });
+        }
       }
 
       // Evaluate assertions on the full resulting history
@@ -392,6 +449,7 @@ export const useFatStore = create<FatStore>()(
     {
       name: 'twinforge-fat-project-settings',
       partialize: (state) => ({
+        scanMode: state.scanMode,
         projectSettings: {
           customerName: state.projectSettings.customerName,
           commissioningLead: state.projectSettings.commissioningLead,
@@ -405,11 +463,12 @@ export const useFatStore = create<FatStore>()(
         },
       }),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<FatStore> | undefined;
+        const persisted = persistedState as (Partial<FatStore> & { scanMode?: 'lockstep' | 'classic' }) | undefined;
         const persistedSettings = persisted?.projectSettings;
         const isCustom = Boolean(persistedSettings?.isCustomRef);
         return {
           ...currentState,
+          scanMode: persisted?.scanMode || currentState.scanMode,
           projectSettings: {
             ...currentState.projectSettings,
             ...(persistedSettings || {}),

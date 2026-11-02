@@ -54,6 +54,7 @@ export interface TestDriverInfo {
   driverType: 'mock' | 'opcua' | 's7' | 'modbus';
   details: string;
   endpoint?: string | null;
+  scanMode?: 'lockstep' | 'classic';
 }
 
 export interface TestResult {

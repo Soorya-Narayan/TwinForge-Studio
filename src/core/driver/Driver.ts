@@ -21,15 +21,15 @@ export interface Driver {
   /**
    * Reads commands emitted by the PLC (digital/analog outputs)
    */
-  readOutputs(): Record<string, boolean | number>;
+  readOutputs(): Record<string, boolean | number> | Promise<Record<string, boolean | number>>;
 
   /**
    * Writes physical sensor and feedback states to the PLC (digital/analog inputs)
    */
-  writeInputs(inputs: Record<string, boolean | number>): void;
+  writeInputs(inputs: Record<string, boolean | number>): Promise<void> | void;
 
   /**
-   * Ticks the PLC logic (if running in-process mock)
+   * Ticks the PLC logic (if running in-process mock) or waits for the PLC scan cycle
    */
-  tick?(dtMs: number): void;
+  tick?(dtMs: number): Promise<void> | void;
 }
