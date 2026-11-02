@@ -62,14 +62,34 @@ export const fatScenarios: TestCase[] = [
     description: 'Step engine for 15 scans. Verify source tank inventory is stably maintained above the 50% start permissive.',
     durationScans: 15,
     dtMs: 100,
+    setup: (sim, plc) => {
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+    },
     stimulus: (_sim, _plc, _step, _history) => {
       // Normal permissive monitoring
     },
-    assertions: (_sim, _plc, history) => {
-      const minLevel = Math.min(...history.map((h) => Number(h.inputs['TK100_LT'] ?? 0)));
-      const il02HealthyThroughout = history.every((h) => h.interlocks?.['IL-02']?.isOk !== false);
+    assertions: (sim, plc, history) => {
+      // Write latest simulation telemetry to plc.inputs before asserting
+      const snap = history.length > 0 ? history[history.length - 1].snapshot : sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+
+      const sourceLevel = Number(plc.inputs['TK100_LT'] ?? 0);
+      const minLevel = Math.min(
+        sourceLevel,
+        ...history.map((h) => Number(h.inputs['TK100_LT'] ?? 0))
+      );
+      const il02Healthy = plc.interlocks.get('IL-02')?.isOk !== false &&
+        history.every((h) => h.interlocks?.['IL-02']?.isOk !== false);
 
       return [
+        {
+          tag: 'TK100_LT',
+          expected: '>= 50%',
+          actual: `${sourceLevel.toFixed(1)}%`,
+          passed: sourceLevel >= 50,
+          message: 'Supply Tank TK-100 raw material inventory verified above start permissive (>= 50%)',
+        },
         {
           tag: 'TK100_LT_MIN',
           expected: '>= 50%',
@@ -80,8 +100,8 @@ export const fatScenarios: TestCase[] = [
         {
           tag: 'IL-02_PERMISSIVE_HISTORY',
           expected: 'HEALTHY (15 scans)',
-          actual: il02HealthyThroughout ? 'HEALTHY (15 scans)' : 'PERMISSIVE TRIPPED',
-          passed: il02HealthyThroughout,
+          actual: il02Healthy ? 'HEALTHY (15 scans)' : 'PERMISSIVE TRIPPED',
+          passed: il02Healthy,
           message: 'IL-02 Low Level permissive held stable and healthy throughout test history',
         },
       ];
@@ -400,14 +420,33 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'Step for 15 scans. Assert Balance Tank level LT1 > 15% satisfies cavitation prevention permissive IL-BAL-LOW.',
     durationScans: 15,
     dtMs: 100,
+    setup: (sim, plc) => {
+      const snap = sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+    },
     stimulus: (_sim, _plc, _step, _history) => {
       // Permissive monitoring
     },
-    assertions: (_sim, _plc, history) => {
-      const minLevel = Math.min(...history.map((h) => Number(h.inputs['LT1'] ?? h.inputs['LT_BALANCE'] ?? 75)));
-      const ilBalLowOk = history.every((h) => h.interlocks?.['IL-BAL-LOW']?.isOk !== false);
+    assertions: (sim, plc, history) => {
+      const snap = history.length > 0 ? history[history.length - 1].snapshot : sim.tick(plc.readOutputs());
+      plc.writeInputs(snap.tags.inputs);
+
+      const balanceLevel = Number(plc.inputs['LT1'] ?? plc.inputs['LT_BALANCE'] ?? 75);
+      const minLevel = Math.min(
+        balanceLevel,
+        ...history.map((h) => Number(h.inputs['LT1'] ?? h.inputs['LT_BALANCE'] ?? 75))
+      );
+      const ilBalLowOk = plc.interlocks.get('IL-BAL-LOW')?.isOk !== false &&
+        history.every((h) => h.interlocks?.['IL-BAL-LOW']?.isOk !== false);
 
       return [
+        {
+          tag: 'BALANCE_TANK_LT',
+          expected: '>= 15%',
+          actual: `${balanceLevel.toFixed(1)}%`,
+          passed: balanceLevel >= 15,
+          message: 'Balance Tank inventory verified above pump priming threshold (>= 15%)',
+        },
         {
           tag: 'BALANCE_TANK_LT_MIN',
           expected: '>= 15%',
