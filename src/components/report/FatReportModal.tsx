@@ -6,7 +6,7 @@
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle } from 'lucide-react';
+import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle, Download } from 'lucide-react';
 
 export const FatReportModal: React.FC = () => {
   const showReportModal = useFatStore((s) => s.showReportModal);
@@ -21,16 +21,17 @@ export const FatReportModal: React.FC = () => {
   const customMeta = useSimulationStore((s) => s.customMeta);
 
   const reportTimestamp = useFatStore((s) => s.reportTimestamp);
-  const timestamp = reportTimestamp || new Date().toISOString();
   const [auditHash, setAuditHash] = React.useState<string>('');
+  const [rawPayload, setRawPayload] = React.useState<string>('');
 
   const reportDate = React.useMemo(() => {
-    return new Date(timestamp).toLocaleDateString('en-US', {
+    if (!reportTimestamp) return '—';
+    return new Date(reportTimestamp).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-  }, [timestamp]);
+  }, [reportTimestamp]);
 
   React.useEffect(() => {
     if (!showReportModal) return;
@@ -44,7 +45,7 @@ export const FatReportModal: React.FC = () => {
         customMeta,
       };
 
-      const payload = JSON.stringify({
+      const payloadObject = {
         certificateRef: projectSettings.certificateRef,
         customerName: projectSettings.customerName,
         commissioningLead: projectSettings.commissioningLead,
@@ -52,13 +53,18 @@ export const FatReportModal: React.FC = () => {
         results,
         journal,
         plantConfig,
-        timestamp,
-      });
+        timestamp: reportTimestamp || '',
+      };
+
+      const payloadString = JSON.stringify(payloadObject, null, 2);
+      if (isMounted) {
+        setRawPayload(payloadString);
+      }
 
       try {
         if (typeof crypto !== 'undefined' && crypto.subtle) {
           const encoder = new TextEncoder();
-          const data = encoder.encode(payload);
+          const data = encoder.encode(payloadString);
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -91,6 +97,34 @@ export const FatReportModal: React.FC = () => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleExportEvidence = async () => {
+    if (!rawPayload) return;
+
+    const safeRef = (projectSettings.certificateRef || 'FAT-REPORT').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateStr = (reportTimestamp ? reportTimestamp.slice(0, 10) : 'latest');
+    const defaultFileName = `twinforge_fat_evidence_${safeRef}_${dateStr}.json`;
+
+    if (window.electronAPI?.saveFile) {
+      await window.electronAPI.saveFile({
+        defaultPath: defaultFileName,
+        filters: [{ name: 'JSON Evidence File', extensions: ['json'] }],
+        content: rawPayload,
+      });
+      return;
+    }
+
+    // Web browser fallback
+    const blob = new Blob([rawPayload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = defaultFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -147,6 +181,21 @@ export const FatReportModal: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleExportEvidence}
+              className="btn btn-ghost"
+              style={{
+                padding: '5px 12px',
+                fontSize: 11,
+                border: '1px solid var(--border-strong)',
+                background: '#ffffff',
+                color: 'var(--text-primary)',
+              }}
+              title="Export serialized JSON payload to verify SHA-256 checksum independently"
+            >
+              <Download size={13} />
+              EXPORT EVIDENCE JSON
+            </button>
             <button onClick={handlePrint} className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 11 }}>
               <Printer size={13} />
               PRINT / EXPORT PDF
@@ -291,7 +340,25 @@ export const FatReportModal: React.FC = () => {
               <strong style={{ fontSize: 12, color: '#0f172a' }}>TwinForge Deterministic Engine</strong>
             </div>
             <div>
-              <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Audit Hash Verification (SHA-256):</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 10, color: '#64748b' }}>Audit Hash Verification (SHA-256):</span>
+                <button
+                  onClick={handleExportEvidence}
+                  className="no-print"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--color-primary)',
+                    fontSize: 9,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0,
+                  }}
+                  title="Download evidence JSON to verify hash via sha256sum"
+                >
+                  Export Payload (.json)
+                </button>
+              </div>
               <span
                 className="mono"
                 style={{
