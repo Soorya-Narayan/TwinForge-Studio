@@ -47,6 +47,10 @@ export class PhysicsEngine {
     this.reset();
   }
 
+  public getTopology(): PlantTopology {
+    return this.topology;
+  }
+
   public reset(): void {
     this.scan = 0;
     this.timeMs = 0;

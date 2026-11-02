@@ -7,30 +7,71 @@
 
 ## 1. Overview
 
-**TwinForge Studio** is a next-generation industrial virtual commissioning platform. It enables control engineers to simulate physical process plants deterministically, verify PLC control logic and safety interlocks, capture high-frequency process trends, and generate tamper-evident FAT compliance certificates before touching physical equipment on site.
-
-### Key Capabilities
-- **Deterministic Physical Simulation**: Strict 100 ms scan loop ($INGEST \rightarrow ADVANCE \rightarrow RESOLVE \rightarrow FLOW \rightarrow INTEGRATE \rightarrow SENSE \rightarrow PUBLISH$). Zero wall-clock jitter, repeatable findings.
-- **Universal Driver Architecture**: In-process Mock PLC, OPC UA client bridge, Modbus TCP, and Siemens S7 compatibility.
-- **Real-Time Process Trend Recorder & Oscilloscope**: Multi-channel high-frequency telemetry tracking (Levels, Flow, Temperature, Pump Speed) with interactive crosshairs and 1-click **Export to CSV**.
-- **Interactive Fault Injection Deck (Phase F)**: Live actuation of valve seizures, contactor overloads, transmitter calibration drift, and transit delays.
-- **Automated FAT Execution Suite**: Automated scenario runner mapped to Functional Design Specifications (FDS clauses) with scan-by-scan evidence diff journal.
-- **Certified Compliance Report Generator (Phase G)**: Exportable, audit-ready PDF/A compliance certificate with cryptographic simulation hash and safety interlock verification matrix.
-- **Visual P&ID Process Modeler**: Drag-and-drop node graph canvas built on `@xyflow/react` for visual process topology inspection and design.
-- **ISA-101 High-Performance Light Mode HMI**: Industrial control room design with high-contrast state indicators and zero decorative emojis.
+**TwinForge Studio** is an industrial virtual commissioning and simulation platform. It enables control engineers to simulate physical process equipment deterministically, verify PLC control logic and safety interlocks, capture high-frequency process trends, inject runtime equipment faults, and run automated FAT test scenarios before deploying to physical hardware on site.
 
 ---
 
-## 2. Key Advantages over Legacy Commissioning Tools
+## 2. Capabilities
 
-| Dimension | Legacy Commissioning Tools | TwinForge Studio |
-| :--- | :--- | :--- |
-| **P&ID Modeler & Physics** | Layout editor only changes SVG coordinates; zero effect on physics. Plants hardcoded in code. | Visual node-based topology canvas with live physical state indicators. |
-| **Process Trend Recorder** | None. No time-series strip chart or oscilloscope. | **Built-in Multi-Channel Oscilloscope** with cursor readouts, freeze mode, and CSV export. |
-| **Fault Injection** | Unbuilt in UI. Faults can only be scripted in TypeScript code by developers. | **Live Fault Injection Station** (Phase F) with 1-click runtime failure triggering. |
-| **FAT Evidence Reports** | No exportable legal report document. | **Audit-Ready Certified FAT Report** (Phase G) ready for regulatory sign-off. |
-| **Hardware Portability** | Single vendor lock-in with fragile external Python sub-process bridge. | Universal protocol architecture (OPC UA, Modbus TCP, EtherNet/IP, S7). |
-| **User Interface** | Split across multiple disconnected browser URLs. | Unified HMI workspace with seamless tabbed switching. |
+### Implemented
+
+- **Deterministic Physical Simulation Engine**:
+  - Discrete 100 ms fixed scan loop (`INGEST → ADVANCE → RESOLVE → FLOW → INTEGRATE → SENSE → PUBLISH`).
+  - Strict step-based physics with zero wall-clock jitter for repeatable testing.
+  - Multi-skid physical modeling:
+    - **Plate Heat Exchanger (PHE) Pasteurizer Skid**: Detailed thermal modeling across Regenerative, Heating, and Cooling sections, holding tube residence time calculation, hot water loop, and automated Flow Diversion Valve (FDV) diversion logic.
+    - **Three-Solution Batch Mixing Skid**: Multi-vessel transfer, variable dosing rates, and agitation dynamics.
+    - **Custom Process Skid Builder**: Configurable vessels, pumps, valves, and transmitter definitions.
+- **In-Process Mock PLC Driver Architecture**:
+  - Unified `Driver` boundary (`readOutputs()` / `writeInputs()`) decoupling plant physics from control logic.
+  - Built-in TypeScript PLC controllers:
+    - `PasteurizerPlcDriver`: State machine for CIP, Water Flush, Pasteurize, and Divert modes; PID temperature control loops; safety interlocks.
+    - `MockPlcDriver`: 3-solution batch state sequencing (Dosing, Mixing, Discharge) and 15-rule safety interlock matrix.
+    - `GenericPlcDriver`: Tag-mapped control driver for custom skids.
+- **Real-Time Process Trend Recorder & Oscilloscope**:
+  - Multi-channel high-frequency telemetry tracking (Levels, Flow Rates, Temperatures, Pressures, Pump Speeds).
+  - Channel toggling, time window adjustment, freeze/pause mode, and interactive cursor inspection readouts.
+  - One-click **Export to CSV** for offline process analysis.
+- **Interactive Fault Injection Deck**:
+  - Live runtime actuation of device failures without code changes:
+    - Valve mechanical seizures and stuck open/closed conditions.
+    - Contactor overloads and pump electrical trips.
+    - Transmitter sensor calibration drift and scaling offsets.
+    - Signal transmission / transit delays.
+- **Automated FAT Execution Suite**:
+  - Automated scenario runner executing sequences mapped to Functional Design Specification (FDS) clauses.
+  - Step-by-step stimulus injection and scan-by-scan assertion validation.
+  - Live execution telemetry, failure diagnostics, and pass/fail reporting.
+- **FAT Inspection & Print Report**:
+  - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation SHA-256 run hash.
+  - Browser and system print export via `window.print()`.
+- **Visual P&ID Process Modeler & Mimics**:
+  - Interactive SVG-based skid mimics with animated fluid flows, device states, and telemetry inspection drawers.
+  - Drag-and-drop node graph canvas built on `@xyflow/react` for visual process topology inspection and layout design.
+- **Tag Watch & Force Table**:
+  - Live I/O monitoring across all boolean and analog process tags.
+  - Manual tag override / forcing capability for commissioning validation.
+- **ISA-101 High-Performance Light Theme HMI**:
+  - Ergonomic industrial control room styling with high-contrast state indicators and focused telemetry presentation.
+- **Desktop Packaging**:
+  - Native cross-platform desktop application packaging using Electron 44 and `electron-builder`.
+
+---
+
+### Planned (Roadmap)
+
+- **External Hardware & Fieldbus Protocol Drivers**:
+  - **OPC UA Client Driver**: Direct connection to external PLC runtimes and industrial edge servers with tag browsing and subscription monitoring.
+  - **Modbus TCP Driver**: Fieldbus communication via standard holding register and coil polling.
+  - **Siemens S7 Protocol Driver**: Native S7 communication (DB block reading/writing for S7-1200 / S7-1500 controllers).
+  - **EtherNet/IP Driver**: CIP tag-based integration for Rockwell / Allen-Bradley ControlLogix and CompactLogix PLCs.
+- **Digital Signatures & PDF/A Archival Export**:
+  - Direct generation of ISO 19005-compliant PDF/A archival documents.
+  - Cryptographic digital signing with user-controlled private keys for audit trail verification.
+- **Dynamic Hydraulic & Multi-Phase Flow Solver**:
+  - Dynamic pipe network pressure-drop calculation, friction loss modeling, and two-phase vapor/liquid handling.
+- **PLC Logic Code Generation**:
+  - Export verified visual control sequences directly into IEC 61131-3 Structured Text (ST) and Siemens SCL.
 
 ---
 
@@ -38,11 +79,11 @@
 
 - **Desktop Shell**: Electron 44 + `electron-builder` (Cross-platform native executable packaging)
 - **Frontend Core**: Vite 8 + React 19 + TypeScript
-- **State Management**: Zustand (sub-millisecond real-time simulation coordination)
-- **Node Graph Canvas**: `@xyflow/react` (React Flow)
+- **State Management**: Zustand
+- **Node Graph Canvas**: `@xyflow/react`
 - **Styling**: ISA-101 High-Performance Light Theme Vanilla CSS
 - **Iconography**: `lucide-react`
-- **Native OS Bridges**: Secure IPC file dialogs for FAT reports and CSV oscillograms
+- **Linter**: `oxlint`
 
 ---
 
@@ -83,8 +124,10 @@ Packaged binaries and installers are output to the `./release/` directory.
 
 ## 5. Web Mode (Optional)
 
-If running in a browser environment without Electron:
+If running in a standard browser environment without Electron:
+
 ```bash
 npm run dev
 ```
-The browser view is available at `http://localhost:5173`.
+
+The browser view will be available at `http://localhost:5173`.

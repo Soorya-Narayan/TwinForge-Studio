@@ -1,32 +1,91 @@
 /**
- * TwinForge Studio - Certified FAT Compliance Report (Light Mode)
- * Exportable, tamper-evident audit report for regulatory sign-off.
+ * TwinForge Studio - Factory Acceptance Test (FAT) Report (Light Mode)
+ * Exportable test execution and safety interlock verification report.
  */
 
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { Printer, CheckCircle, ShieldCheck, X } from 'lucide-react';
+import { Printer, CheckCircle, ShieldCheck, X, Settings2 } from 'lucide-react';
 
 export const FatReportModal: React.FC = () => {
   const showReportModal = useFatStore((s) => s.showReportModal);
   const closeReportModal = useFatStore((s) => s.closeReportModal);
   const results = useFatStore((s) => s.results);
+  const journal = useFatStore((s) => s.journal);
+  const projectSettings = useFatStore((s) => s.projectSettings);
+  const setProjectSettings = useFatStore((s) => s.setProjectSettings);
   const plc = useSimulationStore((s) => s.plc);
   const activeSkid = useSimulationStore((s) => s.activeSkid);
+  const engine = useSimulationStore((s) => s.engine);
+  const customMeta = useSimulationStore((s) => s.customMeta);
 
-  const [reportDate] = React.useState(() => {
-    return new Date().toLocaleDateString('en-US', {
+  const [timestamp] = React.useState(() => new Date().toISOString());
+  const [auditHash, setAuditHash] = React.useState<string>('');
+
+  const reportDate = React.useMemo(() => {
+    return new Date(timestamp).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-  });
+  }, [timestamp]);
+
+  React.useEffect(() => {
+    if (!showReportModal) return;
+
+    let isMounted = true;
+
+    const computeHash = async () => {
+      const plantConfig = {
+        activeSkid,
+        topology: engine?.getTopology ? engine.getTopology() : null,
+        customMeta,
+      };
+
+      const payload = JSON.stringify({
+        certificateRef: projectSettings.certificateRef,
+        customerName: projectSettings.customerName,
+        commissioningLead: projectSettings.commissioningLead,
+        clientAuthority: projectSettings.clientAuthority,
+        results,
+        journal,
+        plantConfig,
+        timestamp,
+      });
+
+      try {
+        if (typeof crypto !== 'undefined' && crypto.subtle) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(payload);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+          if (isMounted) {
+            setAuditHash(hex);
+          }
+        } else {
+          // Fallback if Web Crypto is unavailable
+          if (isMounted) {
+            setAuditHash('UNAVAILABLE');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to compute audit hash:', err);
+      }
+    };
+
+    computeHash();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showReportModal, results, journal, activeSkid, engine, customMeta, timestamp, projectSettings]);
 
   if (!showReportModal) return null;
 
   const passedCount = results.filter((r) => r.passed).length;
-  const isCertified = passedCount === results.length && results.length > 0;
+  const allTestsPassed = passedCount === results.length && results.length > 0;
 
   const handlePrint = () => {
     window.print();
@@ -34,6 +93,7 @@ export const FatReportModal: React.FC = () => {
 
   return (
     <div
+      id="fat-report-modal-backdrop"
       style={{
         position: 'fixed',
         top: 0,
@@ -50,6 +110,7 @@ export const FatReportModal: React.FC = () => {
       }}
     >
       <div
+        id="fat-report-card"
         className="industrial-card"
         style={{
           background: '#ffffff',
@@ -66,6 +127,7 @@ export const FatReportModal: React.FC = () => {
       >
         {/* Header Bar */}
         <div
+          className="no-print"
           style={{
             padding: '12px 20px',
             background: '#f8fafc',
@@ -78,7 +140,7 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShieldCheck size={18} color="var(--color-success)" />
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Factory Acceptance Test (FAT) Certificate · Phase G
+              Factory Acceptance Test (FAT) Report · Phase G
             </span>
           </div>
 
@@ -93,8 +155,86 @@ export const FatReportModal: React.FC = () => {
           </div>
         </div>
 
+        {/* Project Settings / Report Customization Bar (Excluded from Print) */}
+        <div
+          className="no-print"
+          style={{
+            padding: '10px 20px',
+            background: '#f1f5f9',
+            borderBottom: '1px solid var(--border-strong)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: 11,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)', fontWeight: 700 }}>
+            <Settings2 size={13} />
+            <span>Settings:</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Customer:</label>
+            <input
+              type="text"
+              value={projectSettings.customerName}
+              onChange={(e) => setProjectSettings({ customerName: e.target.value })}
+              placeholder="Customer Organization"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 190,
+                background: '#ffffff',
+                color: '#0f172a',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Report Ref:</label>
+            <input
+              type="text"
+              value={projectSettings.certificateRef}
+              onChange={(e) => setProjectSettings({ certificateRef: e.target.value })}
+              placeholder="FAT Reference"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 150,
+                background: '#ffffff',
+                color: '#0f172a',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Authority:</label>
+            <input
+              type="text"
+              value={projectSettings.clientAuthority || ''}
+              onChange={(e) => setProjectSettings({ clientAuthority: e.target.value })}
+              placeholder="Client Authority"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 160,
+                background: '#ffffff',
+                color: '#0f172a',
+              }}
+            />
+          </div>
+        </div>
+
         {/* Printable Report Document Body */}
         <div
+          id="fat-report-printable-area"
           style={{
             flex: 1,
             overflowY: 'auto',
@@ -104,16 +244,16 @@ export const FatReportModal: React.FC = () => {
             fontFamily: 'Inter, sans-serif',
           }}
         >
-          {/* Document Header with Goose Industrial Banner */}
+          {/* Document Header with Banner */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
             <div>
               <img
                 src="./goosebanner.png"
-                alt="Goose Industrial Solutions Banner"
+                alt={`${projectSettings.customerName} Banner`}
                 style={{ height: 46, objectFit: 'contain', marginBottom: 8, display: 'block' }}
               />
               <h1 style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
-                FACTORY ACCEPTANCE TEST CERTIFICATE
+                FACTORY ACCEPTANCE TEST REPORT
               </h1>
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                 Automated Virtual Commissioning & Interlock Verification Report (Phase G)
@@ -121,7 +261,7 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div style={{ textAlign: 'right', paddingTop: 6 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>TwinForge Studio</div>
-              <div style={{ fontSize: 10, color: '#64748b' }}>Certificate Ref: FAT-2026-SCM-001</div>
+              <div style={{ fontSize: 10, color: '#64748b' }}>Report Ref: {projectSettings.certificateRef}</div>
               <div style={{ fontSize: 10, color: '#64748b' }}>Execution Date: {reportDate}</div>
             </div>
           </div>
@@ -130,23 +270,37 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4 }}>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Customer Organization:</span>
-              <strong style={{ fontSize: 12, color: '#0f172a' }}>Goose Industrial Solutions</strong>
+              <strong style={{ fontSize: 12, color: '#0f172a' }}>{projectSettings.customerName}</strong>
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Target Process Skid:</span>
               <strong style={{ fontSize: 12, color: '#0f172a' }}>
                 {activeSkid === 'PASTEURIZER_10KLPH'
                   ? 'Continuous Milk Pasteurizer Skid (10 KLPH · HTST)'
-                  : 'Batch Mixing & CIP Thermal Skid (25 KLPH)'}
+                  : activeSkid === 'BATCH_MIXING'
+                  ? 'Batch Mixing & CIP Thermal Skid (25 KLPH)'
+                  : customMeta?.name || 'Custom Process Skid'}
               </strong>
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>PLC Controller Platform:</span>
-              <strong style={{ fontSize: 12, color: '#0f172a' }}>TwinForge Deterministic Engine (S7 Compatible)</strong>
+              <strong style={{ fontSize: 12, color: '#0f172a' }}>TwinForge Deterministic Engine</strong>
             </div>
             <div>
-              <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Audit Hash Verification:</span>
-              <span className="mono" style={{ fontSize: 10, color: '#0f172a' }}>9f8a3c2b4d1e8765fae3cdbe</span>
+              <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Audit Hash Verification (SHA-256):</span>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 9,
+                  color: '#0f172a',
+                  wordBreak: 'break-all',
+                  lineHeight: 1.3,
+                  display: 'block',
+                  marginTop: 2,
+                }}
+              >
+                {auditHash || 'Computing...'}
+              </span>
             </div>
           </div>
 
@@ -158,13 +312,13 @@ export const FatReportModal: React.FC = () => {
             <p style={{ fontSize: 11, color: '#334155', lineHeight: 1.5, margin: 0 }}>
               The control program logic was subjected to an automated suite of {results.length} functional acceptance tests including nominal recipe execution, abnormal condition handling, and critical safety interlock verification. All physical devices and process parameters were simulated deterministically.
             </p>
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: isCertified ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isCertified ? '#bbf7d0' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <CheckCircle size={18} color={isCertified ? '#16a34a' : '#dc2626'} />
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 4, background: allTestsPassed ? '#f0fdf4' : '#fef2f2', border: `1px solid ${allTestsPassed ? '#bbf7d0' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <CheckCircle size={18} color={allTestsPassed ? '#16a34a' : '#dc2626'} />
               <div>
-                <strong style={{ fontSize: 12, color: isCertified ? '#15803d' : '#991b1b' }}>
-                  {isCertified ? 'ACCEPTED & VERIFIED' : 'TESTS FAILED - ACTION REQUIRED'}
+                <strong style={{ fontSize: 12, color: allTestsPassed ? '#15803d' : '#991b1b' }}>
+                  {allTestsPassed ? 'ACCEPTED & VERIFIED' : 'TESTS FAILED - ACTION REQUIRED'}
                 </strong>
-                <p style={{ fontSize: 10, color: isCertified ? '#166534' : '#b91c1c', margin: 0 }}>
+                <p style={{ fontSize: 10, color: allTestsPassed ? '#166534' : '#b91c1c', margin: 0 }}>
                   {passedCount} of {results.length} test procedures completed with zero non-conformances.
                 </p>
               </div>
@@ -236,13 +390,13 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 30, marginTop: 30, paddingTop: 16, borderTop: '1px solid #cbd5e1' }}>
             <div>
               <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>Commissioning Lead Engineer</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.commissioningLead || 'Commissioning Lead Engineer'}</div>
               <div style={{ fontSize: 9, color: '#64748b' }}>TwinForge Commissioning Systems</div>
             </div>
             <div>
               <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>Client Acceptance Authority</div>
-              <div style={{ fontSize: 9, color: '#64748b' }}>Goose Industrial Solutions</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.clientAuthority || 'Client Acceptance Authority'}</div>
+              <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.customerName}</div>
             </div>
           </div>
         </div>

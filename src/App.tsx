@@ -189,7 +189,7 @@ export function App() {
         {activeTab === 'TEMPLATES' && <SiteTemplatesView onSelectAndNavigate={() => setActiveTab('MIMIC')} />}
       </main>
 
-      {/* Certified FAT Compliance Report Modal */}
+      {/* FAT Verification & Compliance Report Modal */}
       <FatReportModal />
     </div>
   );

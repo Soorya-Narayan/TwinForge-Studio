@@ -20,6 +20,13 @@ export interface ScanJournalEntry {
   status?: 'PASS' | 'FAIL' | 'WARN' | 'INFO';
 }
 
+export interface ReportProjectSettings {
+  certificateRef: string;
+  customerName: string;
+  commissioningLead?: string;
+  clientAuthority?: string;
+}
+
 interface FatStore {
   scenarios: TestCase[];
   currentTestIndex: number;
@@ -27,6 +34,7 @@ interface FatStore {
   results: TestResult[];
   journal: ScanJournalEntry[];
   showReportModal: boolean;
+  projectSettings: ReportProjectSettings;
 
   // Actions
   syncScenarios: (skid: SkidId) => void;
@@ -36,6 +44,7 @@ interface FatStore {
   openReportModal: () => void;
   closeReportModal: () => void;
   addJournalEntry: (entry: Omit<ScanJournalEntry, 'id'>) => void;
+  setProjectSettings: (settings: Partial<ReportProjectSettings>) => void;
 }
 
 export const useFatStore = create<FatStore>((set, get) => ({
@@ -45,6 +54,18 @@ export const useFatStore = create<FatStore>((set, get) => ({
   results: [],
   journal: [],
   showReportModal: false,
+  projectSettings: {
+    certificateRef: 'FAT-2026-SCM-001',
+    customerName: 'Goose Industrial Solutions',
+    commissioningLead: 'Commissioning Lead Engineer',
+    clientAuthority: 'Client Acceptance Authority',
+  },
+
+  setProjectSettings: (settings) => {
+    set((state) => ({
+      projectSettings: { ...state.projectSettings, ...settings },
+    }));
+  },
 
   syncScenarios: (skid: SkidId) => {
     set({
