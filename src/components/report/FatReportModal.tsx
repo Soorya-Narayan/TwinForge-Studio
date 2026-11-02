@@ -335,7 +335,7 @@ export const FatReportModal: React.FC = () => {
                 <CheckCircle size={18} color="#16a34a" />
                 <div>
                   <strong style={{ fontSize: 12, color: '#15803d' }}>
-                    ACCEPTED & VERIFIED
+                    ALL TESTS PASSED
                   </strong>
                   <p style={{ fontSize: 10, color: '#166534', margin: 0 }}>
                     {passedCount} of {results.length} test procedures completed with zero non-conformances.
