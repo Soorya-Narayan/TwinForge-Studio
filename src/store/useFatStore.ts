@@ -48,6 +48,12 @@ interface FatStore {
   setProjectSettings: (settings: Partial<ReportProjectSettings>) => void;
 }
 
+const generateAutoReportRef = (): string => {
+  const year = new Date().getFullYear();
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `FAT-${year}-${rand}`;
+};
+
 export const useFatStore = create<FatStore>((set, get) => ({
   scenarios: getFatScenarios('PASTEURIZER_10KLPH'),
   currentTestIndex: -1,
@@ -57,8 +63,8 @@ export const useFatStore = create<FatStore>((set, get) => ({
   showReportModal: false,
   reportTimestamp: null,
   projectSettings: {
-    certificateRef: 'FAT-2026-SCM-001',
-    customerName: 'Goose Industrial Solutions',
+    certificateRef: generateAutoReportRef(),
+    customerName: '',
     commissioningLead: 'Commissioning Lead Engineer',
     clientAuthority: 'Client Acceptance Authority',
   },
@@ -78,7 +84,14 @@ export const useFatStore = create<FatStore>((set, get) => ({
     });
   },
 
-  openReportModal: () => set({ showReportModal: true, reportTimestamp: new Date().toISOString() }),
+  openReportModal: () => set((state) => ({
+    showReportModal: true,
+    reportTimestamp: new Date().toISOString(),
+    projectSettings: {
+      ...state.projectSettings,
+      certificateRef: state.projectSettings.certificateRef || generateAutoReportRef(),
+    },
+  })),
   closeReportModal: () => set({ showReportModal: false }),
 
   addJournalEntry: (entry) => {
@@ -98,6 +111,12 @@ export const useFatStore = create<FatStore>((set, get) => ({
       journal: [],
       showReportModal: false,
       reportTimestamp: null,
+      projectSettings: {
+        certificateRef: generateAutoReportRef(),
+        customerName: '',
+        commissioningLead: 'Commissioning Lead Engineer',
+        clientAuthority: 'Client Acceptance Authority',
+      },
     });
     useSimulationStore.getState().reset();
   },

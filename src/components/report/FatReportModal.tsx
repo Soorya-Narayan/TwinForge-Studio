@@ -182,7 +182,7 @@ export const FatReportModal: React.FC = () => {
               type="text"
               value={projectSettings.customerName}
               onChange={(e) => setProjectSettings({ customerName: e.target.value })}
-              placeholder="Customer Organization"
+              placeholder="e.g. Acme Industrial Ltd"
               style={{
                 padding: '3px 8px',
                 fontSize: 11,
@@ -201,7 +201,7 @@ export const FatReportModal: React.FC = () => {
               type="text"
               value={projectSettings.certificateRef}
               onChange={(e) => setProjectSettings({ certificateRef: e.target.value })}
-              placeholder="FAT Reference"
+              placeholder="e.g. FAT-2026-001"
               style={{
                 padding: '3px 8px',
                 fontSize: 11,
@@ -272,7 +272,9 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4 }}>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Customer Organization:</span>
-              <strong style={{ fontSize: 12, color: '#0f172a' }}>{projectSettings.customerName}</strong>
+              <strong style={{ fontSize: 12, color: projectSettings.customerName ? '#0f172a' : '#64748b' }}>
+                {projectSettings.customerName || '— (Unspecified)'}
+              </strong>
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Target Process Skid:</span>
@@ -434,7 +436,7 @@ export const FatReportModal: React.FC = () => {
             <div>
               <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.clientAuthority || 'Client Acceptance Authority'}</div>
-              <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.customerName}</div>
+              <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.customerName || 'Client Authority'}</div>
             </div>
           </div>
         </div>
