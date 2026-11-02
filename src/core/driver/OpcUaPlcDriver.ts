@@ -1,8 +1,7 @@
 /**
  * TwinForge Studio - OPC UA Real PLC Driver
  * 
- * Communicates with live industrial PLC hardware or software controllers (Siemens S7,
- * Beckhoff TwinCAT, CODESYS, Rockwell Allen-Bradley, B&R, Omron) over OPC UA (IEC 62541).
+ * Communicates with external PLC controllers over OPC UA (IEC 62541).
  * Uses node-opcua in Electron main process to read live outputs and write simulation sensors.
  */
 

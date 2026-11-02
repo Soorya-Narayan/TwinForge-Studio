@@ -2,8 +2,7 @@
  * TwinForge Studio - OPC UA Connection Manager (Electron Main Process)
  * 
  * Powered by node-opcua-client and node-opcua-server.
- * Connects to live industrial PLCs (Siemens S7, Beckhoff TwinCAT, CODESYS, Rockwell)
- * or local OPC UA servers over standard opc.tcp:// protocol for hardware-in-the-loop FAT.
+ * Connects to external PLC controllers or local test servers over standard opc.tcp:// protocol.
  */
 
 import {

@@ -325,7 +325,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-                  Compatible with Siemens S7-1500 / S7-1200 OPC UA, Beckhoff TwinCAT 3, CODESYS Control, Kepware, Prosys, or any OPC UA compliant server.
+                  Compatible with standard OPC UA (IEC 62541) servers over opc.tcp:// protocol.
                 </div>
               </div>
 
