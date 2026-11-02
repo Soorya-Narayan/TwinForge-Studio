@@ -280,7 +280,6 @@ export const useFatStore = create<FatStore>()(
         }
       }
       engine.clearAllFaults();
-      useSimulationStore.getState().clearFaults();
     }
   },
 
