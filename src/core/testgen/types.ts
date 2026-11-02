@@ -46,6 +46,7 @@ export interface TestCase {
   setup?: (sim: any, plc: any) => void;
   stimulus: (sim: any, plc: any, step: number, history: ScanHistoryRecord[]) => void;
   assertions: (sim: any, plc: any, history: ScanHistoryRecord[]) => TestAssertion[];
+  teardown?: (sim: any, plc: any) => void;
 }
 
 export interface TestResult {

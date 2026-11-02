@@ -181,74 +181,88 @@ export const useFatStore = create<FatStore>()(
       status: 'INFO',
     });
 
-    // Optional setup hook before stepped execution
-    if (test.setup) {
-      test.setup(engine, plc);
-    }
-
-    // Step engine and PLC across totalScans
-    for (let step = 0; step < totalScans; step++) {
-      test.stimulus(engine, plc, step, history);
-
-      plc.tick(dtMs);
-      const outputs = plc.readOutputs();
-      const snap = engine.tick(outputs);
-      plc.writeInputs(snap.tags.inputs);
-
-      const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
-      if (plc.interlocks) {
-        for (const [k, v] of plc.interlocks.entries()) {
-          interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
-        }
+    try {
+      // Optional setup hook before stepped execution
+      if (test.setup) {
+        test.setup(engine, plc);
       }
 
-      history.push({
-        step,
-        scan: snap.scan,
-        timeMs: snap.timeMs,
-        inputs: { ...snap.tags.inputs },
-        outputs: { ...outputs },
-        plcState: (plc as any).state,
-        interlocks,
-        snapshot: snap,
-      });
+      // Step engine and PLC across totalScans
+      for (let step = 0; step < totalScans; step++) {
+        test.stimulus(engine, plc, step, history);
+
+        plc.tick(dtMs);
+        const outputs = plc.readOutputs();
+        const snap = engine.tick(outputs);
+        plc.writeInputs(snap.tags.inputs);
+
+        const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
+        if (plc.interlocks) {
+          for (const [k, v] of plc.interlocks.entries()) {
+            interlocks[k] = { isOk: v.isOk, tripped: v.tripped };
+          }
+        }
+
+        history.push({
+          step,
+          scan: snap.scan,
+          timeMs: snap.timeMs,
+          inputs: { ...snap.tags.inputs },
+          outputs: { ...outputs },
+          plcState: (plc as any).state,
+          interlocks,
+          snapshot: snap,
+        });
+      }
+
+      // Evaluate assertions on the full resulting history
+      const assertions = test.assertions(engine, plc, history);
+      const passed = assertions.every((a) => a.passed);
+
+      // Log assertions in journal with timing metadata
+      for (const a of assertions) {
+        const timingBadge = a.responseTimeMs !== undefined ? ` [Response Time: ${a.responseTimeMs}ms]` : '';
+        get().addJournalEntry({
+          scan: history[history.length - 1]?.scan ?? totalScans,
+          timeFormatted: new Date().toLocaleTimeString(),
+          source: 'TEST_GEN',
+          eventType: 'ASSERTION',
+          description: `${a.message}${timingBadge} (Tag: ${a.tag}, Expected: ${a.expected}, Actual: ${a.actual})`,
+          tag: a.tag,
+          value: String(a.actual),
+          status: a.passed ? 'PASS' : 'FAIL',
+        });
+      }
+
+      const result: TestResult = {
+        testId: test.id,
+        phase: test.phase,
+        title: test.title,
+        clause: test.clause,
+        passed,
+        assertions,
+        timestamp: new Date().toISOString(),
+        durationMs: Math.round(performance.now() - startTime),
+        scansExecuted: totalScans,
+      };
+
+      set((state) => ({
+        results: [...state.results.filter((r) => r.testId !== test.id), result],
+        isRunningSuite: false,
+      }));
+    } finally {
+      // Guaranteed teardown: clear all injected faults after each test
+      // so test outcomes never depend on execution order
+      if (test.teardown) {
+        try {
+          test.teardown(engine, plc);
+        } catch (teardownErr) {
+          console.warn(`Teardown error in [${test.id}]:`, teardownErr);
+        }
+      }
+      engine.clearAllFaults();
+      useSimulationStore.getState().clearFaults();
     }
-
-    // Evaluate assertions on the full resulting history
-    const assertions = test.assertions(engine, plc, history);
-    const passed = assertions.every((a) => a.passed);
-
-    // Log assertions in journal with timing metadata
-    for (const a of assertions) {
-      const timingBadge = a.responseTimeMs !== undefined ? ` [Response Time: ${a.responseTimeMs}ms]` : '';
-      get().addJournalEntry({
-        scan: history[history.length - 1]?.scan ?? totalScans,
-        timeFormatted: new Date().toLocaleTimeString(),
-        source: 'TEST_GEN',
-        eventType: 'ASSERTION',
-        description: `${a.message}${timingBadge} (Tag: ${a.tag}, Expected: ${a.expected}, Actual: ${a.actual})`,
-        tag: a.tag,
-        value: String(a.actual),
-        status: a.passed ? 'PASS' : 'FAIL',
-      });
-    }
-
-    const result: TestResult = {
-      testId: test.id,
-      phase: test.phase,
-      title: test.title,
-      clause: test.clause,
-      passed,
-      assertions,
-      timestamp: new Date().toISOString(),
-      durationMs: Math.round(performance.now() - startTime),
-      scansExecuted: totalScans,
-    };
-
-    set((state) => ({
-      results: [...state.results.filter((r) => r.testId !== test.id), result],
-      isRunningSuite: false,
-    }));
   },
 
   runAllTests: async () => {

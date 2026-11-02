@@ -145,6 +145,10 @@ export const fatScenarios: TestCase[] = [
         },
       ];
     },
+    teardown: (sim, plc) => {
+      sim.clearAllFaults();
+      plc.resetBatch();
+    },
   },
   {
     id: 'TC-04',
@@ -640,6 +644,10 @@ export const pasteurizerFatScenarios: TestCase[] = [
           message: 'Diversion return line PV12 opened for recirculation back to balance tank',
         },
       ];
+    },
+    teardown: (sim, plc) => {
+      sim.clearAllFaults();
+      plc.clearAllOutputs();
     },
   },
   {
