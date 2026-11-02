@@ -1,5 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
+export type OpcUaSecurityPolicy =
+  | 'None'
+  | 'Basic256Sha256'
+  | 'Aes128_Sha256_RsaOaep'
+  | 'Basic256'
+  | 'Basic128Rsa15';
+export type OpcUaAuthMode = 'Anonymous' | 'Username' | 'Certificate';
+
+export interface OpcUaConnectionOptions {
+  endpointUrl: string;
+  securityMode?: OpcUaSecurityMode;
+  securityPolicy?: OpcUaSecurityPolicy;
+  authMode?: OpcUaAuthMode;
+  username?: string;
+  password?: string;
+  certificatePath?: string;
+  privateKeyPath?: string;
+}
+
 export interface ElectronAPI {
   platform: string;
   saveFile: (options: {
@@ -16,11 +36,14 @@ export interface ElectronAPI {
     defaultPath?: string;
   }) => Promise<{ canceled: boolean; filePath?: string; error?: string }>;
   opcua: {
-    connect: (endpointUrl?: string) => Promise<{ success: boolean; error?: string }>;
+    connect: (options?: string | OpcUaConnectionOptions) => Promise<{ success: boolean; error?: string }>;
     disconnect: () => Promise<{ success: boolean }>;
     getStatus: () => Promise<{
       connected: boolean;
       endpointUrl: string;
+      securityMode?: OpcUaSecurityMode;
+      securityPolicy?: OpcUaSecurityPolicy;
+      authMode?: OpcUaAuthMode;
       latencyMs: number;
       lastScanMs: number;
       serverRunning: boolean;

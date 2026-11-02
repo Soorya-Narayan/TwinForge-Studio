@@ -270,8 +270,8 @@ ipcMain.handle('print:toPDF', async (event, options?: { defaultPath?: string }) 
 });
 
 // OPC UA (node-opcua) IPC Handlers for real industrial PLC communication
-ipcMain.handle('opcua:connect', async (_event, endpointUrl?: string) => {
-  return opcuaManager.connect(endpointUrl);
+ipcMain.handle('opcua:connect', async (_event, options?: any) => {
+  return opcuaManager.connect(options);
 });
 
 ipcMain.handle('opcua:disconnect', async () => {

@@ -5,20 +5,49 @@
  * Connects to external PLC controllers or local test servers over standard opc.tcp:// protocol.
  */
 
+import fs from 'fs';
 import {
   OPCUAClient,
   ClientSession,
   AttributeIds,
   DataType,
   StatusCodes,
+  MessageSecurityMode,
+  SecurityPolicy,
+  UserTokenType,
   type ReadValueIdOptions,
   type WriteValueOptions,
+  type UserIdentityInfo,
 } from 'node-opcua-client';
 import { OPCUAServer } from 'node-opcua-server';
+import { readCertificate, readPrivateKeyPEM, convertPEMtoDER } from 'node-opcua-crypto';
+
+export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
+export type OpcUaSecurityPolicy =
+  | 'None'
+  | 'Basic256Sha256'
+  | 'Aes128_Sha256_RsaOaep'
+  | 'Basic256'
+  | 'Basic128Rsa15';
+export type OpcUaAuthMode = 'Anonymous' | 'Username' | 'Certificate';
+
+export interface OpcUaConnectionOptions {
+  endpointUrl: string;
+  securityMode?: OpcUaSecurityMode;
+  securityPolicy?: OpcUaSecurityPolicy;
+  authMode?: OpcUaAuthMode;
+  username?: string;
+  password?: string;
+  certificatePath?: string;
+  privateKeyPath?: string;
+}
 
 export interface OpcUaStatus {
   connected: boolean;
   endpointUrl: string;
+  securityMode?: OpcUaSecurityMode;
+  securityPolicy?: OpcUaSecurityPolicy;
+  authMode?: OpcUaAuthMode;
   latencyMs: number;
   lastScanMs: number;
   serverRunning: boolean;
@@ -33,6 +62,9 @@ export class OpcUaManager {
 
   private connected: boolean = false;
   private endpointUrl: string = 'opc.tcp://127.0.0.1:4840';
+  private securityMode: OpcUaSecurityMode = 'None';
+  private securityPolicy: OpcUaSecurityPolicy = 'None';
+  private authMode: OpcUaAuthMode = 'Anonymous';
   private latencyMs: number = 0;
   private lastScanMs: number = 0;
   private lastError?: string;
@@ -43,6 +75,9 @@ export class OpcUaManager {
     return {
       connected: this.connected && !!this.session,
       endpointUrl: this.endpointUrl,
+      securityMode: this.securityMode,
+      securityPolicy: this.securityPolicy,
+      authMode: this.authMode,
       latencyMs: this.latencyMs,
       lastScanMs: this.lastScanMs,
       serverRunning: !!this.testServer,
@@ -54,17 +89,50 @@ export class OpcUaManager {
   /**
    * Connect to an external or local OPC UA Server
    */
-  public async connect(endpointUrl: string = 'opc.tcp://127.0.0.1:4840'): Promise<{ success: boolean; error?: string }> {
+  public async connect(
+    options: string | OpcUaConnectionOptions = 'opc.tcp://127.0.0.1:4840'
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       if (this.session) {
         await this.disconnect();
       }
 
+      const opts: OpcUaConnectionOptions =
+        typeof options === 'string'
+          ? { endpointUrl: options }
+          : options;
+
+      const endpointUrl = opts.endpointUrl || 'opc.tcp://127.0.0.1:4840';
       this.endpointUrl = endpointUrl;
+      this.securityMode = opts.securityMode || 'None';
+      this.securityPolicy = opts.securityPolicy || 'None';
+      this.authMode = opts.authMode || 'Anonymous';
       this.lastError = undefined;
+
+      // Map MessageSecurityMode
+      let clientSecurityMode: MessageSecurityMode = MessageSecurityMode.None;
+      if (this.securityMode === 'Sign') {
+        clientSecurityMode = MessageSecurityMode.Sign;
+      } else if (this.securityMode === 'SignAndEncrypt') {
+        clientSecurityMode = MessageSecurityMode.SignAndEncrypt;
+      }
+
+      // Map SecurityPolicy
+      let clientSecurityPolicy: SecurityPolicy = SecurityPolicy.None;
+      if (this.securityPolicy === 'Basic256Sha256') {
+        clientSecurityPolicy = SecurityPolicy.Basic256Sha256;
+      } else if (this.securityPolicy === 'Aes128_Sha256_RsaOaep') {
+        clientSecurityPolicy = SecurityPolicy.Aes128_Sha256_RsaOaep;
+      } else if (this.securityPolicy === 'Basic256') {
+        clientSecurityPolicy = SecurityPolicy.Basic256;
+      } else if (this.securityPolicy === 'Basic128Rsa15') {
+        clientSecurityPolicy = SecurityPolicy.Basic128Rsa15;
+      }
 
       this.client = OPCUAClient.create({
         endpointMustExist: false,
+        securityMode: clientSecurityMode,
+        securityPolicy: clientSecurityPolicy,
         connectionStrategy: {
           maxRetry: 2,
           initialDelay: 500,
@@ -73,9 +141,58 @@ export class OpcUaManager {
         requestedSessionTimeout: 30000,
       });
 
+      // Prepare User Identity Info for session authentication
+      let userIdentity: UserIdentityInfo | undefined = undefined;
+
+      if (this.authMode === 'Username') {
+        userIdentity = {
+          type: UserTokenType.UserName,
+          userName: opts.username || '',
+          password: opts.password || '',
+        };
+      } else if (this.authMode === 'Certificate') {
+        const certInput = (opts.certificatePath || '').trim();
+        const keyInput = (opts.privateKeyPath || '').trim();
+
+        if (!certInput) {
+          throw new Error('Certificate file path or PEM data is required for X.509 Certificate authentication');
+        }
+
+        let certData: Buffer;
+        if (fs.existsSync(certInput)) {
+          certData = readCertificate(certInput);
+        } else if (certInput.includes('BEGIN CERTIFICATE')) {
+          certData = convertPEMtoDER(certInput);
+        } else {
+          throw new Error(`Certificate file not found or invalid PEM: "${certInput}"`);
+        }
+
+        let privKey: string | undefined = undefined;
+        if (keyInput) {
+          if (fs.existsSync(keyInput)) {
+            privKey = readPrivateKeyPEM(keyInput);
+          } else if (keyInput.includes('BEGIN')) {
+            privKey = keyInput;
+          } else {
+            throw new Error(`Private key file not found or invalid PEM: "${keyInput}"`);
+          }
+        }
+
+        userIdentity = {
+          type: UserTokenType.Certificate,
+          certificateData: certData,
+          privateKey: privKey,
+        };
+      } else {
+        // Anonymous identity
+        userIdentity = {
+          type: UserTokenType.Anonymous,
+        };
+      }
+
       const startTime = performance.now();
       await this.client.connect(endpointUrl);
-      this.session = await this.client.createSession();
+      this.session = await this.client.createSession(userIdentity);
       this.latencyMs = Math.round(performance.now() - startTime);
       this.connected = true;
 

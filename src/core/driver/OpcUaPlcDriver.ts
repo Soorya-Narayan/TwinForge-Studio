@@ -7,12 +7,39 @@
 
 import type { Driver, DriverStatus } from './Driver';
 
+export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
+export type OpcUaSecurityPolicy =
+  | 'None'
+  | 'Basic256Sha256'
+  | 'Aes128_Sha256_RsaOaep'
+  | 'Basic256'
+  | 'Basic128Rsa15';
+export type OpcUaAuthMode = 'Anonymous' | 'Username' | 'Certificate';
+
+export interface OpcUaConnectionOptions {
+  endpointUrl: string;
+  securityMode?: OpcUaSecurityMode;
+  securityPolicy?: OpcUaSecurityPolicy;
+  authMode?: OpcUaAuthMode;
+  username?: string;
+  password?: string;
+  certificatePath?: string;
+  privateKeyPath?: string;
+}
+
 export interface InterlockStatus {
   id: string;
   name: string;
   condition: string;
   isOk: boolean;
   tripped: boolean;
+}
+
+function getElectronOpcUa() {
+  if (typeof window !== 'undefined' && window.electronAPI?.opcua) {
+    return window.electronAPI.opcua;
+  }
+  return null;
 }
 
 export class OpcUaPlcDriver implements Driver {
@@ -25,6 +52,12 @@ export class OpcUaPlcDriver implements Driver {
   };
 
   public endpointUrl: string = 'opc.tcp://127.0.0.1:4840';
+  public securityOptions: OpcUaConnectionOptions = {
+    endpointUrl: 'opc.tcp://127.0.0.1:4840',
+    securityMode: 'None',
+    securityPolicy: 'None',
+    authMode: 'Anonymous',
+  };
   public serverRunning: boolean = false;
   public state: string = 'OFFLINE';
 
@@ -69,21 +102,32 @@ export class OpcUaPlcDriver implements Driver {
   private isReading: boolean = false;
   private isWriting: boolean = false;
 
-  constructor(endpointUrl?: string) {
-    if (endpointUrl) {
-      this.endpointUrl = endpointUrl;
+  constructor(endpointOrOptions?: string | OpcUaConnectionOptions) {
+    if (typeof endpointOrOptions === 'string') {
+      this.endpointUrl = endpointOrOptions;
+      this.securityOptions.endpointUrl = endpointOrOptions;
+    } else if (endpointOrOptions) {
+      this.securityOptions = { ...this.securityOptions, ...endpointOrOptions };
+      this.endpointUrl = endpointOrOptions.endpointUrl || this.endpointUrl;
     }
   }
 
   /**
    * Connect to the live OPC UA server via Electron IPC bridge
    */
-  public async connect(endpointUrl?: string): Promise<void> {
-    const targetUrl = endpointUrl || this.endpointUrl;
-    this.endpointUrl = targetUrl;
+  public async connect(options?: string | OpcUaConnectionOptions): Promise<void> {
+    const connOpts: OpcUaConnectionOptions = typeof options === 'string'
+      ? { ...this.securityOptions, endpointUrl: options }
+      : options
+      ? { ...this.securityOptions, ...options }
+      : this.securityOptions;
 
-    if (window.electronAPI?.opcua) {
-      const res = await window.electronAPI.opcua.connect(targetUrl);
+    this.endpointUrl = connOpts.endpointUrl || this.endpointUrl;
+    this.securityOptions = connOpts;
+
+    const api = getElectronOpcUa();
+    if (api) {
+      const res = await api.connect(connOpts);
       if (res.success) {
         this.status.connected = true;
         this.state = 'CONNECTED';
@@ -94,7 +138,7 @@ export class OpcUaPlcDriver implements Driver {
         throw new Error(res.error || 'Failed to connect to OPC UA server');
       }
     } else {
-      // Browser fallback (mock connected state for demonstration when running without Electron)
+      // Browser/headless fallback (mock connected state for demonstration when running without Electron)
       this.status.connected = true;
       this.state = 'EMULATED_CONNECTED';
     }
@@ -104,8 +148,9 @@ export class OpcUaPlcDriver implements Driver {
    * Disconnect from live OPC UA server
    */
   public async disconnect(): Promise<void> {
-    if (window.electronAPI?.opcua) {
-      await window.electronAPI.opcua.disconnect();
+    const api = getElectronOpcUa();
+    if (api) {
+      await api.disconnect();
     }
     this.status.connected = false;
     this.state = 'OFFLINE';
@@ -115,10 +160,11 @@ export class OpcUaPlcDriver implements Driver {
    * Start local embedded test OPC UA server
    */
   public async startLocalServer(port: number = 4840): Promise<string> {
-    if (!window.electronAPI?.opcua) {
+    const api = getElectronOpcUa();
+    if (!api) {
       throw new Error('Local OPC UA Server requires Electron runtime.');
     }
-    const res = await window.electronAPI.opcua.startLocalServer(port);
+    const res = await api.startLocalServer(port);
     if (!res.success || !res.endpointUrl) {
       throw new Error(res.error || 'Could not start local test OPC UA server');
     }
@@ -131,8 +177,9 @@ export class OpcUaPlcDriver implements Driver {
    * Stop local embedded test OPC UA server
    */
   public async stopLocalServer(): Promise<void> {
-    if (window.electronAPI?.opcua) {
-      await window.electronAPI.opcua.stopLocalServer();
+    const api = getElectronOpcUa();
+    if (api) {
+      await api.stopLocalServer();
       this.serverRunning = false;
     }
   }
@@ -150,7 +197,8 @@ export class OpcUaPlcDriver implements Driver {
   public async writeInputs(inputs: Record<string, boolean | number>): Promise<void> {
     this.inputs = { ...inputs };
 
-    if (!this.status.connected || this.isWriting || !window.electronAPI?.opcua) {
+    const api = getElectronOpcUa();
+    if (!this.status.connected || this.isWriting || !api) {
       return;
     }
 
@@ -165,7 +213,7 @@ export class OpcUaPlcDriver implements Driver {
     }
 
     try {
-      await window.electronAPI.opcua.writeTags(writePayload);
+      await api.writeTags(writePayload);
     } catch (err) {
       console.warn('OPC UA write error:', err);
     } finally {
@@ -196,7 +244,8 @@ export class OpcUaPlcDriver implements Driver {
    * Asynchronously poll live outputs from the real PLC
    */
   public async syncOutputsFromPlc(): Promise<void> {
-    if (this.isReading || !window.electronAPI?.opcua) {
+    const api = getElectronOpcUa();
+    if (this.isReading || !api) {
       return;
     }
 
@@ -204,7 +253,7 @@ export class OpcUaPlcDriver implements Driver {
     const startTime = performance.now();
 
     try {
-      const readResult = await window.electronAPI.opcua.readTags(this.outputTags);
+      const readResult = await api.readTags(this.outputTags);
       this.status.latencyMs = Math.round(performance.now() - startTime);
 
       for (const [tag, val] of Object.entries(readResult)) {
@@ -250,8 +299,9 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public startProduction(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         START_CMD: { value: true, dataType: 'Boolean' },
         P100_START: { value: true, dataType: 'Boolean' },
         P_FEED_CMD: { value: true, dataType: 'Boolean' },
@@ -260,8 +310,9 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public divertManually(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         PV11_CMD: { value: false, dataType: 'Boolean' },
         PV12_CMD: { value: true, dataType: 'Boolean' },
       });
@@ -269,8 +320,9 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public startBatch(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         START_PB: { value: true, dataType: 'Boolean' },
         P100_START: { value: true, dataType: 'Boolean' },
       });
@@ -278,16 +330,18 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public dischargeBatch(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         V400_PROD_CMD: { value: true, dataType: 'Boolean' },
       });
     }
   }
 
   public abortBatch(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         ABORT_PB: { value: true, dataType: 'Boolean' },
         P100_START: { value: false, dataType: 'Boolean' },
         V101_CMD: { value: false, dataType: 'Boolean' },
@@ -307,8 +361,9 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public emergencyStop(): void {
-    if (this.status.connected && window.electronAPI?.opcua) {
-      window.electronAPI.opcua.writeTags({
+    const api = getElectronOpcUa();
+    if (this.status.connected && api) {
+      api.writeTags({
         E_STOP_PB: { value: false, dataType: 'Boolean' },
         E_STOP: { value: false, dataType: 'Boolean' },
       });

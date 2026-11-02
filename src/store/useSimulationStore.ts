@@ -8,7 +8,7 @@ import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine'
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
 import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
-import { OpcUaPlcDriver } from '../core/driver/OpcUaPlcDriver';
+import { OpcUaPlcDriver, type OpcUaConnectionOptions } from '../core/driver/OpcUaPlcDriver';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
@@ -37,6 +37,7 @@ interface SimulationStore {
   plc: MockPlcDriver | PasteurizerPlcDriver | GenericPlcDriver | OpcUaPlcDriver;
   driverMode: DriverMode;
   opcuaEndpoint: string;
+  opcuaSecurityOptions?: OpcUaConnectionOptions;
   running: boolean;
   speed: number; // 1x, 2x, 5x, 10x
   snapshot: SimulationSnapshot | null;
@@ -47,8 +48,8 @@ interface SimulationStore {
   setSkid: (skid: SkidId) => void;
   setCustomSkid: (topology: PlantTopology, meta: CustomSkidMeta) => void;
   deleteCustomSkid: () => void;
-  setDriverMode: (mode: DriverMode, endpointUrl?: string) => Promise<void>;
-  connectOpcUa: (endpointUrl?: string) => Promise<void>;
+  setDriverMode: (mode: DriverMode, endpointOrOptions?: string | OpcUaConnectionOptions) => Promise<void>;
+  connectOpcUa: (options?: string | OpcUaConnectionOptions) => Promise<void>;
   disconnectOpcUa: () => Promise<void>;
   startLocalOpcUaServer: (port?: number) => Promise<string>;
   stopLocalOpcUaServer: () => Promise<void>;
@@ -169,19 +170,24 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     faults: [],
     trendHistory: [],
 
-    setDriverMode: async (mode, endpointUrl) => {
+    setDriverMode: async (mode, endpointOrOptions) => {
       stopLoop();
-      const endpoint = endpointUrl || get().opcuaEndpoint;
+      const opts: OpcUaConnectionOptions = typeof endpointOrOptions === 'string'
+        ? { endpointUrl: endpointOrOptions }
+        : endpointOrOptions || { endpointUrl: get().opcuaEndpoint };
+      const endpoint = opts.endpointUrl || get().opcuaEndpoint;
+      opts.endpointUrl = endpoint;
+
       if (mode === 'OPCUA') {
-        const opcDriver = new OpcUaPlcDriver(endpoint);
+        const opcDriver = new OpcUaPlcDriver(opts);
         try {
-          await opcDriver.connect(endpoint);
+          await opcDriver.connect(opts);
         } catch (err) {
           console.warn('Initial OPC UA connection attempt:', err);
         }
         const snap = get().engine.tick(opcDriver.readOutputs());
         opcDriver.writeInputs(snap.tags.inputs);
-        set({ driverMode: 'OPCUA', opcuaEndpoint: endpoint, plc: opcDriver, snapshot: snap });
+        set({ driverMode: 'OPCUA', opcuaEndpoint: endpoint, opcuaSecurityOptions: opts, plc: opcDriver, snapshot: snap });
       } else {
         const { activeSkid, customTopology } = get();
         let newPlc: PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver;
@@ -198,14 +204,19 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       }
     },
 
-    connectOpcUa: async (endpointUrl) => {
-      const endpoint = endpointUrl || get().opcuaEndpoint;
+    connectOpcUa: async (options) => {
+      const opts: OpcUaConnectionOptions = typeof options === 'string'
+        ? { endpointUrl: options }
+        : options || { endpointUrl: get().opcuaEndpoint };
+      const endpoint = opts.endpointUrl || get().opcuaEndpoint;
+      opts.endpointUrl = endpoint;
+
       const { plc, driverMode } = get();
       if (driverMode === 'OPCUA' && plc instanceof OpcUaPlcDriver) {
-        await plc.connect(endpoint);
-        set({ opcuaEndpoint: endpoint });
+        await plc.connect(opts);
+        set({ opcuaEndpoint: endpoint, opcuaSecurityOptions: opts });
       } else {
-        await get().setDriverMode('OPCUA', endpoint);
+        await get().setDriverMode('OPCUA', opts);
       }
     },
 

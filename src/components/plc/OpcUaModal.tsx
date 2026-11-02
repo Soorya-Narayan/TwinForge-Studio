@@ -5,7 +5,13 @@
 
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { OpcUaPlcDriver } from '../../core/driver/OpcUaPlcDriver';
+import {
+  OpcUaPlcDriver,
+  type OpcUaSecurityMode,
+  type OpcUaSecurityPolicy,
+  type OpcUaAuthMode,
+  type OpcUaConnectionOptions,
+} from '../../core/driver/OpcUaPlcDriver';
 import {
   Server,
   Cpu,
@@ -18,6 +24,10 @@ import {
   AlertTriangle,
   X,
   ExternalLink,
+  Shield,
+  Lock,
+  User,
+  FolderOpen,
 } from 'lucide-react';
 
 interface OpcUaModalProps {
@@ -29,6 +39,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
   const driverMode = useSimulationStore((s) => s.driverMode);
   const plc = useSimulationStore((s) => s.plc);
   const opcuaEndpoint = useSimulationStore((s) => s.opcuaEndpoint);
+  const opcuaSecurityOptions = useSimulationStore((s) => s.opcuaSecurityOptions);
   const setDriverMode = useSimulationStore((s) => s.setDriverMode);
   const connectOpcUa = useSimulationStore((s) => s.connectOpcUa);
   const disconnectOpcUa = useSimulationStore((s) => s.disconnectOpcUa);
@@ -47,12 +58,34 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
   const isServerRunning = opcDriver?.serverRunning ?? false;
   const latencyMs = opcDriver?.status.latencyMs ?? 0;
 
+  // Security & Authentication options state
+  const savedOpts = opcuaSecurityOptions || opcDriver?.securityOptions;
+  const [securityMode, setSecurityMode] = useState<OpcUaSecurityMode>(savedOpts?.securityMode ?? 'None');
+  const [securityPolicy, setSecurityPolicy] = useState<OpcUaSecurityPolicy>(savedOpts?.securityPolicy ?? 'None');
+  const [authMode, setAuthMode] = useState<OpcUaAuthMode>(savedOpts?.authMode ?? 'Anonymous');
+  const [username, setUsername] = useState<string>(savedOpts?.username ?? '');
+  const [password, setPassword] = useState<string>(savedOpts?.password ?? '');
+  const [certificatePath, setCertificatePath] = useState<string>(savedOpts?.certificatePath ?? '');
+  const [privateKeyPath, setPrivateKeyPath] = useState<string>(savedOpts?.privateKeyPath ?? '');
+
   if (!isOpen) return null;
+
+  const buildConnectionOptions = (): OpcUaConnectionOptions => ({
+    endpointUrl: endpointInput,
+    securityMode,
+    securityPolicy,
+    authMode,
+    username: authMode === 'Username' ? username : undefined,
+    password: authMode === 'Username' ? password : undefined,
+    certificatePath: authMode === 'Certificate' ? certificatePath : undefined,
+    privateKeyPath: authMode === 'Certificate' ? privateKeyPath : undefined,
+  });
 
   const handleSelectMode = async (mode: 'MOCK' | 'OPCUA') => {
     setStatusMsg(null);
     try {
-      await setDriverMode(mode, endpointInput);
+      const opts = buildConnectionOptions();
+      await setDriverMode(mode, opts);
       setStatusMsg({
         type: 'success',
         text: mode === 'OPCUA' ? 'Switched to Real PLC Driver (OPC UA)' : 'Switched to In-Process Mock PLC Driver',
@@ -62,14 +95,51 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleBrowseCert = async () => {
+    if (!window.electronAPI?.openFile) return;
+    try {
+      const res = await window.electronAPI.openFile({
+        filters: [
+          { name: 'X.509 Certificates', extensions: ['der', 'pem', 'crt', 'cer'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (!res.canceled && res.filePath) {
+        setCertificatePath(res.filePath);
+      }
+    } catch (err: any) {
+      console.warn('Certificate browse failed:', err);
+    }
+  };
+
+  const handleBrowseKey = async () => {
+    if (!window.electronAPI?.openFile) return;
+    try {
+      const res = await window.electronAPI.openFile({
+        filters: [
+          { name: 'Private Keys', extensions: ['pem', 'key', 'der'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (!res.canceled && res.filePath) {
+        setPrivateKeyPath(res.filePath);
+      }
+    } catch (err: any) {
+      console.warn('Private key browse failed:', err);
+    }
+  };
+
   const handleConnect = async () => {
     setConnecting(true);
     setStatusMsg(null);
     try {
-      await connectOpcUa(endpointInput);
-      setStatusMsg({ type: 'success', text: `Connected to OPC UA Server: ${endpointInput}` });
+      const opts = buildConnectionOptions();
+      await connectOpcUa(opts);
+      const secInfo = securityMode !== 'None' ? ` [${securityMode} / ${securityPolicy}]` : '';
+      const authInfo = authMode !== 'Anonymous' ? ` (${authMode})` : '';
+      setStatusMsg({ type: 'success', text: `Connected to OPC UA Server: ${endpointInput}${secInfo}${authInfo}` });
     } catch (err: any) {
-      setStatusMsg({ type: 'error', text: err?.message || 'Connection failed. Verify endpoint and PLC network reachability.' });
+      setStatusMsg({ type: 'error', text: err?.message || 'Connection failed. Verify endpoint, security mode, credentials, and PLC network reachability.' });
     } finally {
       setConnecting(false);
     }
@@ -90,6 +160,9 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
     try {
       const url = await startLocalOpcUaServer(4840);
       setCustomEndpoint(url);
+      setSecurityMode('None');
+      setSecurityPolicy('None');
+      setAuthMode('Anonymous');
       setStatusMsg({ type: 'success', text: `Embedded OPC UA Test Server active on ${url}` });
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err?.message || 'Could not start embedded server' });
@@ -129,7 +202,8 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
         style={{
           background: '#ffffff',
           width: '100%',
-          maxWidth: '680px',
+          maxWidth: '720px',
+          maxHeight: '90vh',
           borderRadius: 8,
           boxShadow: 'var(--shadow-lg)',
           overflow: 'hidden',
@@ -165,7 +239,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
           {/* Status Alert Banner */}
           {statusMsg && (
             <div
@@ -326,6 +400,250 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                 </div>
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
                   Compatible with standard OPC UA (IEC 62541) servers over opc.tcp:// protocol.
+                </div>
+              </div>
+
+              {/* Security & Authentication Options */}
+              <div
+                style={{
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 6,
+                  background: '#ffffff',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Shield size={14} color="var(--color-primary)" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Security Mode, Policy & Authentication (IEC 62541)
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: 3,
+                      background: securityMode !== 'None' ? '#ecfdf5' : '#f1f5f9',
+                      color: securityMode !== 'None' ? '#065f46' : '#64748b',
+                      border: securityMode !== 'None' ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                    }}
+                  >
+                    {securityMode !== 'None' ? `${securityMode} · ${securityPolicy}` : 'PLAINTEXT (NONE)'}
+                  </span>
+                </div>
+
+                {/* Security Mode & Security Policy Selectors */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>
+                      Security Mode:
+                    </label>
+                    <select
+                      value={securityMode}
+                      onChange={(e) => {
+                        const val = e.target.value as OpcUaSecurityMode;
+                        setSecurityMode(val);
+                        if (val === 'None') {
+                          setSecurityPolicy('None');
+                        } else if (securityPolicy === 'None') {
+                          setSecurityPolicy('Basic256Sha256');
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        fontSize: 11,
+                        borderRadius: 4,
+                        border: '1px solid var(--border-strong)',
+                        background: '#ffffff',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value="None">None (Unencrypted / Local Dev)</option>
+                      <option value="Sign">Sign (Cryptographic Integrity)</option>
+                      <option value="SignAndEncrypt">SignAndEncrypt (Full Confidentiality)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>
+                      Security Policy:
+                    </label>
+                    <select
+                      value={securityPolicy}
+                      onChange={(e) => setSecurityPolicy(e.target.value as OpcUaSecurityPolicy)}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        fontSize: 11,
+                        borderRadius: 4,
+                        border: '1px solid var(--border-strong)',
+                        background: '#ffffff',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value="None">None</option>
+                      <option value="Basic256Sha256">Basic256Sha256 (Industry Standard)</option>
+                      <option value="Aes128_Sha256_RsaOaep">Aes128_Sha256_RsaOaep</option>
+                      <option value="Basic256">Basic256</option>
+                      <option value="Basic128Rsa15">Basic128Rsa15 (Legacy PLC)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Authentication Identity Tokens */}
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
+                    User Authentication (Identity Token):
+                  </label>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                    {(['Anonymous', 'Username', 'Certificate'] as OpcUaAuthMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setAuthMode(mode)}
+                        style={{
+                          flex: 1,
+                          padding: '5px 8px',
+                          fontSize: 10,
+                          fontWeight: authMode === mode ? 700 : 500,
+                          borderRadius: 4,
+                          border: authMode === mode ? '1px solid var(--color-primary)' : '1px solid var(--border-subtle)',
+                          background: authMode === mode ? '#f0f9ff' : '#ffffff',
+                          color: authMode === mode ? 'var(--color-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {mode === 'Anonymous' ? 'Anonymous' : mode === 'Username' ? 'Username & Password' : 'User Certificate (X.509)'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Username & Password Inputs */}
+                  {authMode === 'Username' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: '#f8fafc', padding: 8, borderRadius: 4 }}>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 2 }}>
+                          Username:
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                          <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="e.g. opcadmin"
+                            style={{
+                              width: '100%',
+                              padding: '5px 8px 5px 24px',
+                              fontSize: 11,
+                              border: '1px solid var(--border-strong)',
+                              borderRadius: 4,
+                              background: '#ffffff',
+                            }}
+                          />
+                          <User size={12} color="#94a3b8" style={{ position: 'absolute', left: 7 }} />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 2 }}>
+                          Password:
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            style={{
+                              width: '100%',
+                              padding: '5px 8px 5px 24px',
+                              fontSize: 11,
+                              border: '1px solid var(--border-strong)',
+                              borderRadius: 4,
+                              background: '#ffffff',
+                            }}
+                          />
+                          <Lock size={12} color="#94a3b8" style={{ position: 'absolute', left: 7 }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Certificate Inputs */}
+                  {authMode === 'Certificate' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc', padding: 8, borderRadius: 4 }}>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 2 }}>
+                          X.509 Client Certificate File (.der / .pem / .crt):
+                        </label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            type="text"
+                            value={certificatePath}
+                            onChange={(e) => setCertificatePath(e.target.value)}
+                            placeholder="/path/to/client_certificate.pem"
+                            style={{
+                              flex: 1,
+                              padding: '5px 8px',
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              border: '1px solid var(--border-strong)',
+                              borderRadius: 4,
+                              background: '#ffffff',
+                            }}
+                          />
+                          {window.electronAPI?.openFile && (
+                            <button
+                              type="button"
+                              onClick={handleBrowseCert}
+                              className="btn btn-ghost"
+                              style={{ padding: '4px 8px', fontSize: 10, border: '1px solid var(--border-strong)', background: '#ffffff' }}
+                            >
+                              <FolderOpen size={11} /> Browse...
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 2 }}>
+                          Private Key File (.pem / .key):
+                        </label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            type="password"
+                            value={privateKeyPath}
+                            onChange={(e) => setPrivateKeyPath(e.target.value)}
+                            placeholder="/path/to/client_private_key.pem"
+                            style={{
+                              flex: 1,
+                              padding: '5px 8px',
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              border: '1px solid var(--border-strong)',
+                              borderRadius: 4,
+                              background: '#ffffff',
+                            }}
+                          />
+                          {window.electronAPI?.openFile && (
+                            <button
+                              type="button"
+                              onClick={handleBrowseKey}
+                              className="btn btn-ghost"
+                              style={{ padding: '4px 8px', fontSize: 10, border: '1px solid var(--border-strong)', background: '#ffffff' }}
+                            >
+                              <FolderOpen size={11} /> Browse...
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
