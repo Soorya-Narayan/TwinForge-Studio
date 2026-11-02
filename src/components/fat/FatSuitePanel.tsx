@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
-import { Play, CheckCircle2, XCircle, FileText, Activity, Clock } from 'lucide-react';
+import { Play, CheckCircle2, XCircle, FileText, Activity, Clock, WifiOff } from 'lucide-react';
 
 export const FatSuitePanel: React.FC = () => {
   const scenarios = useFatStore((s) => s.scenarios);
@@ -187,6 +187,30 @@ export const FatSuitePanel: React.FC = () => {
                         {timingAssertion.timingLimitMs && (
                           <span style={{ opacity: 0.8 }}>(limit: &lt;= {timingAssertion.timingLimitMs} ms)</span>
                         )}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Connection Lost Error Feedback Chip */}
+                  {result && !result.passed && result.assertions.some((a) => a.tag === 'PLC_CONNECTION') && (
+                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '3px 8px',
+                          borderRadius: 3,
+                          background: '#fef2f2',
+                          color: '#b91c1c',
+                          border: '1px solid #fecaca',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        <WifiOff size={11} />
+                        <span>{result.assertions.find((a) => a.tag === 'PLC_CONNECTION')?.message}</span>
                       </span>
                     </div>
                   )}

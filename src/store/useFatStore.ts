@@ -22,8 +22,8 @@ export interface ScanJournalEntry {
   id: string;
   scan: number;
   timeFormatted: string;
-  source: 'TEST_GEN' | 'PLC' | 'SIM' | 'FAULT';
-  eventType: 'COMMAND' | 'FEEDBACK' | 'INTERLOCK' | 'ASSERTION' | 'FAULT';
+  source: 'TEST_GEN' | 'PLC' | 'SIM' | 'FAULT' | 'DRIVER';
+  eventType: 'COMMAND' | 'FEEDBACK' | 'INTERLOCK' | 'ASSERTION' | 'FAULT' | 'ALARM';
   description: string;
   tag?: string;
   value?: string | number | boolean;
@@ -60,7 +60,7 @@ interface FatStore {
   setScanMode: (mode: 'lockstep' | 'classic') => void;
   syncScenarios: (skid: SkidId) => void;
   runAllTests: () => Promise<void>;
-  runSingleTest: (testId: string) => Promise<void>;
+  runSingleTest: (testId: string, driverOverride?: HarnessPlcDriver) => Promise<void>;
   resetSuite: () => void;
   openReportModal: () => void;
   closeReportModal: () => void;
@@ -91,11 +91,25 @@ export const createIsolatedTestHarness = (
     engine = new PhysicsEngine(topology, stepMs);
   }
 
-  // Wire live connected OPC UA driver for real Hardware-in-the-Loop (HIL) testing
-  const liveCandidate = driverOverride ?? (typeof useSimulationStore !== 'undefined' ? useSimulationStore.getState()?.plc : undefined);
-  if (liveCandidate && liveCandidate.status?.driverType === 'opcua' && liveCandidate.status?.connected) {
-    plc = liveCandidate as OpcUaPlcDriver;
-    plc.setSkid(skid);
+  // Wire driver for testing: preserve OPC UA driver when selected or provided
+  const simStore = typeof useSimulationStore !== 'undefined' ? useSimulationStore.getState() : undefined;
+  const liveCandidate = driverOverride ?? simStore?.plc;
+
+  if (driverOverride) {
+    plc = driverOverride;
+    if (typeof (plc as any).setSkid === 'function') {
+      (plc as any).setSkid(skid);
+    }
+  } else if (simStore?.driverMode === 'OPCUA' && liveCandidate) {
+    plc = liveCandidate;
+    if (typeof (plc as any).setSkid === 'function') {
+      (plc as any).setSkid(skid);
+    }
+  } else if (liveCandidate && liveCandidate.status?.driverType === 'opcua') {
+    plc = liveCandidate;
+    if (typeof (plc as any).setSkid === 'function') {
+      (plc as any).setSkid(skid);
+    }
   } else if (skid === 'PASTEURIZER_10KLPH') {
     plc = new PasteurizerPlcDriver();
   } else if (skid === 'BATCH_MIXING') {
@@ -206,7 +220,7 @@ export const useFatStore = create<FatStore>()(
         }));
       },
 
-  runSingleTest: async (testId: string) => {
+  runSingleTest: async (testId: string, driverOverride?: HarnessPlcDriver) => {
     const simStore = useSimulationStore.getState();
     const currentSkid = simStore.activeSkid;
     const scenarios = get().scenarios.length > 0 ? get().scenarios : getFatScenarios(currentSkid);
@@ -220,7 +234,7 @@ export const useFatStore = create<FatStore>()(
     const history: ScanHistoryRecord[] = [];
 
     // Isolate each test with a fresh engine and PLC instance calibrated to test dtMs
-    const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology, dtMs);
+    const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology, dtMs, driverOverride);
 
     const driverName = plc.constructor?.name || 'MockPlcDriver';
     const driverType = plc.status.driverType;
@@ -250,6 +264,11 @@ export const useFatStore = create<FatStore>()(
     });
 
     try {
+      // 0. Pre-execution Driver Connection Verification
+      if (!plc.status.connected) {
+        throw new Error(`PLC connection is offline (${driverDetails}). Cannot validate process control without live connection. Stale outputs discarded.`);
+      }
+
       // Optional setup hook before stepped execution
       if (test.setup) {
         test.setup(engine, plc);
@@ -263,6 +282,10 @@ export const useFatStore = create<FatStore>()(
 
         // Step engine and PLC in lockstep across totalScans
         for (let step = 0; step < totalScans; step++) {
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
           test.stimulus(engine, plc, step, history);
 
           // Step 1: Write inputs to PLC
@@ -275,8 +298,16 @@ export const useFatStore = create<FatStore>()(
             await new Promise((resolve) => setTimeout(resolve, dtMs));
           }
 
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
           // Step 3: Read outputs from PLC
           const outputs = await plc.readOutputs();
+
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
 
           // Step 4: Then tick the engine
           const snap = engine.tick(outputs, dtMs);
@@ -303,12 +334,26 @@ export const useFatStore = create<FatStore>()(
       } else {
         // Classic Scan Mode:
         for (let step = 0; step < totalScans; step++) {
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
           test.stimulus(engine, plc, step, history);
 
           if (typeof plc.tick === 'function') {
             await plc.tick(dtMs);
           }
+
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
           const outputs = await plc.readOutputs();
+
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
           const snap = engine.tick(outputs, dtMs);
           await plc.writeInputs(snap.tags.inputs);
 
@@ -372,22 +417,33 @@ export const useFatStore = create<FatStore>()(
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`Error executing scenario [${test.id}]:`, err);
 
+      const isConnectionLost =
+        !plc.status.connected ||
+        errorMsg.toLowerCase().includes('connection lost') ||
+        errorMsg.toLowerCase().includes('disconnected') ||
+        errorMsg.toLowerCase().includes('offline') ||
+        errorMsg.toLowerCase().includes('not connected');
+
       const failedAssertion: TestAssertion = {
-        tag: 'SCENARIO_EXECUTION',
-        expected: 'COMPLETED_WITHOUT_ERROR',
-        actual: `ERROR: ${errorMsg}`,
+        tag: isConnectionLost ? 'PLC_CONNECTION' : 'SCENARIO_EXECUTION',
+        expected: isConnectionLost ? 'CONNECTED' : 'COMPLETED_WITHOUT_ERROR',
+        actual: isConnectionLost ? 'DISCONNECTED' : `ERROR: ${errorMsg}`,
         passed: false,
-        message: `Scenario aborted with runtime exception: ${errorMsg}`,
+        message: isConnectionLost
+          ? `FAT Test aborted: PLC communication failure at scan ${history.length + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`
+          : `Scenario aborted with runtime exception: ${errorMsg}`,
       };
 
       get().addJournalEntry({
-        scan: history[history.length - 1]?.scan ?? 0,
+        scan: history[history.length - 1]?.scan ?? history.length,
         timeFormatted: new Date().toLocaleTimeString(),
-        source: 'TEST_GEN',
-        eventType: 'ASSERTION',
-        description: `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
-        tag: 'EXCEPTION',
-        value: errorMsg,
+        source: isConnectionLost ? 'DRIVER' : 'TEST_GEN',
+        eventType: isConnectionLost ? 'ALARM' : 'ASSERTION',
+        description: isConnectionLost
+          ? `COMMUNICATION FAILURE on [${test.id}]: ${errorMsg}`
+          : `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
+        tag: isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
+        value: isConnectionLost ? 'DISCONNECTED' : errorMsg,
         status: 'FAIL',
       });
 

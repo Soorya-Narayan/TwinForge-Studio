@@ -210,6 +210,7 @@ export class OpcUaPlcDriver implements Driver {
     }
     this.status.connected = false;
     this.state = 'OFFLINE';
+    this.outputs = {}; // Invalidate stale outputs upon disconnect
   }
 
   /**
@@ -254,7 +255,11 @@ export class OpcUaPlcDriver implements Driver {
     this.inputs = { ...inputs };
 
     const api = getElectronOpcUa();
-    if (!this.status.connected || this.isWriting || !api) {
+    if (!this.status.connected) {
+      throw new Error(`Cannot write inputs: OPC UA PLC driver is disconnected (${this.endpointUrl})`);
+    }
+
+    if (this.isWriting || !api) {
       return;
     }
 
@@ -270,9 +275,21 @@ export class OpcUaPlcDriver implements Driver {
     }
 
     try {
-      await api.writeTags(writePayload);
+      const res = await api.writeTags(writePayload);
+      if (res && res.success === false) {
+        if (res.error?.toLowerCase().includes('connect') || res.error?.toLowerCase().includes('session')) {
+          this.status.connected = false;
+          this.state = 'DISCONNECTED';
+          this.outputs = {};
+        }
+        throw new Error(res.error || 'Failed to write OPC UA tags');
+      }
     } catch (err) {
       console.warn('OPC UA write error:', err);
+      this.status.connected = false;
+      this.state = 'DISCONNECTED';
+      this.outputs = {};
+      throw err;
     } finally {
       this.isWriting = false;
     }
@@ -285,7 +302,7 @@ export class OpcUaPlcDriver implements Driver {
     this.status.lastScanMs = dtMs;
 
     if (!this.status.connected) {
-      return;
+      throw new Error(`PLC scan tick failed: OPC UA driver is disconnected (${this.endpointUrl}). Stale outputs discarded.`);
     }
 
     // In lockstep scan mode, wait for the PLC scan cycle duration
@@ -301,6 +318,10 @@ export class OpcUaPlcDriver implements Driver {
    * Asynchronously poll live outputs from the real PLC
    */
   public async syncOutputsFromPlc(): Promise<void> {
+    if (!this.status.connected) {
+      throw new Error(`PLC sync failed: OPC UA driver is disconnected (${this.endpointUrl}). Stale outputs discarded.`);
+    }
+
     const api = getElectronOpcUa();
     if (this.isReading || !api) {
       return;
@@ -316,6 +337,18 @@ export class OpcUaPlcDriver implements Driver {
       const nodesToRead = tagsToRead.map((tag) => this.resolvePlcNodeId(tag));
       const readResult = await api.readTags(nodesToRead);
       this.status.latencyMs = Math.round(performance.now() - startTime);
+
+      // Verify whether connection was lost:
+      // If tags were requested but 0 tags were returned, query live connection status
+      if (nodesToRead.length > 0 && Object.keys(readResult).length === 0) {
+        const liveStatus = await api.getStatus?.();
+        if (liveStatus && !liveStatus.connected) {
+          this.status.connected = false;
+          this.state = 'DISCONNECTED';
+          this.outputs = {};
+          throw new Error(`OPC UA connection lost during tag read: Server unreachable (${this.endpointUrl})`);
+        }
+      }
 
       for (const internalTag of tagsToRead) {
         const plcNodeId = this.resolvePlcNodeId(internalTag);
@@ -340,8 +373,12 @@ export class OpcUaPlcDriver implements Driver {
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Failed to poll OPC UA tags:', err);
+      this.status.connected = false;
+      this.state = 'DISCONNECTED';
+      this.outputs = {};
+      throw err;
     } finally {
       this.isReading = false;
     }
