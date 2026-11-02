@@ -35,21 +35,27 @@ export const fatScenarios: TestCase[] = [
           expected: 'IDLE (10 scans)',
           actual: allIdle ? 'IDLE (10 scans)' : `${plc.state}`,
           passed: allIdle,
-          message: 'PLC batch state machine held IDLE across all 10 baseline scans',
+          message: allIdle
+            ? 'PLC batch state machine held IDLE across all 10 baseline scans'
+            : `PLC batch state machine failed to maintain IDLE baseline (current: ${plc.state})`,
         },
         {
           tag: 'P100_START_CONTINUOUS_OFF',
           expected: false,
           actual: !allPumpsOff,
           passed: allPumpsOff,
-          message: 'P-100 command remained continuously OFF across full baseline history',
+          message: allPumpsOff
+            ? 'P-100 command remained continuously OFF across full baseline history'
+            : 'P-100 command energized unexpectedly during baseline check',
         },
         {
           tag: 'VALVES_SEATED_CLOSED',
           expected: 'ALL CLOSED (10 scans)',
           actual: allValvesClosed ? 'ALL CLOSED (10 scans)' : 'VALVES OPENED',
           passed: allValvesClosed,
-          message: 'All dosing valves maintained fail-safe seated posture across baseline',
+          message: allValvesClosed
+            ? 'All dosing valves maintained fail-safe seated posture across baseline'
+            : 'One or more dosing valves unseated during baseline check',
         },
       ];
     },
@@ -82,27 +88,36 @@ export const fatScenarios: TestCase[] = [
       const il02Healthy = plc.interlocks.get('IL-02')?.isOk !== false &&
         history.every((h) => h.interlocks?.['IL-02']?.isOk !== false);
 
+      const sourceLevelPassed = sourceLevel >= 50;
+      const minLevelPassed = minLevel >= 50;
+
       return [
         {
           tag: 'TK100_LT',
           expected: '>= 50%',
           actual: `${sourceLevel.toFixed(1)}%`,
-          passed: sourceLevel >= 50,
-          message: 'Supply Tank TK-100 raw material inventory verified above start permissive (>= 50%)',
+          passed: sourceLevelPassed,
+          message: sourceLevelPassed
+            ? 'Supply Tank TK-100 raw material inventory verified above start permissive (>= 50%)'
+            : `Supply Tank TK-100 inventory below start permissive (${sourceLevel.toFixed(1)}% < 50%)`,
         },
         {
           tag: 'TK100_LT_MIN',
           expected: '>= 50%',
           actual: `${minLevel.toFixed(1)}%`,
-          passed: minLevel >= 50,
-          message: 'Supply Tank TK-100 raw material inventory remained >= 50% across 15 scans',
+          passed: minLevelPassed,
+          message: minLevelPassed
+            ? 'Supply Tank TK-100 raw material inventory remained >= 50% across 15 scans'
+            : `Supply Tank TK-100 inventory dropped below 50% threshold (min: ${minLevel.toFixed(1)}%)`,
         },
         {
           tag: 'IL-02_PERMISSIVE_HISTORY',
           expected: 'HEALTHY (15 scans)',
           actual: il02Healthy ? 'HEALTHY (15 scans)' : 'PERMISSIVE TRIPPED',
           passed: il02Healthy,
-          message: 'IL-02 Low Level permissive held stable and healthy throughout test history',
+          message: il02Healthy
+            ? 'IL-02 Low Level permissive held stable and healthy throughout test history'
+            : 'IL-02 Low Level permissive tripped unexpectedly during baseline monitoring',
         },
       ];
     },
@@ -137,31 +152,41 @@ export const fatScenarios: TestCase[] = [
       const pumpDropIndex = history.findIndex((h, idx) => idx >= faultStep && !h.outputs['P100_START']);
       const pumpDropLatencyMs = pumpDropIndex >= 0 ? (pumpDropIndex - faultStep) * 100 : 9999;
 
+      const v101ZsoPassed = !history[history.length - 1].inputs['V101_ZSO'];
+      const tripPassed = tripLatencyMs <= 200;
+      const pumpDropPassed = pumpDropLatencyMs <= 200;
+
       return [
         {
           tag: 'V101_ZSO_FAULT',
           expected: false,
           actual: Boolean(history[history.length - 1].inputs['V101_ZSO']),
-          passed: !history[history.length - 1].inputs['V101_ZSO'],
-          message: 'Suction valve V-101 open feedback withheld by stuck-closed physical fault',
+          passed: v101ZsoPassed,
+          message: v101ZsoPassed
+            ? 'Suction valve V-101 open feedback withheld by stuck-closed physical fault'
+            : 'Suction valve V-101 open feedback proved despite stuck-closed fault',
         },
         {
           tag: 'IL-01_TRIP_LATENCY',
           expected: '<= 200 ms',
           actual: `${tripLatencyMs} ms`,
-          passed: tripLatencyMs <= 200,
+          passed: tripPassed,
           responseTimeMs: tripLatencyMs,
           timingLimitMs: 200,
-          message: `IL-01 Suction Safety Interlock tripped within ${tripLatencyMs} ms of fault injection (limit: <= 200 ms)`,
+          message: tripPassed
+            ? `IL-01 Suction Safety Interlock tripped within ${tripLatencyMs} ms of fault injection (limit: <= 200 ms)`
+            : `IL-01 Suction Safety Interlock trip latency exceeded limit (${tripLatencyMs} ms > 200 ms)`,
         },
         {
           tag: 'P100_DE_ENERGIZED_TIME',
           expected: '<= 200 ms',
           actual: `${pumpDropLatencyMs} ms`,
-          passed: pumpDropLatencyMs <= 200,
+          passed: pumpDropPassed,
           responseTimeMs: pumpDropLatencyMs,
           timingLimitMs: 200,
-          message: `Transfer pump P-100 command de-energized within ${pumpDropLatencyMs} ms (limit: <= 200 ms)`,
+          message: pumpDropPassed
+            ? `Transfer pump P-100 command de-energized within ${pumpDropLatencyMs} ms (limit: <= 200 ms)`
+            : `Transfer pump P-100 failed to de-energize within safety limit (${pumpDropLatencyMs} ms > 200 ms)`,
         },
       ];
     },
@@ -195,6 +220,8 @@ export const fatScenarios: TestCase[] = [
 
       // Check fluid flow established after stroke
       const finalFlow = history[history.length - 1].snapshot?.paths?.find((p: any) => p.id === 'PIPE-02')?.flowLpm ?? 0;
+      const pumpRunPassed = Boolean(history[history.length - 1].outputs['P100_START']);
+      const flowPassed = finalFlow > 100;
 
       return [
         {
@@ -204,21 +231,27 @@ export const fatScenarios: TestCase[] = [
           passed: strokeWithinTolerance,
           responseTimeMs: strokeTimeMs,
           timingLimitMs: 1700,
-          message: `V-101 actuator travel transit duration measured at ${strokeTimeMs} ms (target 1400 ± 300 ms)`,
+          message: strokeWithinTolerance
+            ? `V-101 actuator travel transit duration measured at ${strokeTimeMs} ms (target 1400 ± 300 ms)`
+            : `V-101 actuator travel transit out of tolerance (${strokeTimeMs} ms, expected 1400 ± 300 ms)`,
         },
         {
           tag: 'POST_STROKE_PUMP_RUN',
           expected: true,
-          actual: Boolean(history[history.length - 1].outputs['P100_START']),
-          passed: Boolean(history[history.length - 1].outputs['P100_START']),
-          message: 'P-100 commanded ON after V-101 confirmed fully open',
+          actual: pumpRunPassed,
+          passed: pumpRunPassed,
+          message: pumpRunPassed
+            ? 'P-100 commanded ON after V-101 confirmed fully open'
+            : 'P-100 failed to command ON after V-101 confirmed open',
         },
         {
           tag: 'HEADER_FLOW_RATE',
           expected: '> 100 L/min',
           actual: `${finalFlow} L/min`,
-          passed: finalFlow > 100,
-          message: 'Hydraulic velocity established in header following valve travel proof',
+          passed: flowPassed,
+          message: flowPassed
+            ? 'Hydraulic velocity established in header following valve travel proof'
+            : `Header flow rate below target (${finalFlow.toFixed(1)} L/min <= 100 L/min)`,
         },
       ];
     },
@@ -253,27 +286,36 @@ export const fatScenarios: TestCase[] = [
       const slewRateDegPerSec = tempRise / durationSec;
       const il04Ok = history.every((h) => h.interlocks?.['IL-04']?.isOk !== false);
 
+      const finalTempPassed = finalTemp > 40;
+      const slewRatePassed = slewRateDegPerSec > 0.5;
+
       return [
         {
           tag: 'HX100_TT_FINAL',
           expected: '> 40°C',
           actual: `${finalTemp.toFixed(1)}°C`,
-          passed: finalTemp > 40,
-          message: `Product stream heated to ${finalTemp.toFixed(1)}°C over 40 scans (initial: ${initialTemp.toFixed(1)}°C)`,
+          passed: finalTempPassed,
+          message: finalTempPassed
+            ? `Product stream heated to ${finalTemp.toFixed(1)}°C over 40 scans (initial: ${initialTemp.toFixed(1)}°C)`
+            : `Product stream temperature below target (${finalTemp.toFixed(1)}°C <= 40°C)`,
         },
         {
           tag: 'THERMAL_SLEW_RATE',
           expected: '> 0.50 °C/s',
           actual: `+${slewRateDegPerSec.toFixed(2)} °C/s`,
-          passed: slewRateDegPerSec > 0.5,
-          message: `Thermal rise slew rate confirmed at +${slewRateDegPerSec.toFixed(2)} °C/sec`,
+          passed: slewRatePassed,
+          message: slewRatePassed
+            ? `Thermal rise slew rate confirmed at +${slewRateDegPerSec.toFixed(2)} °C/sec`
+            : `Thermal rise slew rate below requirement (+${slewRateDegPerSec.toFixed(2)} °C/sec <= 0.50 °C/sec)`,
         },
         {
           tag: 'IL-04_THERMAL_SAFETY',
           expected: 'HEALTHY (40 scans)',
           actual: il04Ok ? 'HEALTHY (40 scans)' : 'TRIPPED',
           passed: il04Ok,
-          message: 'Thermal limit safety interlock IL-04 maintained in healthy zone throughout heating cycle',
+          message: il04Ok
+            ? 'Thermal limit safety interlock IL-04 maintained in healthy zone throughout heating cycle'
+            : 'Thermal limit safety interlock IL-04 tripped during heating cycle',
         },
       ];
     },
@@ -297,16 +339,19 @@ export const fatScenarios: TestCase[] = [
     assertions: (_sim, _plc, history) => {
       const openStepIndex = history.findIndex((h) => Boolean(h.inputs['V400_PROD_ZSO']));
       const strokeTimeMs = openStepIndex >= 0 ? openStepIndex * 100 : 9999;
+      const strokePassed = strokeTimeMs <= 2500;
 
       return [
         {
           tag: 'V400_PROD_STROKE_TIME',
           expected: '<= 2500 ms',
           actual: `${strokeTimeMs} ms`,
-          passed: strokeTimeMs <= 2500,
+          passed: strokePassed,
           responseTimeMs: strokeTimeMs,
           timingLimitMs: 2500,
-          message: `Discharge valve V-400 open proof proved at ${strokeTimeMs} ms (limit: <= 2500 ms)`,
+          message: strokePassed
+            ? `Discharge valve V-400 open proof proved at ${strokeTimeMs} ms (limit: <= 2500 ms)`
+            : `Discharge valve V-400 open proof stroke time exceeded limit (${strokeTimeMs} ms > 2500 ms)`,
         },
       ];
     },
@@ -335,23 +380,29 @@ export const fatScenarios: TestCase[] = [
         (h, idx) => idx >= estopStep && !h.outputs['P100_START'] && !h.outputs['V101_CMD'] && !h.outputs['V400_PROD_CMD']
       );
       const latencyMs = allZeroStep >= 0 ? (allZeroStep - estopStep) * 100 : 9999;
+      const statePassed = history[history.length - 1].plcState === 'ABORTED';
+      const latencyPassed = latencyMs <= 100;
 
       return [
         {
           tag: 'PLC_STATE',
           expected: 'ABORTED',
           actual: history[history.length - 1].plcState,
-          passed: history[history.length - 1].plcState === 'ABORTED',
-          message: 'PLC entered ABORTED state following E-Stop trigger',
+          passed: statePassed,
+          message: statePassed
+            ? 'PLC entered ABORTED state following E-Stop trigger'
+            : `PLC failed to transition to ABORTED on E-Stop (current: ${history[history.length - 1].plcState})`,
         },
         {
           tag: 'ESTOP_DE_ENERGIZATION_LATENCY',
           expected: '<= 100 ms (1 scan)',
           actual: `${latencyMs} ms`,
-          passed: latencyMs <= 100,
+          passed: latencyPassed,
           responseTimeMs: latencyMs,
           timingLimitMs: 100,
-          message: `All contactor and valve outputs de-energized within ${latencyMs} ms (limit: <= 100 ms)`,
+          message: latencyPassed
+            ? `All contactor and valve outputs de-energized within ${latencyMs} ms (limit: <= 100 ms)`
+            : `Outputs failed to de-energize within safety latency limit (${latencyMs} ms > 100 ms)`,
         },
       ];
     },
@@ -386,28 +437,36 @@ export const pasteurizerFatScenarios: TestCase[] = [
           expected: 'STOPPED (10 scans)',
           actual: allStopped ? 'STOPPED (10 scans)' : 'NOT STOPPED',
           passed: allStopped,
-          message: 'Pasteurizer controller safely maintained STOPPED across all 10 scans',
+          message: allStopped
+            ? 'Pasteurizer controller safely maintained STOPPED across all 10 scans'
+            : `Pasteurizer controller failed to hold STOPPED baseline (current: ${history[history.length - 1]?.plcState})`,
         },
         {
           tag: 'P_FEED_CONTINUOUS_OFF',
           expected: false,
           actual: !feedOff,
           passed: feedOff,
-          message: 'Raw milk feed pump P-FEED de-energized across full baseline',
+          message: feedOff
+            ? 'Raw milk feed pump P-FEED de-energized across full baseline'
+            : 'Raw milk feed pump P-FEED energized unexpectedly during baseline',
         },
         {
           tag: 'P_BOOSTER_CONTINUOUS_OFF',
           expected: false,
           actual: !boosterOff,
           passed: boosterOff,
-          message: 'Booster pump P-BOOSTER de-energized across full baseline',
+          message: boosterOff
+            ? 'Booster pump P-BOOSTER de-energized across full baseline'
+            : 'Booster pump P-BOOSTER energized unexpectedly during baseline',
         },
         {
           tag: 'PV11_FORWARD_FAIL_SAFE',
           expected: false,
           actual: !forwardClosed,
           passed: forwardClosed,
-          message: 'Forward flow valve PV11 held in fail-safe closed posture',
+          message: forwardClosed
+            ? 'Forward flow valve PV11 held in fail-safe closed posture'
+            : 'Forward flow valve PV11 unseated or opened during baseline',
         },
       ];
     },
@@ -439,27 +498,36 @@ export const pasteurizerFatScenarios: TestCase[] = [
       const ilBalLowOk = plc.interlocks.get('IL-BAL-LOW')?.isOk !== false &&
         history.every((h) => h.interlocks?.['IL-BAL-LOW']?.isOk !== false);
 
+      const balanceLevelPassed = balanceLevel >= 15;
+      const minLevelPassed = minLevel >= 15;
+
       return [
         {
           tag: 'BALANCE_TANK_LT',
           expected: '>= 15%',
           actual: `${balanceLevel.toFixed(1)}%`,
-          passed: balanceLevel >= 15,
-          message: 'Balance Tank inventory verified above pump priming threshold (>= 15%)',
+          passed: balanceLevelPassed,
+          message: balanceLevelPassed
+            ? 'Balance Tank inventory verified above pump priming threshold (>= 15%)'
+            : `Balance Tank inventory below pump priming threshold (${balanceLevel.toFixed(1)}% < 15%)`,
         },
         {
           tag: 'BALANCE_TANK_LT_MIN',
           expected: '>= 15%',
           actual: `${minLevel.toFixed(1)}%`,
-          passed: minLevel >= 15,
-          message: 'Balance Tank volume verified continuously above minimum pump priming threshold',
+          passed: minLevelPassed,
+          message: minLevelPassed
+            ? 'Balance Tank volume verified continuously above minimum pump priming threshold'
+            : `Balance Tank volume dropped below minimum priming threshold (min: ${minLevel.toFixed(1)}% < 15%)`,
         },
         {
           tag: 'IL-BAL-LOW_PERMISSIVE',
           expected: 'HEALTHY (15 scans)',
           actual: ilBalLowOk ? 'HEALTHY (15 scans)' : 'TRIPPED',
           passed: ilBalLowOk,
-          message: 'Low level lockout IL-BAL-LOW proved healthy across all 15 scans',
+          message: ilBalLowOk
+            ? 'Low level lockout IL-BAL-LOW proved healthy across all 15 scans'
+            : 'Low level lockout IL-BAL-LOW tripped unexpectedly during baseline',
         },
       ];
     },
@@ -489,21 +557,27 @@ export const pasteurizerFatScenarios: TestCase[] = [
           expected: 'UNPROVED (< 88°C)',
           actual: ilFdvUnproved ? 'UNPROVED (< 88°C)' : 'PREMATURELY PROVED',
           passed: ilFdvUnproved,
-          message: 'Legal diversion interlock IL-FDV correctly unproved while holding tube temperature is sub-pasteurizing',
+          message: ilFdvUnproved
+            ? 'Legal diversion interlock IL-FDV correctly unproved while holding tube temperature is sub-pasteurizing'
+            : 'Legal diversion interlock IL-FDV proved prematurely while temperature was sub-pasteurizing',
         },
         {
           tag: 'PV11_FORWARD_LOCKED',
           expected: 'CLOSED (20 scans)',
           actual: pv11AlwaysClosed ? 'CLOSED (20 scans)' : 'OPENED ILLEGALLY',
           passed: pv11AlwaysClosed,
-          message: 'Forward flow valve PV11 strictly locked closed during warm-up cycle',
+          message: pv11AlwaysClosed
+            ? 'Forward flow valve PV11 strictly locked closed during warm-up cycle'
+            : 'Forward flow valve PV11 commanded open prematurely during sub-temperature cycle',
         },
         {
           tag: 'PV12_DIVERT_RECYCLE',
           expected: 'OPEN (20 scans)',
           actual: pv12AlwaysOpen ? 'OPEN (20 scans)' : 'DIVERT CLOSED',
           passed: pv12AlwaysOpen,
-          message: 'Diversion valve PV12 continuously recycled flow back to Balance Tank',
+          message: pv12AlwaysOpen
+            ? 'Diversion valve PV12 continuously recycled flow back to Balance Tank'
+            : 'Diversion valve PV12 failed to maintain continuous recycle during sub-temperature cycle',
         },
       ];
     },
@@ -539,30 +613,41 @@ export const pasteurizerFatScenarios: TestCase[] = [
 
       const finalRecord = history[history.length - 1];
       const finalFlow = Number(finalRecord.inputs['FM'] ?? 0);
+      const tt5Final = Number(finalRecord.inputs['TT5'] ?? 0);
+
+      const legalTempPassed = tt5Final >= 88.0;
+      const forwardDelayPassed = forwardDelayMs <= 500;
+      const ratedFlowPassed = finalFlow >= 9500;
 
       return [
         {
           tag: 'LEGAL_TEMP_ACHIEVED',
           expected: '>= 88.0°C',
-          actual: `${Number(finalRecord.inputs['TT5'] ?? 0).toFixed(1)}°C`,
-          passed: Number(finalRecord.inputs['TT5'] ?? 0) >= 88.0,
-          message: 'Holding tube TT5 successfully reached legal HTST pasteurization threshold',
+          actual: `${tt5Final.toFixed(1)}°C`,
+          passed: legalTempPassed,
+          message: legalTempPassed
+            ? 'Holding tube TT5 successfully reached legal HTST pasteurization threshold'
+            : `Holding tube TT5 failed to reach legal HTST pasteurization threshold (${tt5Final.toFixed(1)}°C < 88.0°C)`,
         },
         {
           tag: 'FORWARD_PROVING_DELAY',
           expected: '<= 500 ms',
           actual: `${forwardDelayMs} ms`,
-          passed: forwardDelayMs <= 500,
+          passed: forwardDelayPassed,
           responseTimeMs: forwardDelayMs,
           timingLimitMs: 500,
-          message: `Sanitary forward flow valve PV11 opened within ${forwardDelayMs} ms of legal pasteurizing temperature attainment (limit: <= 500 ms)`,
+          message: forwardDelayPassed
+            ? `Sanitary forward flow valve PV11 opened within ${forwardDelayMs} ms of legal pasteurizing temperature attainment (limit: <= 500 ms)`
+            : `Sanitary forward flow valve PV11 exceeded proving delay limit (${forwardDelayMs} ms > 500 ms)`,
         },
         {
           tag: 'RATED_FLOW_ESTABLISHED',
           expected: '>= 9500 LPH',
           actual: `${finalFlow} LPH`,
-          passed: finalFlow >= 9500,
-          message: 'Rated continuous pasteurization throughput confirmed (10,000 LPH)',
+          passed: ratedFlowPassed,
+          message: ratedFlowPassed
+            ? 'Rated continuous pasteurization throughput confirmed (10,000 LPH)'
+            : `Continuous pasteurization throughput below specification (${finalFlow.toFixed(0)} LPH < 9,500 LPH)`,
         },
       ];
     },
@@ -597,22 +682,29 @@ export const pasteurizerFatScenarios: TestCase[] = [
       const finalRecord = history[history.length - 1];
       const finalDp = Number(finalRecord.inputs['PT4'] ?? 0) - Number(finalRecord.inputs['PT2'] ?? 0);
 
+      const dpBuildPassed = dpBuildTimeMs <= 1000;
+      const finalDpPassed = finalDp >= 0.5;
+
       return [
         {
           tag: 'DP_BUILD_TIME',
           expected: '<= 1000 ms',
           actual: `${dpBuildTimeMs} ms`,
-          passed: dpBuildTimeMs <= 1000,
+          passed: dpBuildPassed,
           responseTimeMs: dpBuildTimeMs,
           timingLimitMs: 1000,
-          message: `Regenerator differential pressure achieved legal positive threshold in ${dpBuildTimeMs} ms (limit: <= 1000 ms)`,
+          message: dpBuildPassed
+            ? `Regenerator differential pressure achieved legal positive threshold in ${dpBuildTimeMs} ms (limit: <= 1000 ms)`
+            : `Regenerator differential pressure failed to build within limit (${dpBuildTimeMs} ms > 1000 ms)`,
         },
         {
           tag: 'FINAL_DIFFERENTIAL_PRESSURE',
           expected: '>= +0.50 bar',
           actual: `+${finalDp.toFixed(2)} bar`,
-          passed: finalDp >= 0.5,
-          message: 'Sanitary positive pressure gradient maintained to eliminate risk of pinhole raw milk migration',
+          passed: finalDpPassed,
+          message: finalDpPassed
+            ? 'Sanitary positive pressure gradient maintained to eliminate risk of pinhole raw milk migration'
+            : `Sanitary positive pressure gradient inadequate (+${finalDp.toFixed(2)} bar < +0.50 bar risk of cross-contamination)`,
         },
       ];
     },
@@ -651,36 +743,49 @@ export const pasteurizerFatScenarios: TestCase[] = [
       const trippedRecord = history[history.length - 1];
       const trippedTemp = Number(trippedRecord.inputs['TT5'] ?? 0);
 
+      const underTempPassed = trippedTemp < 88.0;
+      const divertPassed = divertResponseTimeMs <= 400;
+      const pv11ClosedPassed = !trippedRecord.outputs['PV11_CMD'];
+      const pv12OpenPassed = Boolean(trippedRecord.outputs['PV12_CMD']);
+
       return [
         {
           tag: 'TT5_UNDER_TEMP_DETECTED',
           expected: '< 88.0°C',
           actual: `${trippedTemp.toFixed(1)}°C`,
-          passed: trippedTemp < 88.0,
-          message: 'Holding tube thermal disturbance detected by dual legal RTDs',
+          passed: underTempPassed,
+          message: underTempPassed
+            ? 'Holding tube thermal disturbance detected by dual legal RTDs'
+            : `Holding tube under-temperature fault not detected (${trippedTemp.toFixed(1)}°C >= 88.0°C)`,
         },
         {
           tag: 'DIVERT_RESPONSE_TIME',
           expected: '<= 400 ms (PMO Limit)',
           actual: `${divertResponseTimeMs} ms`,
-          passed: divertResponseTimeMs <= 400,
+          passed: divertPassed,
           responseTimeMs: divertResponseTimeMs,
           timingLimitMs: 400,
-          message: `Flow diversion valve assembly actuated to full recycle within ${divertResponseTimeMs} ms of under-temperature detection (PMO legal limit: <= 400 ms)`,
+          message: divertPassed
+            ? `Flow diversion valve assembly actuated to full recycle within ${divertResponseTimeMs} ms of under-temperature detection (PMO legal limit: <= 400 ms)`
+            : `Flow diversion valve failed to divert within PMO limit (${divertResponseTimeMs} ms > 400 ms)`,
         },
         {
           tag: 'PV11_CLOSED_ON_DIVERT',
           expected: false,
           actual: Boolean(trippedRecord.outputs['PV11_CMD']),
-          passed: !trippedRecord.outputs['PV11_CMD'],
-          message: 'Forward flow valve PV11 confirmed strictly closed to protect finished silo',
+          passed: pv11ClosedPassed,
+          message: pv11ClosedPassed
+            ? 'Forward flow valve PV11 confirmed strictly closed to protect finished silo'
+            : 'Forward flow valve PV11 remained energized open during thermal anomaly (PMO violation)',
         },
         {
           tag: 'PV12_OPEN_TO_BALANCE',
           expected: true,
           actual: Boolean(trippedRecord.outputs['PV12_CMD']),
-          passed: Boolean(trippedRecord.outputs['PV12_CMD']),
-          message: 'Diversion return line PV12 opened for recirculation back to balance tank',
+          passed: pv12OpenPassed,
+          message: pv12OpenPassed
+            ? 'Diversion return line PV12 opened for recirculation back to balance tank'
+            : 'Diversion return line PV12 failed to open during legal diversion event',
         },
       ];
     },
@@ -716,22 +821,29 @@ export const pasteurizerFatScenarios: TestCase[] = [
       );
       const latencyMs = deEnergizedStep >= 0 ? (deEnergizedStep - estopStep) * 100 : 9999;
 
+      const latencyPassed = latencyMs <= 100;
+      const statePassed = history[history.length - 1].plcState === 'EMERGENCY_STOP';
+
       return [
         {
           tag: 'ESTOP_DE_ENERGIZATION_LATENCY',
           expected: '<= 100 ms (1 scan)',
           actual: `${latencyMs} ms`,
-          passed: latencyMs <= 100,
+          passed: latencyPassed,
           responseTimeMs: latencyMs,
           timingLimitMs: 100,
-          message: `All motive drives and thermal sources de-energized on immediate scan (${latencyMs} ms <= 100 ms)`,
+          message: latencyPassed
+            ? `All motive drives and thermal sources de-energized on immediate scan (${latencyMs} ms <= 100 ms)`
+            : `Motive drives and thermal sources failed to de-energize within limit (${latencyMs} ms > 100 ms)`,
         },
         {
           tag: 'PLC_STATE',
           expected: 'EMERGENCY_STOP',
           actual: history[history.length - 1].plcState,
-          passed: history[history.length - 1].plcState === 'EMERGENCY_STOP',
-          message: 'Pasteurizer controller locked in safe EMERGENCY_STOP posture',
+          passed: statePassed,
+          message: statePassed
+            ? 'Pasteurizer controller locked in safe EMERGENCY_STOP posture'
+            : `Pasteurizer controller failed to enter EMERGENCY_STOP (current: ${history[history.length - 1].plcState})`,
         },
       ];
     },
