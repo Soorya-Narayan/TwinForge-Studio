@@ -95,6 +95,7 @@ export const createIsolatedTestHarness = (
   const liveCandidate = driverOverride ?? (typeof useSimulationStore !== 'undefined' ? useSimulationStore.getState()?.plc : undefined);
   if (liveCandidate && liveCandidate.status?.driverType === 'opcua' && liveCandidate.status?.connected) {
     plc = liveCandidate as OpcUaPlcDriver;
+    plc.setSkid(skid);
   } else if (skid === 'PASTEURIZER_10KLPH') {
     plc = new PasteurizerPlcDriver();
   } else if (skid === 'BATCH_MIXING') {

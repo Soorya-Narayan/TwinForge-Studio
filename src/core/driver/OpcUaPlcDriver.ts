@@ -6,7 +6,7 @@
  */
 
 import type { Driver, DriverStatus } from './Driver';
-import { loadStoredTagMap } from './opcuaTagMap';
+import { loadStoredTagMap, getOutputTagsForSkid, DEFAULT_OPCUA_TAGS } from './opcuaTagMap';
 
 export type OpcUaSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt';
 export type OpcUaSecurityPolicy =
@@ -27,6 +27,7 @@ export interface OpcUaConnectionOptions {
   certificatePath?: string;
   privateKeyPath?: string;
   tagMap?: Record<string, string>;
+  activeSkid?: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
 }
 
 export interface InterlockStatus {
@@ -63,6 +64,7 @@ export class OpcUaPlcDriver implements Driver {
   public serverRunning: boolean = false;
   public state: string = 'OFFLINE';
   public tagMap: Record<string, string> = {};
+  public activeSkid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM' = 'PASTEURIZER_10KLPH';
 
   // Live I/O mirrors matching industrial PLC register tags
   public inputs: Record<string, boolean | number> = {};
@@ -77,30 +79,8 @@ export class OpcUaPlcDriver implements Driver {
     ['IL-DIFF', { id: 'IL-DIFF', name: 'Sanitary Differential Pressure (OPC UA)', condition: 'PT4 - PT2 >= 0.5 bar', isOk: true, tripped: false }],
   ]);
 
-  // Output tags to read cyclically from the real PLC
-  public outputTags: string[] = [
-    // Batch Mixing Skid
-    'P100_START',
-    'V101_CMD',
-    'V102_CMD',
-    'V103_CMD',
-    'HEATER_CMD',
-    'AGITATOR_CMD',
-    'PLC_STATE',
-    'IL-01',
-    'IL-02',
-    'IL-03',
-
-    // Pasteurizer Skid
-    'P_FEED_CMD',
-    'P_BOOSTER_CMD',
-    'P_HOT_WATER_CMD',
-    'PV11_CMD',
-    'PV12_CMD',
-    'MOD_VALVE',
-    'IL-FDV',
-    'IL-DIFF',
-  ];
+  // Output tags read cyclically from the real PLC (split per skid)
+  public outputTags: string[] = [];
 
   private isReading: boolean = false;
   private isWriting: boolean = false;
@@ -110,13 +90,41 @@ export class OpcUaPlcDriver implements Driver {
       this.endpointUrl = endpointOrOptions;
       this.securityOptions.endpointUrl = endpointOrOptions;
       this.tagMap = loadStoredTagMap();
+      this.activeSkid = 'PASTEURIZER_10KLPH';
     } else if (endpointOrOptions) {
       this.securityOptions = { ...this.securityOptions, ...endpointOrOptions };
       this.endpointUrl = endpointOrOptions.endpointUrl || this.endpointUrl;
       this.tagMap = endpointOrOptions.tagMap ? { ...endpointOrOptions.tagMap } : loadStoredTagMap();
+      this.activeSkid = endpointOrOptions.activeSkid || 'PASTEURIZER_10KLPH';
     } else {
       this.tagMap = loadStoredTagMap();
+      this.activeSkid = 'PASTEURIZER_10KLPH';
     }
+    this.outputTags = this.getActiveOutputTags();
+  }
+
+  /**
+   * Set the active plant skid to read only relevant tags during cyclic scans
+   */
+  public setSkid(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM'): void {
+    this.activeSkid = skid;
+    this.outputTags = this.getActiveOutputTags();
+  }
+
+  /**
+   * Returns output tags relevant to the currently active skid (plus any custom user tags)
+   */
+  public getActiveOutputTags(): string[] {
+    const baseTags = getOutputTagsForSkid(this.activeSkid);
+
+    // Also include any user-defined custom output tags from tagMap
+    const customOutputTags = Object.keys(this.tagMap).filter((tag) => {
+      const isKnown = DEFAULT_OPCUA_TAGS.some((d) => d.tag === tag);
+      if (isKnown) return false;
+      return tag.includes('CMD') || tag.includes('START') || tag.includes('IL-') || tag.includes('MOD_');
+    });
+
+    return [...new Set([...baseTags, ...customOutputTags])];
   }
 
   /**
@@ -124,6 +132,7 @@ export class OpcUaPlcDriver implements Driver {
    */
   public setTagMap(tagMap: Record<string, string>): void {
     this.tagMap = { ...this.tagMap, ...tagMap };
+    this.outputTags = this.getActiveOutputTags();
   }
 
   /**
@@ -282,12 +291,14 @@ export class OpcUaPlcDriver implements Driver {
     const startTime = performance.now();
 
     try {
-      // Map internal output tag names to configured real PLC NodeIds
-      const nodesToRead = this.outputTags.map((tag) => this.resolvePlcNodeId(tag));
+      // Split tag lists per skid: read only active skid's output tags on every scan
+      const tagsToRead = this.getActiveOutputTags();
+      this.outputTags = tagsToRead;
+      const nodesToRead = tagsToRead.map((tag) => this.resolvePlcNodeId(tag));
       const readResult = await api.readTags(nodesToRead);
       this.status.latencyMs = Math.round(performance.now() - startTime);
 
-      for (const internalTag of this.outputTags) {
+      for (const internalTag of tagsToRead) {
         const plcNodeId = this.resolvePlcNodeId(internalTag);
         const val = readResult[plcNodeId] ?? readResult[internalTag];
 

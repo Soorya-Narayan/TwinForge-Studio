@@ -178,10 +178,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     setDriverMode: async (mode, endpointOrOptions) => {
       stopLoop();
       const opts: OpcUaConnectionOptions = typeof endpointOrOptions === 'string'
-        ? { endpointUrl: endpointOrOptions, tagMap: get().opcuaTagMap }
+        ? { endpointUrl: endpointOrOptions, tagMap: get().opcuaTagMap, activeSkid: get().activeSkid }
         : endpointOrOptions
-        ? { tagMap: get().opcuaTagMap, ...endpointOrOptions }
-        : { endpointUrl: get().opcuaEndpoint, tagMap: get().opcuaTagMap };
+        ? { tagMap: get().opcuaTagMap, activeSkid: get().activeSkid, ...endpointOrOptions }
+        : { endpointUrl: get().opcuaEndpoint, tagMap: get().opcuaTagMap, activeSkid: get().activeSkid };
       const endpoint = opts.endpointUrl || get().opcuaEndpoint;
       opts.endpointUrl = endpoint;
 
@@ -243,6 +243,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         authMode: 'Username',
         username: 'admin',
         password: 'password',
+        tagMap: get().opcuaTagMap,
+        activeSkid: get().activeSkid,
       };
       if (plc instanceof OpcUaPlcDriver) {
         const endpoint = await plc.startLocalServer(port);
@@ -294,7 +296,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const newEngine = new PhysicsEngine(topology);
       const { driverMode, plc } = get();
       let newPlc = plc;
-      if (driverMode === 'MOCK' || !(plc instanceof OpcUaPlcDriver)) {
+      if (driverMode === 'OPCUA' && plc instanceof OpcUaPlcDriver) {
+        plc.setSkid(skid);
+      } else {
         newPlc = skid === 'PASTEURIZER_10KLPH' ? new PasteurizerPlcDriver() : new MockPlcDriver();
       }
       const snap = newEngine.tick(newPlc.readOutputs());
@@ -307,7 +311,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const newEngine = new PhysicsEngine(topology);
       const { driverMode, plc } = get();
       let newPlc = plc;
-      if (driverMode === 'MOCK' || !(plc instanceof OpcUaPlcDriver)) {
+      if (driverMode === 'OPCUA' && plc instanceof OpcUaPlcDriver) {
+        plc.setSkid('CUSTOM');
+      } else {
         newPlc = new GenericPlcDriver(topology);
       }
       const snap = newEngine.tick(newPlc.readOutputs());

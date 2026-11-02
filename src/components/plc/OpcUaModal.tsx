@@ -60,6 +60,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
   const disconnectOpcUa = useSimulationStore((s) => s.disconnectOpcUa);
   const startLocalOpcUaServer = useSimulationStore((s) => s.startLocalOpcUaServer);
   const stopLocalOpcUaServer = useSimulationStore((s) => s.stopLocalOpcUaServer);
+  const activeSkid = useSimulationStore((s) => s.activeSkid);
   const setOpcuaTagMap = useSimulationStore((s) => s.setOpcuaTagMap);
   const resetOpcuaTagMap = useSimulationStore((s) => s.resetOpcuaTagMap);
 
@@ -556,8 +557,23 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                 </button>
               </div>
 
-              <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                {isConnected ? `Live Sync (${latencyMs}ms)` : 'Config persisted locally'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    background: '#f1f5f9',
+                    color: '#334155',
+                    border: '1px solid #cbd5e1',
+                  }}
+                >
+                  Active Skid: {activeSkid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer' : activeSkid === 'BATCH_MIXING' ? 'Batch Mixing' : 'Custom'} ({opcDriver?.outputTags?.length ?? (activeSkid === 'PASTEURIZER_10KLPH' ? 8 : 10)} tags/scan)
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                  {isConnected ? `Live Sync (${latencyMs}ms)` : 'Config persisted locally'}
+                </span>
               </div>
             </div>
           )}
@@ -943,6 +959,31 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                 gap: 14,
               }}
             >
+              {/* Skid Scan Isolation Notice */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  fontSize: 11,
+                  color: '#0369a1',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Activity size={13} color="#0284c7" />
+                  <span>
+                    Current Scan Isolation: Polling <strong>{opcDriver?.outputTags?.length ?? (activeSkid === 'PASTEURIZER_10KLPH' ? 8 : 10)} tags</strong> for <strong>{activeSkid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer Skid (10k LPH)' : activeSkid === 'BATCH_MIXING' ? 'Batch Mixing Skid' : 'Custom Skid'}</strong>
+                  </span>
+                </div>
+                <span style={{ fontSize: 10, color: '#0284c7', fontWeight: 600 }}>
+                  Per-Skid Tag Splitting Active
+                </span>
+              </div>
+
               {/* Presets and Quick Actions */}
               <div
                 style={{

@@ -62,6 +62,68 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'IL-03', name: 'High Temp Safety Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-03', description: 'Thermal high-temperature trip status' },
 ];
 
+export const PASTEURIZER_OUTPUT_TAGS: string[] = [
+  'P_FEED_CMD',
+  'P_BOOSTER_CMD',
+  'P_HOT_WATER_CMD',
+  'PV11_CMD',
+  'PV12_CMD',
+  'MOD_VALVE',
+  'IL-FDV',
+  'IL-DIFF',
+];
+
+export const BATCH_MIXING_OUTPUT_TAGS: string[] = [
+  'P100_START',
+  'V101_CMD',
+  'V102_CMD',
+  'V103_CMD',
+  'HEATER_CMD',
+  'AGITATOR_CMD',
+  'PLC_STATE',
+  'IL-01',
+  'IL-02',
+  'IL-03',
+];
+
+export const PASTEURIZER_INPUT_TAGS: string[] = [
+  'TT1',
+  'TT2',
+  'TT3',
+  'TT4',
+  'TT5',
+  'FM',
+  'PT2',
+  'PT4',
+  'LT_BALANCE',
+  'LT_PRODUCT',
+];
+
+export const BATCH_MIXING_INPUT_TAGS: string[] = [
+  'TK100_LT',
+  'TK400_LT',
+  'TT100',
+  'FT100',
+  'PT100',
+  'V101_ZSO',
+  'E_STOP_PB',
+];
+
+/**
+ * Returns the output tags to poll cyclically for a specific skid, avoiding
+ * reading unnecessary tags from other processes.
+ */
+export function getOutputTagsForSkid(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM' | string): string[] {
+  if (skid === 'PASTEURIZER_10KLPH') {
+    return [...PASTEURIZER_OUTPUT_TAGS];
+  }
+  if (skid === 'BATCH_MIXING') {
+    return [...BATCH_MIXING_OUTPUT_TAGS];
+  }
+  // CUSTOM skid: return all known outputs
+  return [...PASTEURIZER_OUTPUT_TAGS, ...BATCH_MIXING_OUTPUT_TAGS];
+}
+
 export const TAG_MAP_STORAGE_KEY = 'twinforge_opcua_tag_map';
 
 export function getDefaultTagMap(): Record<string, string> {
