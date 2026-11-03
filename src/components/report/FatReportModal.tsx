@@ -229,7 +229,7 @@ export const FatReportModal: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShieldCheck size={18} color="var(--color-success)" />
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Factory Acceptance Test (FAT) Report · Phase G
+              Factory Acceptance Test (FAT) Report
             </span>
           </div>
 
@@ -481,7 +481,7 @@ export const FatReportModal: React.FC = () => {
                 FACTORY ACCEPTANCE TEST REPORT
               </h1>
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
-                Automated Virtual Commissioning & Interlock Verification Report (Phase G)
+                Automated Virtual Commissioning & Interlock Verification Report
               </p>
             </div>
             <div style={{ textAlign: 'right', paddingTop: 6 }}>
