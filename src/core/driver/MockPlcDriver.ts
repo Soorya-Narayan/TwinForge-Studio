@@ -109,12 +109,25 @@ export class MockPlcDriver implements Driver {
   public tick(dtMs: number): void {
     const dtSeconds = dtMs / 1000.0;
 
+    // Lockstep sequence-number handshake echo
+    if (this.inputs['SEQ'] !== undefined) {
+      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
+    }
+
     // 1. Evaluate Interlock Matrix
     this.evaluateInterlocks();
 
     // 2. State Machine Logic (in AUTO mode)
     if (this.mode === 'AUTO') {
       this.evaluateBatchStateMachine(dtSeconds);
+    }
+  }
+
+  public waitForSeqAck(expectedSeq: number, timeoutMs: number = 3000): void {
+    if (Number(this.outputs['SEQ_ACK']) !== expectedSeq) {
+      throw new Error(
+        `Lockstep handshake timeout: PLC failed to acknowledge SEQ = ${expectedSeq} (received SEQ_ACK = ${this.outputs['SEQ_ACK']}) within ${timeoutMs}ms`
+      );
     }
   }
 

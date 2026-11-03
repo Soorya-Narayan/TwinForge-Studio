@@ -64,7 +64,7 @@ export const FatSuitePanel: React.FC = () => {
                   background: scanMode === 'lockstep' ? '#0284c7' : '#94a3b8',
                   color: '#ffffff',
                 }}
-                title="Lockstep: Write inputs -> Wait PLC scan -> Read outputs -> Tick engine"
+                title="Lockstep: Write inputs (SEQ = n) -> Wait PLC SEQ_ACK echo -> Read outputs -> Tick engine"
               >
                 {scanMode === 'lockstep' ? 'LOCKSTEP' : 'CLASSIC'}
               </button>

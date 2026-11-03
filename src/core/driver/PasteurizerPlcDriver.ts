@@ -97,11 +97,24 @@ export class PasteurizerPlcDriver implements Driver {
 
   public tick(dtMs: number): void {
     void dtMs;
+    // Lockstep sequence-number handshake echo
+    if (this.inputs['SEQ'] !== undefined) {
+      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
+    }
+
     // 1. Evaluate Legal Safety Interlocks
     this.evaluateInterlocks();
 
     // 2. Advance Pasteurization State Machine
     this.advanceStateMachine();
+  }
+
+  public waitForSeqAck(expectedSeq: number, timeoutMs: number = 3000): void {
+    if (Number(this.outputs['SEQ_ACK']) !== expectedSeq) {
+      throw new Error(
+        `Lockstep handshake timeout: PLC failed to acknowledge SEQ = ${expectedSeq} (received SEQ_ACK = ${this.outputs['SEQ_ACK']}) within ${timeoutMs}ms`
+      );
+    }
   }
 
   private evaluateInterlocks(): void {

@@ -304,10 +304,14 @@ export const useFatStore = create<FatStore>()(
 
           await test.stimulus(engine, plc, step, history);
 
-          // Step 1: Write inputs to PLC
+          // Sequence-number handshake for lockstep synchronization
+          const seq = step + 1;
+          currentInputs.SEQ = seq;
+
+          // Step 1: Write inputs (with SEQ = n) to PLC
           await plc.writeInputs(currentInputs);
 
-          // Step 2: Wait for PLC scan
+          // Step 2: Trigger PLC scan cycle
           if (typeof plc.tick === 'function') {
             await plc.tick(dtMs);
           } else {
@@ -318,14 +322,44 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          // Step 3: Read outputs from PLC
+          // Step 3: Wait for PLC to echo SEQ as SEQ_ACK before reading outputs
+          const handshakeTimeoutMs = Math.max(3000, dtMs * 15);
+          if (typeof (plc as any).waitForSeqAck === 'function') {
+            await (plc as any).waitForSeqAck(seq, handshakeTimeoutMs);
+          } else {
+            const startWait = performance.now();
+            let checkOutputs = await plc.readOutputs();
+            while (Number(checkOutputs['SEQ_ACK']) !== seq) {
+              if (!plc.status.connected) {
+                throw new Error(`PLC connection lost while waiting for SEQ_ACK = ${seq} (${driverDetails}). Stale outputs discarded.`);
+              }
+              if (performance.now() - startWait >= handshakeTimeoutMs) {
+                const actualAck = checkOutputs['SEQ_ACK'];
+                throw new Error(
+                  `Lockstep handshake timeout: PLC failed to acknowledge SEQ = ${seq} (received SEQ_ACK = ${actualAck !== undefined ? actualAck : 'none'}) within ${handshakeTimeoutMs}ms (${driverDetails}).`
+                );
+              }
+              await new Promise((r) => setTimeout(r, Math.min(20, dtMs)));
+              if (typeof (plc as any).syncOutputsFromPlc === 'function') {
+                await (plc as any).syncOutputsFromPlc();
+              }
+              checkOutputs = await plc.readOutputs();
+            }
+          }
+
+          if (!plc.status.connected) {
+            throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
+          }
+
+          // Step 4: Read verified outputs from PLC
           const outputs = await plc.readOutputs();
 
           if (!plc.status.connected) {
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          // Step 4: Then tick the engine
+          // Step 5: Then tick the engine
+          const executedInputs = { ...currentInputs };
           const snap = engine.tick(outputs, dtMs);
           currentInputs = { ...snap.tags.inputs };
 
@@ -340,7 +374,7 @@ export const useFatStore = create<FatStore>()(
             step,
             scan: snap.scan,
             timeMs: snap.timeMs,
-            inputs: { ...snap.tags.inputs },
+            inputs: executedInputs,
             outputs: { ...outputs },
             plcState: (plc as any).state,
             interlocks,
@@ -433,19 +467,24 @@ export const useFatStore = create<FatStore>()(
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`Error executing scenario [${test.id}]:`, err);
 
+      const isHandshakeTimeout = errorMsg.toLowerCase().includes('handshake timeout');
       const isConnectionLost =
-        !plc.status.connected ||
-        errorMsg.toLowerCase().includes('connection lost') ||
-        errorMsg.toLowerCase().includes('disconnected') ||
-        errorMsg.toLowerCase().includes('offline') ||
-        errorMsg.toLowerCase().includes('not connected');
+        !isHandshakeTimeout && (
+          !plc.status.connected ||
+          errorMsg.toLowerCase().includes('connection lost') ||
+          errorMsg.toLowerCase().includes('disconnected') ||
+          errorMsg.toLowerCase().includes('offline') ||
+          errorMsg.toLowerCase().includes('not connected')
+        );
 
       const failedAssertion: TestAssertion = {
-        tag: isConnectionLost ? 'PLC_CONNECTION' : 'SCENARIO_EXECUTION',
-        expected: isConnectionLost ? 'CONNECTED' : 'COMPLETED_WITHOUT_ERROR',
-        actual: isConnectionLost ? 'DISCONNECTED' : `ERROR: ${errorMsg}`,
+        tag: isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'SCENARIO_EXECUTION',
+        expected: isHandshakeTimeout ? 'SEQ_ACK == SEQ' : isConnectionLost ? 'CONNECTED' : 'COMPLETED_WITHOUT_ERROR',
+        actual: isHandshakeTimeout ? 'TIMEOUT / NO_ACK' : isConnectionLost ? 'DISCONNECTED' : `ERROR: ${errorMsg}`,
         passed: false,
-        message: isConnectionLost
+        message: isHandshakeTimeout
+          ? `Lockstep handshake failure: ${errorMsg}`
+          : isConnectionLost
           ? `FAT Test aborted: PLC communication failure at scan ${history.length + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`
           : `Scenario aborted with runtime exception: ${errorMsg}`,
       };
@@ -453,13 +492,15 @@ export const useFatStore = create<FatStore>()(
       get().addJournalEntry({
         scan: history[history.length - 1]?.scan ?? history.length,
         timeFormatted: new Date().toLocaleTimeString(),
-        source: isConnectionLost ? 'DRIVER' : 'TEST_GEN',
-        eventType: isConnectionLost ? 'ALARM' : 'ASSERTION',
-        description: isConnectionLost
+        source: isHandshakeTimeout || isConnectionLost ? 'DRIVER' : 'TEST_GEN',
+        eventType: isHandshakeTimeout || isConnectionLost ? 'ALARM' : 'ASSERTION',
+        description: isHandshakeTimeout
+          ? `LOCKSTEP HANDSHAKE TIMEOUT on [${test.id}]: ${errorMsg}`
+          : isConnectionLost
           ? `COMMUNICATION FAILURE on [${test.id}]: ${errorMsg}`
           : `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
-        tag: isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
-        value: isConnectionLost ? 'DISCONNECTED' : errorMsg,
+        tag: isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
+        value: isHandshakeTimeout ? 'TIMEOUT' : isConnectionLost ? 'DISCONNECTED' : errorMsg,
         status: 'FAIL',
       });
 

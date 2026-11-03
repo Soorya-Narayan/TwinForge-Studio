@@ -60,6 +60,10 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'IL-01', name: 'Suction Interlock Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-01', description: 'Suction valve open interlock status' },
   { tag: 'IL-02', name: 'Low Level Permissive Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-02', description: 'Minimum tank inventory permissive status' },
   { tag: 'IL-03', name: 'High Temp Safety Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-03', description: 'Thermal high-temperature trip status' },
+
+  // Lockstep Handshake Tags (Common)
+  { tag: 'SEQ', name: 'Lockstep Scan Sequence', skid: 'COMMON', direction: 'INPUT', dataType: 'Int32', defaultNodeId: 'ns=1;s=SEQ', description: 'Lockstep scan sequence number written by test harness' },
+  { tag: 'SEQ_ACK', name: 'Lockstep Sequence Acknowledgment', skid: 'COMMON', direction: 'OUTPUT', dataType: 'Int32', defaultNodeId: 'ns=1;s=SEQ_ACK', description: 'Lockstep scan sequence number echoed by PLC' },
 ];
 
 export const PASTEURIZER_OUTPUT_TAGS: string[] = [
@@ -109,19 +113,23 @@ export const BATCH_MIXING_INPUT_TAGS: string[] = [
   'E_STOP_PB',
 ];
 
+export const COMMON_OUTPUT_TAGS: string[] = ['SEQ_ACK'];
+export const COMMON_INPUT_TAGS: string[] = ['SEQ'];
+
 /**
  * Returns the output tags to poll cyclically for a specific skid, avoiding
  * reading unnecessary tags from other processes.
  */
 export function getOutputTagsForSkid(skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM' | string): string[] {
+  let tags: string[];
   if (skid === 'PASTEURIZER_10KLPH') {
-    return [...PASTEURIZER_OUTPUT_TAGS];
+    tags = [...PASTEURIZER_OUTPUT_TAGS];
+  } else if (skid === 'BATCH_MIXING') {
+    tags = [...BATCH_MIXING_OUTPUT_TAGS];
+  } else {
+    tags = [...PASTEURIZER_OUTPUT_TAGS, ...BATCH_MIXING_OUTPUT_TAGS];
   }
-  if (skid === 'BATCH_MIXING') {
-    return [...BATCH_MIXING_OUTPUT_TAGS];
-  }
-  // CUSTOM skid: return all known outputs
-  return [...PASTEURIZER_OUTPUT_TAGS, ...BATCH_MIXING_OUTPUT_TAGS];
+  return [...new Set([...tags, ...COMMON_OUTPUT_TAGS])];
 }
 
 export const TAG_MAP_STORAGE_KEY = 'twinforge_opcua_tag_map';

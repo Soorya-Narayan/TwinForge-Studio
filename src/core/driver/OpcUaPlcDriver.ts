@@ -441,6 +441,9 @@ export class OpcUaPlcDriver implements Driver {
       const api = this.customApi || getElectronOpcUa();
       if (!api) {
         if (this.state === 'EMULATED_CONNECTED') {
+          if (inputs['SEQ'] !== undefined) {
+            this.outputs['SEQ_ACK'] = Number(inputs['SEQ']);
+          }
           return;
         }
         throw new Error(`Cannot write inputs: Electron OPC UA API is unavailable (${this.endpointUrl})`);
@@ -450,9 +453,13 @@ export class OpcUaPlcDriver implements Driver {
 
       for (const [tag, value] of Object.entries(inputs)) {
         const plcNodeId = this.resolvePlcNodeId(tag);
+        let dataType: string = typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double';
+        if (tag === 'SEQ' || Number.isInteger(value)) {
+          dataType = 'Int32';
+        }
         writePayload[plcNodeId] = {
           value,
-          dataType: typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double',
+          dataType,
         };
       }
 
@@ -496,6 +503,42 @@ export class OpcUaPlcDriver implements Driver {
 
     // Poll latest outputs produced by the PLC during its scan
     await this.syncOutputsFromPlc();
+  }
+
+  /**
+   * Sequence-number handshake for lockstep scan verification.
+   * Awaits until the PLC outputs SEQ_ACK matching expectedSeq.
+   * If the handshake does not complete within timeoutMs, throws an Error that fails the test.
+   */
+  public async waitForSeqAck(expectedSeq: number, timeoutMs: number = 3000): Promise<void> {
+    if (!this.status.connected) {
+      throw new Error(
+        `Lockstep handshake failed: OPC UA driver is disconnected (${this.endpointUrl}). Stale outputs discarded.`
+      );
+    }
+
+    if (this.state === 'EMULATED_CONNECTED') {
+      this.outputs['SEQ_ACK'] = expectedSeq;
+      return;
+    }
+
+    const startTime = performance.now();
+    while (Number(this.outputs['SEQ_ACK']) !== expectedSeq) {
+      if (!this.status.connected) {
+        throw new Error(
+          `Lockstep handshake failed: OPC UA driver disconnected while waiting for SEQ_ACK = ${expectedSeq} (${this.endpointUrl})`
+        );
+      }
+      if (performance.now() - startTime >= timeoutMs) {
+        const receivedAck = this.outputs['SEQ_ACK'];
+        throw new Error(
+          `Lockstep handshake timeout: PLC failed to acknowledge SEQ = ${expectedSeq} (received SEQ_ACK = ${receivedAck !== undefined ? receivedAck : 'none'}) within ${timeoutMs}ms (${this.endpointUrl}).`
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, Math.min(20, this.status.lastScanMs || 50)));
+      await this.syncOutputsFromPlc();
+    }
   }
 
   /**

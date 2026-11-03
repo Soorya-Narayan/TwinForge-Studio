@@ -422,6 +422,9 @@ export class OpcUaManager {
           { name: 'MOD_VALVE', type: DataType.Double, initial: 45.0 },
           { name: 'IL-FDV', type: DataType.Boolean, initial: true },
           { name: 'IL-DIFF', type: DataType.Boolean, initial: true },
+          // Lockstep Handshake Tags
+          { name: 'SEQ', type: DataType.Int32, initial: 0 },
+          { name: 'SEQ_ACK', type: DataType.Int32, initial: 0 },
         ];
 
         for (const tag of defaultTags) {
@@ -429,7 +432,14 @@ export class OpcUaManager {
             componentOf: plantFolder,
             browseName: tag.name,
             nodeId: `ns=1;s=${tag.name}`,
-            dataType: tag.type === DataType.Boolean ? 'Boolean' : tag.type === DataType.String ? 'String' : 'Double',
+            dataType:
+              tag.type === DataType.Boolean
+                ? 'Boolean'
+                : tag.type === DataType.String
+                ? 'String'
+                : tag.type === DataType.Int32
+                ? 'Int32'
+                : 'Double',
             value: { dataType: tag.type, value: tag.initial },
           });
 
