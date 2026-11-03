@@ -368,6 +368,25 @@ export const FatReportModal: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Lead:</label>
+            <input
+              type="text"
+              value={projectSettings.commissioningLead || ''}
+              onChange={(e) => setProjectSettings({ commissioningLead: e.target.value })}
+              placeholder="Commissioning Lead"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 160,
+                background: '#ffffff',
+                color: '#0f172a',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={{ color: '#475569', fontWeight: 600 }}>Logo:</label>
             <label
               className="btn btn-ghost"
