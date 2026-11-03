@@ -8,7 +8,7 @@
 import fs from 'fs';
 import {
   OPCUAClient,
-  ClientSession,
+  type ClientSession,
   AttributeIds,
   DataType,
   StatusCodes,
