@@ -1,6 +1,6 @@
 /**
- * TwinForge Studio - Real PLC Driver & OPC UA Connection Modal
- * Configures connection to real external PLCs via OPC UA (node-opcua) or embedded test server.
+ * TwinForge Studio - OPC UA PLC Driver & Connection Modal
+ * Configures connection to external OPC UA servers (node-opcua) or embedded test server.
  */
 
 import React, { useState } from 'react';
@@ -157,7 +157,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
       await setDriverMode(mode, opts);
       setStatusMsg({
         type: 'success',
-        text: mode === 'OPCUA' ? 'Switched to Real PLC Driver (OPC UA)' : 'Switched to In-Process Mock PLC Driver',
+        text: mode === 'OPCUA' ? 'Switched to OPC UA Driver' : 'Switched to In-Process Mock PLC Driver',
       });
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err?.message || 'Failed to switch driver' });
@@ -462,7 +462,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                 PLC Driver Configuration · OPC UA (IEC 62541)
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                Hardware-in-the-Loop simulation & real industrial PLC FAT verification
+                OPC UA simulation & automated PLC FAT verification
               </div>
             </div>
           </div>
@@ -555,11 +555,11 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <Server size={16} color={isOpcUa ? 'var(--color-primary)' : 'var(--text-secondary)'} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Real PLC · OPC UA Driver
+                    OPC UA Driver
                   </span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  Communicates with live physical PLC or software controller via <strong>node-opcua</strong>.
+                  Communicates with external OPC UA server or software controller via <strong>node-opcua</strong>.
                 </div>
               </div>
             </div>

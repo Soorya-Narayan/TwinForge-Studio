@@ -21,7 +21,7 @@ export interface TagDefinition {
 
 export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   // Pasteurizer Skid Inputs (Simulator Sensors -> PLC Input registers)
-  // Real PLCs (Siemens S7 REAL, Rockwell REAL) use 32-bit single-precision Float
+  // External PLCs (Siemens S7 REAL, Rockwell REAL) use 32-bit single-precision Float
   { tag: 'TT1', name: 'Raw Milk In Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT1', description: 'Raw milk intake temperature (°C)' },
   { tag: 'TT2', name: 'Pre-heat Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT2', description: 'Pre-heating exit temperature (°C)' },
   { tag: 'TT3', name: 'Heating Section Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT3', description: 'Hot water heating zone exit temperature (°C)' },

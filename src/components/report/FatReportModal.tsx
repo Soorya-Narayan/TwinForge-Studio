@@ -7,7 +7,7 @@ import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { computeEvidenceFingerprint } from '../../core/report/fingerprint';
-import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { FatReportToolbar } from './FatReportToolbar';
 import { FatReportSettingsBar } from './FatReportSettingsBar';
 import { FatReportTable } from './FatReportTable';
@@ -261,7 +261,17 @@ export const FatReportModal: React.FC = () => {
             </div>
             <div>
               <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>PLC Controller Platform:</span>
-              <strong style={{ fontSize: 12, color: harnessDriver.driverType === 'opcua' ? '#0284c7' : '#0f172a' }}>
+              <strong
+                style={{
+                  fontSize: 12,
+                  color:
+                    harnessDriver.driverType === 'opcua'
+                      ? '#0284c7'
+                      : harnessDriver.driverType === 'opcua-loopback'
+                      ? '#d97706'
+                      : '#0f172a',
+                }}
+              >
                 {harnessDriver.details}
               </strong>
             </div>
@@ -300,6 +310,30 @@ export const FatReportModal: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {/* Loopback Test Server Notice */}
+          {harnessDriver.driverType === 'opcua-loopback' && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: '10px 14px',
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 4,
+                color: '#92400e',
+                fontSize: 11,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0 }} />
+              <span>
+                Tests ran against the built-in Loopback Test Server, which contains no PLC control logic. These results do not verify any PLC program.
+              </span>
+            </div>
+          )}
 
           {/* Executive Summary */}
           <div style={{ marginBottom: 20 }}>

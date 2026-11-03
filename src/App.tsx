@@ -177,7 +177,7 @@ export function App() {
             <Server size={13} color={driverMode === 'OPCUA' ? 'var(--color-success)' : 'var(--text-secondary)'} />
             <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>PLC:</span>
             <span style={{ fontWeight: 700, color: driverMode === 'OPCUA' ? '#15803d' : '#334155' }}>
-              {driverMode === 'OPCUA' ? 'Real PLC (OPC UA)' : 'Mock Driver'}
+              {driverMode === 'OPCUA' ? 'OPC UA Driver' : 'Mock Driver'}
             </span>
           </button>
 

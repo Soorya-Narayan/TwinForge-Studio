@@ -1,7 +1,8 @@
 /**
- * TwinForge Studio - OPC UA Real PLC Driver
+ * TwinForge Studio - OPC UA PLC Driver
  * 
- * Communicates with external PLC controllers over OPC UA (IEC 62541).
+ * Communicates with an external OPC UA server (IEC 62541), typically a PLC or soft-PLC,
+ * or with the app's built-in Loopback Test Server (which contains no PLC control logic).
  * Uses node-opcua in Electron main process to read live outputs and write simulation sensors.
  */
 
@@ -32,6 +33,11 @@ export type OpcUaSecurityPolicy =
 export type OpcUaAuthMode = 'Anonymous' | 'Username' | 'Certificate';
 
 export type OpcUaConcurrencyMode = 'wait' | 'throw';
+
+/** Standard NodeId of Server.ServerStatus.BuildInfo.ProductName (VariableIds.Server_ServerStatus_BuildInfo_ProductName) */
+export const BUILDINFO_PRODUCT_NAME_NODE = 'ns=0;i=2261';
+/** BuildInfo.ProductName advertised by the built-in loopback server in electron/opcuaManager.ts */
+export const LOOPBACK_PRODUCT_NAME = 'Loopback Test Server';
 
 export interface OpcUaConnectionOptions {
   endpointUrl: string;
@@ -170,10 +176,10 @@ export class OpcUaPlcDriver implements Driver {
   public inputs: Record<string, boolean | number> = {};
   public outputs: Record<string, boolean | number> = {};
 
-  // Interlock status parsed from configuration and updated from real PLC
+  // Interlock status parsed from configuration and updated from connected PLC
   public interlocks: Map<string, InterlockStatus> = new Map();
 
-  // Output tags read cyclically from the real PLC (split per skid)
+  // Output tags read cyclically from the connected PLC (split per skid)
   public outputTags: string[] = [];
 
   private _isReading: boolean = false;
@@ -201,6 +207,30 @@ export class OpcUaPlcDriver implements Driver {
   private readLock = new AsyncLock('read');
 
   public serverNodeDataTypes: Record<string, TagDataType> = {};
+
+  /** Endpoint URL returned by startLocalServer() for the built-in Loopback Test Server */
+  private localServerEndpointUrl: string | null = null;
+  /** BuildInfo.ProductName read from the connected server after connect (null if unreadable) */
+  private _serverProductName: string | null = null;
+  /** Set at connect time from the facts above; never guessed */
+  private _loopbackSession: boolean = false;
+
+  /**
+   * BuildInfo.ProductName reported by the connected OPC UA server (null if not read).
+   */
+  public get serverProductName(): string | null {
+    return this._serverProductName;
+  }
+
+  /**
+   * True only while connected to the app's built-in Loopback Test Server.
+   * Determined at connect time from (a) the endpoint URL matching the URL returned by
+   * startLocalServer() while the server is running, and/or (b) the server's
+   * BuildInfo.ProductName being "Loopback Test Server".
+   */
+  public isLoopbackSession(): boolean {
+    return this.status.connected && this._loopbackSession;
+  }
 
   constructor(endpointOrOptions?: string | OpcUaConnectionOptions) {
     if (typeof endpointOrOptions === 'string') {
@@ -304,7 +334,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   /**
-   * Set or update tag mapping (internal simulator tag -> real PLC NodeId)
+   * Set or update tag mapping (internal simulator tag -> PLC NodeId)
    */
   public setTagMap(tagMap: Record<string, string>): void {
     this.tagMap = { ...this.tagMap, ...tagMap };
@@ -333,7 +363,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   /**
-   * Translate internal tag name to real PLC NodeId
+   * Translate internal tag name to PLC NodeId
    */
   public resolvePlcNodeId(internalTag: string): string {
     return this.tagMap[internalTag] || internalTag;
@@ -367,10 +397,14 @@ export class OpcUaPlcDriver implements Driver {
       );
     }
 
+    this._loopbackSession = false;
+    this._serverProductName = null;
+
     const res = await api.connect(connOpts);
     if (res.success) {
       this.status.connected = true;
       this.state = 'CONNECTED';
+      await this.detectLoopbackSession(api);
       await this.discoverServerDataTypes();
       await this.syncOutputsFromPlc();
     } else {
@@ -378,6 +412,39 @@ export class OpcUaPlcDriver implements Driver {
       this.state = 'DISCONNECTED';
       throw new Error(res.error || 'Failed to connect to OPC UA server');
     }
+  }
+
+  /**
+   * Decide whether the current session targets the built-in Loopback Test Server.
+   * Uses only facts: the URL returned by startLocalServer() (from this driver or the
+   * main-process status) and the server's BuildInfo.ProductName (ns=0;i=2261).
+   */
+  private async detectLoopbackSession(api: any): Promise<void> {
+    let urlMatches = this.serverRunning && this.localServerEndpointUrl !== null && this.endpointUrl === this.localServerEndpointUrl;
+
+    if (!urlMatches && typeof api.getStatus === 'function') {
+      try {
+        const st = await api.getStatus();
+        urlMatches = Boolean(st?.serverRunning && st?.serverEndpointUrl && st.serverEndpointUrl === this.endpointUrl);
+      } catch {
+        // Status unavailable: rely on BuildInfo check below
+      }
+    }
+
+    let productMatches = false;
+    if (typeof api.readTags === 'function') {
+      try {
+        const res = await api.readTags([BUILDINFO_PRODUCT_NAME_NODE]);
+        const raw = res?.[BUILDINFO_PRODUCT_NAME_NODE];
+        const name = raw === null || raw === undefined ? null : String(typeof raw === 'object' && 'text' in raw ? raw.text : raw);
+        this._serverProductName = name;
+        productMatches = name === LOOPBACK_PRODUCT_NAME;
+      } catch {
+        this._serverProductName = null;
+      }
+    }
+
+    this._loopbackSession = urlMatches || productMatches;
   }
 
   /**
@@ -421,6 +488,8 @@ export class OpcUaPlcDriver implements Driver {
     }
     this.status.connected = false;
     this.state = 'OFFLINE';
+    this._loopbackSession = false;
+    this._serverProductName = null;
     this.outputs = {}; // Invalidate stale outputs upon disconnect
     this.serverNodeDataTypes = {};
     this.isWriting = false;
@@ -442,6 +511,7 @@ export class OpcUaPlcDriver implements Driver {
       throw new Error(res.error || 'Could not start local test OPC UA server');
     }
     this.serverRunning = true;
+    this.localServerEndpointUrl = res.endpointUrl;
     this.endpointUrl = res.endpointUrl;
     return res.endpointUrl;
   }
@@ -454,6 +524,7 @@ export class OpcUaPlcDriver implements Driver {
     if (api) {
       await api.stopLocalServer();
       this.serverRunning = false;
+      this.localServerEndpointUrl = null;
     }
   }
 
@@ -465,10 +536,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   /**
-   * Writes physical sensor and feedback states to the real PLC
-   */
-  /**
-   * Writes physical sensor and feedback states to the real PLC.
+   * Writes physical sensor and feedback states to the connected PLC.
    * If a write is currently in progress, it waits for completion up to operationTimeoutMs,
    * or throws immediately if concurrencyMode is 'throw'. Never silently returns.
    */
@@ -637,7 +705,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   /**
-   * Asynchronously poll live outputs from the real PLC.
+   * Asynchronously poll live outputs from the connected PLC.
    * If a read is currently in progress, it waits for completion up to operationTimeoutMs,
    * or throws immediately if concurrencyMode is 'throw'. Never silently returns.
    */
@@ -838,7 +906,7 @@ export class OpcUaPlcDriver implements Driver {
     }
 
     throw new Error(
-      `Reset precondition failed: Real PLC state is '${lastKnownState}', expected ${validStates.map((s) => `'${s}'`).join(' or ')} within ${timeoutMs}ms (${this.endpointUrl}).`
+      `Reset precondition failed: PLC state is '${lastKnownState}', expected ${validStates.map((s) => `'${s}'`).join(' or ')} within ${timeoutMs}ms (${this.endpointUrl}).`
     );
   }
 

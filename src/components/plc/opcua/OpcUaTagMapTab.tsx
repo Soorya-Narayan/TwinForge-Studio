@@ -419,7 +419,7 @@ export const OpcUaTagMapTab: React.FC<OpcUaTagMapTabProps> = ({
           </div>
           <div>
             <label style={{ fontSize: 10, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 2 }}>
-              Real PLC NodeId:
+              PLC NodeId:
             </label>
             <input
               type="text"
@@ -485,7 +485,7 @@ export const OpcUaTagMapTab: React.FC<OpcUaTagMapTabProps> = ({
                 Direction / Type
               </th>
               <th style={{ padding: '8px 12px', fontWeight: 700, color: '#334155', width: '42%' }}>
-                Real PLC NodeId (Addressing)
+                PLC NodeId (Addressing)
               </th>
               <th style={{ padding: '8px 8px', fontWeight: 700, color: '#334155', width: '8%', textAlign: 'center' }}>
                 Action
@@ -587,7 +587,7 @@ export const OpcUaTagMapTab: React.FC<OpcUaTagMapTabProps> = ({
                       </div>
                     </td>
 
-                    {/* Real PLC NodeId Editable Input */}
+                    {/* PLC NodeId Editable Input */}
                     <td style={{ padding: '6px 12px', verticalAlign: 'middle' }}>
                       <input
                         type="text"

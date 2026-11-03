@@ -1,6 +1,9 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { OpcUaManager } from '../../../../electron/opcuaManager';
 import { OpcUaPlcDriver } from '../OpcUaPlcDriver';
+import { useFatStore } from '../../../store/useFatStore';
+import { getFatScenarios } from '../../testgen/scenarios';
+import { computeEvidenceFingerprint } from '../../report/fingerprint';
 
 describe('OPC UA Loopback Server Lockstep Integration', () => {
   const manager = new OpcUaManager();
@@ -95,4 +98,67 @@ describe('OPC UA Loopback Server Lockstep Integration', () => {
     await manager.stopLocalServer();
     expect(manager.getStatus().serverRunning).toBe(false);
   }, 20000);
+
+  it('identifies loopback session and labels driver as opcua-loopback without Real PLC claims in FAT runner and evidence', async () => {
+    const loopbackPort = 4853;
+    const startRes = await manager.startLocalServer(loopbackPort);
+    expect(startRes.success).toBe(true);
+
+    const bridge = {
+      connect: (opts: any) => manager.connect(opts),
+      disconnect: () => manager.disconnect(),
+      readTags: (tags: string[]) => manager.readTags(tags),
+      readNodeDataTypes: (tags: string[]) => manager.readNodeDataTypes(tags),
+      writeTags: (tags: any) => manager.writeTags(tags),
+      startLocalServer: (port?: number) => manager.startLocalServer(port),
+      stopLocalServer: () => manager.stopLocalServer(),
+      getStatus: () => manager.getStatus(),
+    };
+
+    const loopbackDriver = new OpcUaPlcDriver({
+      endpointUrl: startRes.endpointUrl!,
+      authMode: 'Username',
+      username: 'admin',
+      password: 'admin',
+    });
+    loopbackDriver.customApi = bridge;
+
+    await loopbackDriver.connect();
+    expect(loopbackDriver.isLoopbackSession()).toBe(true);
+    expect(loopbackDriver.serverProductName).toBe('Loopback Test Server');
+
+    const testScenario = getFatScenarios('PASTEURIZER_10KLPH')[0];
+    await useFatStore.getState().runSingleTest(testScenario.id, loopbackDriver);
+
+    const storeState = useFatStore.getState();
+    const result = storeState.results.find((r) => r.testId === testScenario.id);
+    expect(result).toBeDefined();
+    if (!result) throw new Error('Result not found');
+    if (!result.driver) throw new Error('Driver not found');
+    expect(result.driver.driverType).toBe('opcua-loopback');
+    expect(result.driver.details).toContain('Loopback Test Server');
+    expect(result.driver.details).not.toContain('Real PLC');
+    expect(storeState.executionDriverInfo?.driverType).toBe('opcua-loopback');
+
+    // Build evidence payload like FatReportModal does and verify fingerprint
+    const payloadObject = {
+      certificateRef: storeState.projectSettings.certificateRef,
+      customerName: storeState.projectSettings.customerName,
+      authority: storeState.projectSettings.clientAuthority,
+      lead: storeState.projectSettings.commissioningLead,
+      results: storeState.results,
+      journal: storeState.journal,
+      driver: storeState.executionDriverInfo,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { payloadString } = await computeEvidenceFingerprint(payloadObject);
+    expect(payloadString).not.toContain('Real PLC');
+    expect(payloadString).toContain('opcua-loopback');
+    expect(payloadString).toContain('Loopback Test Server');
+
+    await loopbackDriver.disconnect();
+    await manager.stopLocalServer();
+  }, 30000);
 });
+

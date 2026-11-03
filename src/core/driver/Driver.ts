@@ -72,6 +72,12 @@ export interface Driver {
   waitForSeqAck?(expectedSeq: number, timeoutMs?: number): Promise<void> | void;
 
   /**
+   * True only when the live session is connected to the app's built-in
+   * Loopback Test Server (which contains no PLC control logic).
+   */
+  isLoopbackSession?(): boolean;
+
+  /**
    * Set runtime interlock definitions
    */
   setInterlockDefinitions?(defs: any): void;

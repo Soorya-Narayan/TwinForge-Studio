@@ -261,12 +261,23 @@ export const useFatStore = create<FatStore>()(
       plc.status.connected &&
       ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean(plc.customApi))
     );
+    const isLoopbackHarness = hasLiveElectronSession && plc.isLoopbackSession?.() === true;
 
     const driverName = plc.constructor?.name || (hasLiveElectronSession ? 'OpcUaPlcDriver' : 'MockPlcDriver');
-    const driverType = hasLiveElectronSession ? 'opcua' : 'mock';
-    const driverDetails = hasLiveElectronSession
-      ? `Real PLC via node-opcua (${plc.endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
+    const harnessEndpoint = plc.endpointUrl || 'opc.tcp://127.0.0.1:4840';
+    const driverType: TestDriverInfo['driverType'] = !hasLiveElectronSession
+      ? 'mock'
+      : isLoopbackHarness
+      ? 'opcua-loopback'
+      : 'opcua';
+    const driverDetails = driverType === 'opcua-loopback'
+      ? `Loopback Test Server (no control logic) (${harnessEndpoint})`
+      : driverType === 'opcua'
+      ? `External OPC UA server via node-opcua (${harnessEndpoint})`
       : `In-Process Mock Driver (${driverName})`;
+    // Both OPC UA harness kinds exchange I/O over the network, so measured time and
+    // I/O timing tolerance apply to both. Only an external server may be called HIL.
+    const isOpcUaHarness = driverType === 'opcua' || driverType === 'opcua-loopback';
 
     const scanMode = get().scanMode;
     const timeAdvanceMode = get().timeAdvanceMode ?? 'measured';
@@ -300,7 +311,7 @@ export const useFatStore = create<FatStore>()(
       }
 
       // 1. Reset Precondition: Command PLC reset and verify known baseline state before starting test
-      // Real PLCs retain operational state across tests. Command a reset and verify a known state before starting.
+      // External PLCs retain operational state across tests. Command a reset and verify a known state before starting.
       const expectedResetStates = test.expectedInitialState
         ? (Array.isArray(test.expectedInitialState) ? test.expectedInitialState : [test.expectedInitialState])
         : currentSkid === 'BATCH_MIXING'
@@ -321,7 +332,7 @@ export const useFatStore = create<FatStore>()(
         const currentState = plc.state ?? (plc.outputs?.['PLC_STATE'] !== undefined ? String(plc.outputs['PLC_STATE']) : undefined);
         if (!currentState || !expectedResetStates.includes(currentState)) {
           throw new Error(
-            `Reset precondition failed: Real PLC state is '${currentState || 'UNDEFINED'}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
+            `Reset precondition failed: PLC state is '${currentState || 'UNDEFINED'}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
           );
         }
       }
@@ -420,8 +431,7 @@ export const useFatStore = create<FatStore>()(
           // Time drift compensation:
           // Use measured time only for OPC UA runs (clamped between dtMs and 2 * dtMs to prevent slow handshakes from causing unstable physics steps).
           // Mock drivers always advance by nominal dtMs since their in-process execution is ~1 ms.
-          const isOpcUa = driverType === 'opcua' || plc.status?.driverType === 'opcua';
-          const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
+          const stepDt = (isOpcUaHarness && timeAdvanceMode === 'measured')
             ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
             : dtMs;
 
@@ -482,8 +492,7 @@ export const useFatStore = create<FatStore>()(
           const stepDrift = stepElapsedMs - dtMs;
           cumulativeDriftMs += stepDrift;
 
-          const isOpcUa = driverType === 'opcua' || plc.status?.driverType === 'opcua';
-          const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
+          const stepDt = (isOpcUaHarness && timeAdvanceMode === 'measured')
             ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
             : dtMs;
 
@@ -515,18 +524,21 @@ export const useFatStore = create<FatStore>()(
 
       // Evaluate assertions on the full resulting history
       const rawAssertions = test.assertions(engine, plc, history);
-      const isHil = driverInfo.driverType === 'opcua' || plc.status?.driverType === 'opcua';
+      const applyIoTolerance = isOpcUaHarness;
+      const toleranceLabel = driverType === 'opcua-loopback'
+        ? 'OPC UA I/O timing tolerance (Loopback Test Server)'
+        : 'HIL timing tolerance';
 
-      // Account for documented HIL timing tolerance when running against live hardware
+      // Account for documented OPC UA I/O timing tolerance when exchanging I/O over the network
       const assertions = rawAssertions.map((a) => {
         if (a.timingLimitMs !== undefined && a.responseTimeMs !== undefined) {
-          const tolerance = a.timingToleranceMs ?? (isHil ? Math.max(50, dtMs) : 0);
-          const effectiveLimit = a.timingLimitMs + (isHil ? tolerance : 0);
+          const tolerance = a.timingToleranceMs ?? (applyIoTolerance ? Math.max(50, dtMs) : 0);
+          const effectiveLimit = a.timingLimitMs + (applyIoTolerance ? tolerance : 0);
           if (!a.passed && a.responseTimeMs <= effectiveLimit) {
             return {
               ...a,
               passed: true,
-              message: `${a.message} (Within HIL timing tolerance: ${a.responseTimeMs} ms <= ${a.timingLimitMs} ms + ${tolerance} ms network/scan latency)`,
+              message: `${a.message} (Within ${toleranceLabel}: ${a.responseTimeMs} ms <= ${a.timingLimitMs} ms + ${tolerance} ms network/scan latency)`,
             };
           }
         }

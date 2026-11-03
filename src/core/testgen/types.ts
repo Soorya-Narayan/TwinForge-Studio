@@ -56,7 +56,11 @@ export interface TestCase {
 
 export interface TestDriverInfo {
   driverName: string;
-  driverType: 'mock' | 'opcua' | 's7' | 'modbus';
+  /**
+   * 'opcua'          = external OPC UA server (the software cannot verify it is a physical PLC)
+   * 'opcua-loopback' = the app's built-in Loopback Test Server (no PLC control logic)
+   */
+  driverType: 'mock' | 'opcua' | 'opcua-loopback' | 's7' | 'modbus';
   details: string;
   endpoint?: string | null;
   scanMode?: 'lockstep' | 'classic';
