@@ -105,7 +105,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     const snap = engine.tick(outputs);
 
     // 3. Sim sensors feed back into PLC inputs
-    plc.writeInputs(snap.tags.inputs);
+    const writeResult = plc.writeInputs(snap.tags.inputs);
+    if (writeResult instanceof Promise) {
+      writeResult.catch((err) => {
+        console.warn('Simulation tick writeInputs error:', err);
+      });
+    }
 
     // 4. Capture Trend Data Point dynamically mapped for current skid
     let dataPoint: TrendDataPoint;

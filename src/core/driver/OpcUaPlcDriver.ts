@@ -25,6 +25,8 @@ export type OpcUaSecurityPolicy =
   | 'Basic128Rsa15';
 export type OpcUaAuthMode = 'Anonymous' | 'Username' | 'Certificate';
 
+export type OpcUaConcurrencyMode = 'wait' | 'throw';
+
 export interface OpcUaConnectionOptions {
   endpointUrl: string;
   securityMode?: OpcUaSecurityMode;
@@ -37,6 +39,8 @@ export interface OpcUaConnectionOptions {
   tagMap?: Record<string, string>;
   activeSkid?: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
   interlockDefinitions?: InterlockDefinition[];
+  concurrencyMode?: OpcUaConcurrencyMode;
+  operationTimeoutMs?: number;
 }
 
 function getElectronOpcUa() {
@@ -44,6 +48,92 @@ function getElectronOpcUa() {
     return window.electronAPI.opcua;
   }
   return null;
+}
+
+class AsyncLock {
+  private queue: Array<{
+    resolve: () => void;
+    reject: (err: Error) => void;
+    timeoutTimer?: ReturnType<typeof setTimeout>;
+  }> = [];
+  private locked: boolean = false;
+  public readonly name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  public get isLocked(): boolean {
+    return this.locked;
+  }
+
+  public async acquire(timeoutMs: number, operationDescription: string): Promise<() => void> {
+    if (!this.locked) {
+      this.locked = true;
+      let released = false;
+      return () => {
+        if (!released) {
+          released = true;
+          this.release();
+        }
+      };
+    }
+
+    return new Promise<() => void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      if (timeoutMs > 0 && timeoutMs !== Infinity) {
+        timer = setTimeout(() => {
+          const index = this.queue.findIndex((entry) => entry.timeoutTimer === timer);
+          if (index !== -1) {
+            this.queue.splice(index, 1);
+            reject(
+              new Error(
+                `Timeout (${timeoutMs}ms) waiting for prior OPC UA ${this.name} (${operationDescription}) to complete.`
+              )
+            );
+          }
+        }, timeoutMs);
+      }
+
+      this.queue.push({
+        resolve: () => {
+          if (timer) clearTimeout(timer);
+          let released = false;
+          resolve(() => {
+            if (!released) {
+              released = true;
+              this.release();
+            }
+          });
+        },
+        reject: (err: Error) => {
+          if (timer) clearTimeout(timer);
+          reject(err);
+        },
+        timeoutTimer: timer,
+      });
+    });
+  }
+
+  private release(): void {
+    const next = this.queue.shift();
+    if (next) {
+      next.resolve();
+    } else {
+      this.locked = false;
+    }
+  }
+
+  public abortAll(err: Error): void {
+    const pending = [...this.queue];
+    this.queue = [];
+    this.locked = false;
+    for (const item of pending) {
+      if (item.timeoutTimer) clearTimeout(item.timeoutTimer);
+      item.reject(err);
+    }
+  }
 }
 
 export class OpcUaPlcDriver implements Driver {
@@ -78,8 +168,29 @@ export class OpcUaPlcDriver implements Driver {
   // Output tags read cyclically from the real PLC (split per skid)
   public outputTags: string[] = [];
 
-  private isReading: boolean = false;
-  private isWriting: boolean = false;
+  private _isReading: boolean = false;
+  private _isWriting: boolean = false;
+
+  public get isReading(): boolean {
+    return this._isReading || this.readLock.isLocked;
+  }
+  public set isReading(value: boolean) {
+    this._isReading = value;
+  }
+
+  public get isWriting(): boolean {
+    return this._isWriting || this.writeLock.isLocked;
+  }
+  public set isWriting(value: boolean) {
+    this._isWriting = value;
+  }
+
+  public concurrencyMode: OpcUaConcurrencyMode = 'wait';
+  public operationTimeoutMs: number = 5000;
+  public customApi?: any;
+
+  private writeLock = new AsyncLock('write');
+  private readLock = new AsyncLock('read');
 
   constructor(endpointOrOptions?: string | OpcUaConnectionOptions) {
     if (typeof endpointOrOptions === 'string') {
@@ -96,6 +207,12 @@ export class OpcUaPlcDriver implements Driver {
       this.interlockDefinitions = endpointOrOptions.interlockDefinitions
         ? [...endpointOrOptions.interlockDefinitions]
         : loadStoredInterlockDefinitions();
+      if (endpointOrOptions.concurrencyMode) {
+        this.concurrencyMode = endpointOrOptions.concurrencyMode;
+      }
+      if (endpointOrOptions.operationTimeoutMs) {
+        this.operationTimeoutMs = endpointOrOptions.operationTimeoutMs;
+      }
     } else {
       this.tagMap = loadStoredTagMap();
       this.activeSkid = 'PASTEURIZER_10KLPH';
@@ -180,8 +297,14 @@ export class OpcUaPlcDriver implements Driver {
 
     this.endpointUrl = connOpts.endpointUrl || this.endpointUrl;
     this.securityOptions = connOpts;
+    if (connOpts.concurrencyMode) {
+      this.concurrencyMode = connOpts.concurrencyMode;
+    }
+    if (connOpts.operationTimeoutMs) {
+      this.operationTimeoutMs = connOpts.operationTimeoutMs;
+    }
 
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (api) {
       const res = await api.connect(connOpts);
       if (res.success) {
@@ -204,13 +327,21 @@ export class OpcUaPlcDriver implements Driver {
    * Disconnect from live OPC UA server
    */
   public async disconnect(): Promise<void> {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (api) {
-      await api.disconnect();
+      try {
+        await api.disconnect();
+      } catch (err) {
+        console.warn('Error during OPC UA disconnect:', err);
+      }
     }
     this.status.connected = false;
     this.state = 'OFFLINE';
     this.outputs = {}; // Invalidate stale outputs upon disconnect
+    this.isWriting = false;
+    this.isReading = false;
+    this.writeLock.abortAll(new Error(`OPC UA driver disconnected (${this.endpointUrl})`));
+    this.readLock.abortAll(new Error(`OPC UA driver disconnected (${this.endpointUrl})`));
   }
 
   /**
@@ -251,30 +382,80 @@ export class OpcUaPlcDriver implements Driver {
   /**
    * Writes physical sensor and feedback states to the real PLC
    */
-  public async writeInputs(inputs: Record<string, boolean | number>): Promise<void> {
+  /**
+   * Writes physical sensor and feedback states to the real PLC.
+   * If a write is currently in progress, it waits for completion up to operationTimeoutMs,
+   * or throws immediately if concurrencyMode is 'throw'. Never silently returns.
+   */
+  public async writeInputs(
+    inputs: Record<string, boolean | number>,
+    options?: { concurrencyMode?: OpcUaConcurrencyMode; timeoutMs?: number }
+  ): Promise<void> {
     this.inputs = { ...inputs };
 
-    const api = getElectronOpcUa();
     if (!this.status.connected) {
       throw new Error(`Cannot write inputs: OPC UA PLC driver is disconnected (${this.endpointUrl})`);
     }
 
-    if (this.isWriting || !api) {
-      return;
+    const mode = options?.concurrencyMode ?? this.concurrencyMode;
+    const timeout = options?.timeoutMs ?? this.operationTimeoutMs;
+
+    // Guard: Prevent skipped writes.
+    // If another write is already running or queued:
+    if (this.isWriting) {
+      if (mode === 'throw') {
+        throw new Error(
+          `Cannot write inputs: OPC UA write collision detected on ${this.endpointUrl}. An active write is already in progress and concurrency mode is THROW.`
+        );
+      }
     }
 
-    this.isWriting = true;
-    const writePayload: Record<string, { value: any; dataType?: string }> = {};
-
-    for (const [tag, value] of Object.entries(inputs)) {
-      const plcNodeId = this.resolvePlcNodeId(tag);
-      writePayload[plcNodeId] = {
-        value,
-        dataType: typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double',
-      };
+    // If _isWriting was set directly/externally, wait for it to clear
+    if (this._isWriting) {
+      const waitStart = performance.now();
+      while (this._isWriting) {
+        if (!this.status.connected) {
+          throw new Error(
+            `Cannot write inputs: OPC UA PLC driver disconnected while waiting for in-flight write (${this.endpointUrl})`
+          );
+        }
+        if (performance.now() - waitStart >= timeout) {
+          throw new Error(
+            `OPC UA write timeout: previous write did not complete within ${timeout}ms (${this.endpointUrl})`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
     }
+
+    let releaseLock: (() => void) | null = null;
+    try {
+      releaseLock = await this.writeLock.acquire(timeout, `writeInputs to ${this.endpointUrl}`);
+    } catch (err: any) {
+      throw new Error(`Failed to acquire OPC UA write lock: ${err.message || String(err)}`);
+    }
+
+    this._isWriting = true;
 
     try {
+      const api = this.customApi || getElectronOpcUa();
+      if (!api) {
+        if (this.state === 'EMULATED_CONNECTED') {
+          return;
+        }
+        throw new Error(`Cannot write inputs: Electron OPC UA API is unavailable (${this.endpointUrl})`);
+      }
+
+      const writePayload: Record<string, { value: any; dataType?: string }> = {};
+
+      for (const [tag, value] of Object.entries(inputs)) {
+        const plcNodeId = this.resolvePlcNodeId(tag);
+        writePayload[plcNodeId] = {
+          value,
+          dataType: typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double',
+        };
+      }
+
       const res = await api.writeTags(writePayload);
       if (res && res.success === false) {
         if (res.error?.toLowerCase().includes('connect') || res.error?.toLowerCase().includes('session')) {
@@ -291,7 +472,10 @@ export class OpcUaPlcDriver implements Driver {
       this.outputs = {};
       throw err;
     } finally {
-      this.isWriting = false;
+      this._isWriting = false;
+      if (releaseLock) {
+        releaseLock();
+      }
     }
   }
 
@@ -315,22 +499,66 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   /**
-   * Asynchronously poll live outputs from the real PLC
+   * Asynchronously poll live outputs from the real PLC.
+   * If a read is currently in progress, it waits for completion up to operationTimeoutMs,
+   * or throws immediately if concurrencyMode is 'throw'. Never silently returns.
    */
-  public async syncOutputsFromPlc(): Promise<void> {
+  public async syncOutputsFromPlc(
+    options?: { concurrencyMode?: OpcUaConcurrencyMode; timeoutMs?: number }
+  ): Promise<void> {
     if (!this.status.connected) {
       throw new Error(`PLC sync failed: OPC UA driver is disconnected (${this.endpointUrl}). Stale outputs discarded.`);
     }
 
-    const api = getElectronOpcUa();
-    if (this.isReading || !api) {
-      return;
+    const mode = options?.concurrencyMode ?? this.concurrencyMode;
+    const timeout = options?.timeoutMs ?? this.operationTimeoutMs;
+
+    // Guard: Prevent skipped reads.
+    if (this.isReading) {
+      if (mode === 'throw') {
+        throw new Error(
+          `Cannot read outputs: OPC UA read collision detected on ${this.endpointUrl}. An active read is already in progress and concurrency mode is THROW.`
+        );
+      }
     }
 
-    this.isReading = true;
+    // If _isReading was set directly/externally, wait for it to clear
+    if (this._isReading) {
+      const waitStart = performance.now();
+      while (this._isReading) {
+        if (!this.status.connected) {
+          throw new Error(
+            `PLC sync failed: OPC UA PLC driver disconnected while waiting for in-flight read (${this.endpointUrl})`
+          );
+        }
+        if (performance.now() - waitStart >= timeout) {
+          throw new Error(
+            `OPC UA read timeout: previous read did not complete within ${timeout}ms (${this.endpointUrl})`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+
+    let releaseLock: (() => void) | null = null;
+    try {
+      releaseLock = await this.readLock.acquire(timeout, `syncOutputsFromPlc from ${this.endpointUrl}`);
+    } catch (err: any) {
+      throw new Error(`Failed to acquire OPC UA read lock: ${err.message || String(err)}`);
+    }
+
+    this._isReading = true;
     const startTime = performance.now();
 
     try {
+      const api = this.customApi || getElectronOpcUa();
+      if (!api) {
+        if (this.state === 'EMULATED_CONNECTED') {
+          return;
+        }
+        throw new Error(`Cannot read outputs: Electron OPC UA API is unavailable (${this.endpointUrl})`);
+      }
+
       // Split tag lists per skid: read only active skid's output tags on every scan
       const tagsToRead = this.getActiveOutputTags();
       this.outputTags = tagsToRead;
@@ -380,7 +608,10 @@ export class OpcUaPlcDriver implements Driver {
       this.outputs = {};
       throw err;
     } finally {
-      this.isReading = false;
+      this._isReading = false;
+      if (releaseLock) {
+        releaseLock();
+      }
     }
   }
 
@@ -400,7 +631,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public startProduction(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('START_CMD')]: { value: true, dataType: 'Boolean' },
@@ -411,7 +642,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public divertManually(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('PV11_CMD')]: { value: false, dataType: 'Boolean' },
@@ -421,7 +652,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public startBatch(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('START_PB')]: { value: true, dataType: 'Boolean' },
@@ -431,7 +662,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public dischargeBatch(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('V400_PROD_CMD')]: { value: true, dataType: 'Boolean' },
@@ -440,7 +671,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public abortBatch(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('ABORT_PB')]: { value: true, dataType: 'Boolean' },
@@ -462,7 +693,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public emergencyStop(): void {
-    const api = getElectronOpcUa();
+    const api = this.customApi || getElectronOpcUa();
     if (this.status.connected && api) {
       api.writeTags({
         [this.resolvePlcNodeId('E_STOP_PB')]: { value: false, dataType: 'Boolean' },
