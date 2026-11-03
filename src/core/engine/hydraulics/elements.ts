@@ -132,3 +132,18 @@ export class StaticHeadElement implements HydraulicElement {
     return deltaPPa / 100000; // bar (can be negative if flowing downhill)
   }
 }
+
+export class PumpElement implements HydraulicElement {
+  public readonly id: string;
+  public readonly pumpHeadM: (flowLph: number) => number;
+
+  constructor(id: string, pumpHeadM: (flowLph: number) => number) {
+    this.id = id;
+    this.pumpHeadM = pumpHeadM;
+  }
+
+  public pressureDropBar(flowLph: number, fluid: FluidState): number {
+    const head = this.pumpHeadM(flowLph);
+    return -(fluid.densityKgM3 * GRAVITY_M_S2 * head) / 100000;
+  }
+}

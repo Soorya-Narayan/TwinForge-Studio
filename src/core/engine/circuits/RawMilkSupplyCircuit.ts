@@ -32,6 +32,7 @@ export interface CircuitOutputs {
   flowLpm: number; // Signed flow in L/min
   suctionPressureBar: number; // Absolute suction pressure (bar)
   dischargePressureBar: number; // Absolute discharge pressure (bar)
+  nodePressuresBar?: Record<string, number>; // Calculated intermediate node pressures (bar)
   pumpState: PumpState;
   alarms: string[];
 }
@@ -234,6 +235,7 @@ export class RawMilkSupplyCircuit {
     let solvedFlowLph = 0;
     let pSuctionBar = pSiloAbsBar;
     let pDischargeBar = pSiloAbsBar;
+    let nodePressuresBar: Record<string, number> | undefined;
 
     if (isPumpRunning && isPv1Passable) {
       // 1. Pump is running and PV-1 is passable: solve operating point
@@ -270,8 +272,12 @@ export class RawMilkSupplyCircuit {
           maxFlowLph: this.pump.ratedFlowLph * 1.5,
           toleranceLph: 1.0,
           inletPressureBar: pSiloAbsBar,
+          pumpIndex: 1,
+          pumpId: 'pump',
         }
       );
+
+      nodePressuresBar = res.pressuresBar;
 
       if (!res.noForwardFlow) {
         solvedFlowLph = res.flowLph;
@@ -384,6 +390,7 @@ export class RawMilkSupplyCircuit {
       flowLpm: Number((solvedFlowLph / 60).toFixed(2)),
       suctionPressureBar: Number(pSuctionBar.toFixed(3)),
       dischargePressureBar: Number(pDischargeBar.toFixed(3)),
+      nodePressuresBar,
       pumpState,
       alarms,
     };

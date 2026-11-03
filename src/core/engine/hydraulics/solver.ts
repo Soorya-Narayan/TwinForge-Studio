@@ -16,6 +16,8 @@ export interface SolverOptions {
   toleranceLph?: number; // Default 1 L/h
   inletPressureBar?: number; // Starting boundary pressure
   maxIterations?: number; // Safety guard
+  pumpIndex?: number; // Position in elements array where pump is located (0-indexed, default 0)
+  pumpId?: string; // Identifier for pump node pressure (default 'pump')
 }
 
 /**
@@ -32,6 +34,8 @@ export function solveSeriesOperatingPoint(
   const toleranceLph = options.toleranceLph ?? 1.0;
   const inletPressureBar = options.inletPressureBar ?? 0.0;
   const maxIterations = options.maxIterations ?? 100;
+  const pumpIndex = options.pumpIndex ?? 0;
+  const pumpId = options.pumpId ?? 'pump';
 
   // Residual function: net head/pressure driving flow (bar)
   const calcResidual = (flowLph: number): number => {
@@ -51,10 +55,31 @@ export function solveSeriesOperatingPoint(
     let currentP = inletPressureBar;
     pressures['inlet'] = Number(currentP.toFixed(4));
 
-    for (const elem of elements) {
+    const headM = pumpHeadM(flowLph);
+    const pumpDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * headM) / 100000;
+
+    const applyPump = () => {
+      currentP = currentP + pumpDeltaPBar;
+      pressures[pumpId] = Number(currentP.toFixed(4));
+    };
+
+    if (pumpIndex === 0) {
+      applyPump();
+    }
+
+    for (let i = 0; i < elements.length; i++) {
+      const elem = elements[i];
       const drop = elem.pressureDropBar(flowLph, fluid);
       currentP = currentP - drop;
       pressures[elem.id] = Number(currentP.toFixed(4));
+
+      if (i + 1 === pumpIndex) {
+        applyPump();
+      }
+    }
+
+    if (pumpIndex > elements.length) {
+      applyPump();
     }
 
     return pressures;
