@@ -412,10 +412,12 @@ export const useFatStore = create<FatStore>()(
           cumulativeDriftMs += stepDrift;
 
           // Time drift compensation:
-          // In 'measured' mode, advance simulation engine by the actual measured elapsed time
-          // so that plant physical integrators stay in lockstep with the PLC's hardware clock.
-          // In 'nominal' mode, advance by nominal dtMs.
-          const stepDt = timeAdvanceMode === 'measured' ? Math.max(dtMs, stepElapsedMs) : dtMs;
+          // Use measured time only for OPC UA runs (clamped between dtMs and 2 * dtMs to prevent slow handshakes from causing unstable physics steps).
+          // Mock drivers always advance by nominal dtMs since their in-process execution is ~1 ms.
+          const isOpcUa = driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+          const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
+            ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
+            : dtMs;
 
           // Step 6: Tick the engine
           const executedInputs = { ...currentInputs };
@@ -474,7 +476,10 @@ export const useFatStore = create<FatStore>()(
           const stepDrift = stepElapsedMs - dtMs;
           cumulativeDriftMs += stepDrift;
 
-          const stepDt = timeAdvanceMode === 'measured' ? Math.max(dtMs, stepElapsedMs) : dtMs;
+          const isOpcUa = driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+          const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
+            ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
+            : dtMs;
 
           const snap = engine.tick(outputs, stepDt);
           await plc.writeInputs(snap.tags.inputs);
