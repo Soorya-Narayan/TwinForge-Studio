@@ -176,10 +176,10 @@ export function validateCustomSkid(raw: any): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {
       valid: false,
-      errors: ['Invalid input: Expected a JSON object.'],
+      errors: ['Invalid template: Expected a JSON object with "meta" and "topology".'],
       warnings: [],
       stats: { tankCount: 0, valveCount: 0, pumpCount: 0, exchangerCount: 0, connectionCount: 0 },
     };
@@ -187,15 +187,43 @@ export function validateCustomSkid(raw: any): ValidationResult {
 
   // 1. Validate Metadata
   const meta = raw.meta ?? raw;
-  if (!meta.id || typeof meta.id !== 'string') {
-    errors.push('Missing or invalid "meta.id" (string required, e.g. "MY_SKID_01").');
+  if (!meta.id || typeof meta.id !== 'string' || meta.id.trim() === '') {
+    errors.push('Missing or invalid "meta.id": must be a non-empty string identifier (e.g. "CUSTOM_SKID_01").');
+  } else if (!/^[A-Za-z0-9_-]+$/.test(meta.id.trim())) {
+    errors.push(`Invalid "meta.id" format: "${meta.id}". Only alphanumeric characters, dashes, and underscores are allowed.`);
   }
-  if (!meta.name || typeof meta.name !== 'string') {
-    errors.push('Missing or invalid "meta.name" (e.g. "Custom Process Skid").');
+
+  if (!meta.name || typeof meta.name !== 'string' || meta.name.trim() === '') {
+    errors.push('Missing or invalid "meta.name": must be a non-empty descriptive name (e.g. "Custom Process Skid").');
   }
 
   // 2. Validate Topology Structure
   const topology = raw.topology ?? raw;
+  if (!topology || typeof topology !== 'object' || Array.isArray(topology)) {
+    return {
+      valid: false,
+      errors: [...errors, 'Missing or invalid "topology": must be an object defining tanks, valves, pumps, and connections.'],
+      warnings,
+      stats: { tankCount: 0, valveCount: 0, pumpCount: 0, exchangerCount: 0, connectionCount: 0 },
+    };
+  }
+
+  if (topology.tanks !== undefined && !Array.isArray(topology.tanks)) {
+    errors.push('"topology.tanks" must be an array of tank configurations.');
+  }
+  if (topology.valves !== undefined && !Array.isArray(topology.valves)) {
+    errors.push('"topology.valves" must be an array of valve configurations.');
+  }
+  if (topology.pumps !== undefined && !Array.isArray(topology.pumps)) {
+    errors.push('"topology.pumps" must be an array of pump configurations.');
+  }
+  if (topology.exchangers !== undefined && !Array.isArray(topology.exchangers)) {
+    errors.push('"topology.exchangers" must be an array of heat exchanger configurations.');
+  }
+  if (topology.connections !== undefined && !Array.isArray(topology.connections)) {
+    errors.push('"topology.connections" must be an array of pipe connections.');
+  }
+
   const tanks: TankConfig[] = Array.isArray(topology.tanks) ? topology.tanks : [];
   const valves: ValveConfig[] = Array.isArray(topology.valves) ? topology.valves : [];
   const pumps: PumpConfig[] = Array.isArray(topology.pumps) ? topology.pumps : [];
@@ -209,71 +237,165 @@ export function validateCustomSkid(raw: any): ValidationResult {
     errors.push('Topology must contain at least 1 pump in "topology.pumps" for fluid propulsion.');
   }
   if (connections.length === 0) {
-    errors.push('Topology must contain pipe connections in "topology.connections".');
+    errors.push('Topology must contain at least 1 pipe connection in "topology.connections".');
   }
 
-  // Set of all node IDs to check referential integrity
+  // Registry of all device IDs across all types to ensure global uniqueness
   const nodeIds = new Set<string>();
+  const tagToDeviceId = new Map<string, string>();
+
+  const registerDeviceId = (id: any, kind: string, index: number): string | null => {
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      errors.push(`${kind}[${index}] is missing a valid non-empty string "id".`);
+      return null;
+    }
+    const cleanId = id.trim();
+    if (nodeIds.has(cleanId)) {
+      errors.push(`Duplicate component ID "${cleanId}" in ${kind}[${index}]. Component IDs must be unique across all tanks, valves, pumps, and heat exchangers.`);
+    } else {
+      nodeIds.add(cleanId);
+    }
+    return cleanId;
+  };
+
+  const registerTag = (tag: any, deviceId: string, kind: string) => {
+    if (tag === undefined || tag === null) return;
+    if (typeof tag !== 'string' || tag.trim() === '') {
+      errors.push(`${kind} "${deviceId}" tag must be a non-empty string.`);
+      return;
+    }
+    const cleanTag = tag.trim();
+    if (tagToDeviceId.has(cleanTag)) {
+      errors.push(`Duplicate SCADA tag "${cleanTag}" assigned to both "${tagToDeviceId.get(cleanTag)}" and "${deviceId}". SCADA tags must be unique.`);
+    } else {
+      tagToDeviceId.set(cleanTag, deviceId);
+    }
+  };
 
   // Check Tanks
   tanks.forEach((t, i) => {
-    if (!t.id) errors.push(`Tank[${i}] is missing "id".`);
-    else if (nodeIds.has(t.id)) errors.push(`Duplicate component ID "${t.id}" found in tanks.`);
-    else nodeIds.add(t.id);
+    const cleanId = registerDeviceId(t.id, 'Tank', i);
+    const idLabel = cleanId || `Tank[${i}]`;
 
-    if (!t.tag) warnings.push(`Tank "${t.id}" is missing a short SCADA "tag" (defaulting to ${t.id}).`);
-    if (typeof t.capacityL !== 'number' || t.capacityL <= 0) {
-      errors.push(`Tank "${t.id}" must have a positive "capacityL" (e.g. 1000).`);
+    if (t.tag) registerTag(t.tag, idLabel, 'Tank');
+    else warnings.push(`Tank "${idLabel}" is missing a SCADA "tag" (defaulting to ${idLabel}).`);
+
+    if (typeof t.capacityL !== 'number' || !Number.isFinite(t.capacityL) || t.capacityL <= 0) {
+      errors.push(`Tank "${idLabel}" must have a positive finite "capacityL" (received ${t.capacityL}).`);
     }
-    if (typeof t.initialLevelPct === 'number' && (t.initialLevelPct < 0 || t.initialLevelPct > 100)) {
-      warnings.push(`Tank "${t.id}" initialLevelPct (${t.initialLevelPct}) is outside 0-100% range.`);
+
+    if (t.initialLevelPct !== undefined) {
+      if (typeof t.initialLevelPct !== 'number' || !Number.isFinite(t.initialLevelPct) || t.initialLevelPct < 0 || t.initialLevelPct > 100) {
+        errors.push(`Tank "${idLabel}" "initialLevelPct" must be a number between 0 and 100% (received ${t.initialLevelPct}).`);
+      }
+    }
+
+    if (t.initialTempC !== undefined) {
+      if (typeof t.initialTempC !== 'number' || !Number.isFinite(t.initialTempC)) {
+        errors.push(`Tank "${idLabel}" "initialTempC" must be a valid finite temperature in °C (received ${t.initialTempC}).`);
+      }
     }
   });
 
   // Check Valves
   valves.forEach((v, i) => {
-    if (!v.id) errors.push(`Valve[${i}] is missing "id".`);
-    else if (nodeIds.has(v.id)) errors.push(`Duplicate component ID "${v.id}" found in valves.`);
-    else nodeIds.add(v.id);
+    const cleanId = registerDeviceId(v.id, 'Valve', i);
+    const idLabel = cleanId || `Valve[${i}]`;
 
-    if (typeof v.travelTimeS === 'number' && v.travelTimeS <= 0) {
-      warnings.push(`Valve "${v.id}" travelTimeS must be > 0 (defaulting to 1.0s).`);
+    if (v.tag) registerTag(v.tag, idLabel, 'Valve');
+
+    if (v.travelTimeS !== undefined) {
+      if (typeof v.travelTimeS !== 'number' || !Number.isFinite(v.travelTimeS) || v.travelTimeS <= 0) {
+        errors.push(`Valve "${idLabel}" "travelTimeS" must be a finite number > 0 (received ${v.travelTimeS}).`);
+      }
+    }
+
+    if (v.passableThresholdPct !== undefined) {
+      if (typeof v.passableThresholdPct !== 'number' || !Number.isFinite(v.passableThresholdPct) || v.passableThresholdPct < 0 || v.passableThresholdPct > 100) {
+        errors.push(`Valve "${idLabel}" "passableThresholdPct" must be between 0 and 100% (received ${v.passableThresholdPct}).`);
+      }
+    }
+
+    if (v.failSafe !== undefined && v.failSafe !== 'normally_closed' && v.failSafe !== 'normally_open') {
+      errors.push(`Valve "${idLabel}" invalid failSafe: "${v.failSafe}". Must be "normally_closed" or "normally_open".`);
     }
   });
 
   // Check Pumps
   pumps.forEach((p, i) => {
-    if (!p.id) errors.push(`Pump[${i}] is missing "id".`);
-    else if (nodeIds.has(p.id)) errors.push(`Duplicate component ID "${p.id}" found in pumps.`);
-    else nodeIds.add(p.id);
+    const cleanId = registerDeviceId(p.id, 'Pump', i);
+    const idLabel = cleanId || `Pump[${i}]`;
 
-    if (typeof p.maxFlowLpm !== 'number' || p.maxFlowLpm <= 0) {
-      errors.push(`Pump "${p.id}" must have a positive "maxFlowLpm" (e.g. 200).`);
+    if (p.tag) registerTag(p.tag, idLabel, 'Pump');
+
+    if (typeof p.maxFlowLpm !== 'number' || !Number.isFinite(p.maxFlowLpm) || p.maxFlowLpm <= 0) {
+      errors.push(`Pump "${idLabel}" must have a positive finite "maxFlowLpm" (received ${p.maxFlowLpm}).`);
+    }
+
+    if (p.rampUpTimeS !== undefined) {
+      if (typeof p.rampUpTimeS !== 'number' || !Number.isFinite(p.rampUpTimeS) || p.rampUpTimeS < 0) {
+        errors.push(`Pump "${idLabel}" "rampUpTimeS" must be a finite non-negative number in seconds (received ${p.rampUpTimeS}).`);
+      }
     }
   });
 
   // Check Exchangers
   exchangers.forEach((hx, i) => {
-    if (!hx.id) errors.push(`HeatExchanger[${i}] is missing "id".`);
-    else if (nodeIds.has(hx.id)) errors.push(`Duplicate component ID "${hx.id}" found in exchangers.`);
-    else nodeIds.add(hx.id);
+    const cleanId = registerDeviceId(hx.id, 'HeatExchanger', i);
+    const idLabel = cleanId || `HeatExchanger[${i}]`;
+
+    if (hx.tag) registerTag(hx.tag, idLabel, 'HeatExchanger');
+
+    if (hx.heatTransferCoeffUA !== undefined) {
+      if (typeof hx.heatTransferCoeffUA !== 'number' || !Number.isFinite(hx.heatTransferCoeffUA) || hx.heatTransferCoeffUA <= 0) {
+        errors.push(`HeatExchanger "${idLabel}" "heatTransferCoeffUA" must be a positive finite number (received ${hx.heatTransferCoeffUA}).`);
+      }
+    }
   });
 
-  // Check Pipe Connections (Referential Integrity)
+  // Check Pipe Connections (Referential Integrity & Graph Connectivity)
   const connectionIds = new Set<string>();
-  connections.forEach((conn, i) => {
-    if (!conn.id) errors.push(`Connection[${i}] is missing "id".`);
-    else if (connectionIds.has(conn.id)) errors.push(`Duplicate connection ID "${conn.id}".`);
-    else connectionIds.add(conn.id);
+  const connectedNodes = new Set<string>();
 
-    if (!conn.fromNode || !nodeIds.has(conn.fromNode)) {
-      errors.push(`Connection "${conn.id}" fromNode "${conn.fromNode}" does not exist in any tank, valve, pump, or exchanger.`);
+  connections.forEach((conn, i) => {
+    if (!conn.id || typeof conn.id !== 'string' || conn.id.trim() === '') {
+      errors.push(`Connection[${i}] is missing a valid non-empty string "id".`);
+      return;
     }
-    if (!conn.toNode || !nodeIds.has(conn.toNode)) {
-      errors.push(`Connection "${conn.id}" toNode "${conn.toNode}" does not exist in any tank, valve, pump, or exchanger.`);
+    const cleanConnId = conn.id.trim();
+    if (connectionIds.has(cleanConnId)) {
+      errors.push(`Duplicate connection ID "${cleanConnId}". Pipe connection IDs must be unique.`);
+    } else {
+      connectionIds.add(cleanConnId);
     }
-    if (conn.fromNode === conn.toNode) {
-      warnings.push(`Connection "${conn.id}" forms a zero-length loop back to itself (${conn.fromNode}).`);
+
+    if (!conn.fromNode || typeof conn.fromNode !== 'string' || !nodeIds.has(conn.fromNode.trim())) {
+      errors.push(`Connection "${cleanConnId}" fromNode "${conn.fromNode}" does not exist in any registered tank, valve, pump, or heat exchanger.`);
+    } else {
+      connectedNodes.add(conn.fromNode.trim());
+    }
+
+    if (!conn.toNode || typeof conn.toNode !== 'string' || !nodeIds.has(conn.toNode.trim())) {
+      errors.push(`Connection "${cleanConnId}" toNode "${conn.toNode}" does not exist in any registered tank, valve, pump, or heat exchanger.`);
+    } else {
+      connectedNodes.add(conn.toNode.trim());
+    }
+
+    if (conn.fromNode && conn.toNode && conn.fromNode.trim() === conn.toNode.trim()) {
+      errors.push(`Connection "${cleanConnId}" forms an invalid self-referential loop (fromNode "${conn.fromNode}" equals toNode). Pipes must connect two distinct components.`);
+    }
+
+    if (conn.diameterMm !== undefined) {
+      if (typeof conn.diameterMm !== 'number' || !Number.isFinite(conn.diameterMm) || conn.diameterMm <= 0) {
+        errors.push(`Connection "${cleanConnId}" "diameterMm" must be a positive finite number (received ${conn.diameterMm}).`);
+      }
+    }
+  });
+
+  // Check for disconnected components
+  nodeIds.forEach((id) => {
+    if (!connectedNodes.has(id)) {
+      warnings.push(`Component "${id}" is disconnected: it has no incoming or outgoing pipe connections.`);
     }
   });
 
