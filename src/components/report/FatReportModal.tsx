@@ -7,7 +7,11 @@ import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { computeEvidenceFingerprint } from '../../core/report/fingerprint';
-import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle, Download, Upload } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FatReportToolbar } from './FatReportToolbar';
+import { FatReportSettingsBar } from './FatReportSettingsBar';
+import { FatReportTable } from './FatReportTable';
+import { FatReportSignatures } from './FatReportSignatures';
 
 export const FatReportModal: React.FC = () => {
   const showReportModal = useFatStore((s) => s.showReportModal);
@@ -68,19 +72,13 @@ export const FatReportModal: React.FC = () => {
       const payloadObject = {
         certificateRef: projectSettings.certificateRef,
         customerName: projectSettings.customerName,
-        commissioningLead: projectSettings.commissioningLead,
-        clientAuthority: projectSettings.clientAuthority,
+        authority: projectSettings.clientAuthority,
+        lead: projectSettings.commissioningLead,
         organization: projectSettings.organization,
-        plcPlatform: {
-          driverName: harnessDriver.driverName,
-          driverType: harnessDriver.driverType,
-          endpoint: harnessDriver.endpoint || null,
-          details: harnessDriver.details,
-          scanMode: harnessDriver.scanMode || 'lockstep',
-        },
+        plantConfig,
         results,
         journal: normalizedJournal,
-        plantConfig,
+        driver: harnessDriver,
         timestamp: reportTimestamp || '',
       };
 
@@ -92,6 +90,9 @@ export const FatReportModal: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to compute run fingerprint:', err);
+        if (isMounted) {
+          setRunFingerprint('ERROR_COMPUTING_HASH');
+        }
       }
     };
 
@@ -100,70 +101,59 @@ export const FatReportModal: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [showReportModal, results, journal, activeSkid, engine, customMeta, reportTimestamp, projectSettings, harnessDriver]);
+  }, [showReportModal, projectSettings, activeSkid, engine, customMeta, results, journal, harnessDriver, reportTimestamp]);
 
   if (!showReportModal) return null;
 
   const passedCount = results.filter((r) => r.passed).length;
-  const failedCount = results.length - passedCount;
-  const allTestsPassed = passedCount === results.length && results.length > 0;
+  const failedCount = results.filter((r) => !r.passed).length;
+  const allTestsPassed = results.length > 0 && failedCount === 0;
 
   const handleExportPDF = async () => {
-    if (window.electronAPI?.printToPDF) {
-      setIsGeneratingPdf(true);
-      setPdfSuccessMessage(null);
-      try {
-        const safeRef = (projectSettings.certificateRef || 'FAT-REPORT').replace(/[^a-zA-Z0-9_-]/g, '_');
-        const dateStr = reportTimestamp ? reportTimestamp.slice(0, 10) : 'latest';
-        const defaultPdfName = `twinforge_fat_report_${safeRef}_${dateStr}.pdf`;
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    setPdfSuccessMessage(null);
 
-        const result = await window.electronAPI.printToPDF({
-          defaultPath: defaultPdfName,
-        });
-
-        if (!result.canceled && result.filePath) {
-          const fileName = result.filePath.split(/[/\\]/).pop();
-          setPdfSuccessMessage(`Saved ${fileName}`);
+    try {
+      const electronAPI = (window as any).electronAPI;
+      if (electronAPI && typeof electronAPI.printToPDF === 'function') {
+        const defaultFilename = `TwinForge-FAT-Report-${projectSettings.certificateRef || 'Export'}.pdf`;
+        const res = await electronAPI.printToPDF({ defaultPath: defaultFilename });
+        if (res && res.success) {
+          setPdfSuccessMessage('PDF saved successfully');
           setTimeout(() => setPdfSuccessMessage(null), 4000);
+          return;
+        } else if (res && res.canceled) {
+          return;
+        } else {
+          console.warn('Electron printToPDF failed or was canceled:', res?.error);
         }
-      } catch (err) {
-        console.error('Failed to export PDF via printToPDF:', err);
-      } finally {
-        setIsGeneratingPdf(false);
       }
-      return;
+      // Fallback for standard browser environments
+      window.print();
+    } catch (err) {
+      console.warn('PDF export error, falling back to window.print():', err);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
     }
-
-    // Web browser fallback when Electron printToPDF IPC is unavailable
-    window.print();
   };
 
-  const handleExportEvidence = async () => {
-    if (!rawPayload) return;
-
-    const safeRef = (projectSettings.certificateRef || 'FAT-REPORT').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const dateStr = (reportTimestamp ? reportTimestamp.slice(0, 10) : 'latest');
-    const defaultFileName = `twinforge_fat_evidence_${safeRef}_${dateStr}.json`;
-
-    if (window.electronAPI?.saveFile) {
-      await window.electronAPI.saveFile({
-        defaultPath: defaultFileName,
-        filters: [{ name: 'JSON Evidence File', extensions: ['json'] }],
-        content: rawPayload,
-      });
-      return;
+  const handleExportEvidence = () => {
+    try {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(rawPayload);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute(
+        'download',
+        `TwinForge-FAT-Evidence-${projectSettings.certificateRef || 'Run'}-${runFingerprint ? runFingerprint.substring(0, 8) : 'sha256'}.json`
+      );
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err) {
+      console.error('Failed to export evidence payload JSON:', err);
     }
-
-    // Web browser fallback
-    const blob = new Blob([rawPayload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = defaultFileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -201,210 +191,19 @@ export const FatReportModal: React.FC = () => {
         }}
       >
         {/* Header Bar */}
-        <div
-          className="no-print"
-          style={{
-            padding: '12px 20px',
-            background: '#f8fafc',
-            borderBottom: '1px solid var(--border-strong)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShieldCheck size={18} color="var(--color-success)" />
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Factory Acceptance Test (FAT) Report
-            </span>
-          </div>
+        <FatReportToolbar
+          onExportEvidence={handleExportEvidence}
+          onExportPDF={handleExportPDF}
+          onClose={closeReportModal}
+          isGeneratingPdf={isGeneratingPdf}
+          pdfSuccessMessage={pdfSuccessMessage}
+        />
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={handleExportEvidence}
-              className="btn btn-ghost"
-              style={{
-                padding: '5px 12px',
-                fontSize: 11,
-                border: '1px solid var(--border-strong)',
-                background: '#ffffff',
-                color: 'var(--text-primary)',
-              }}
-              title="Export serialized JSON payload to verify SHA-256 checksum independently"
-            >
-              <Download size={13} />
-              EXPORT EVIDENCE JSON
-            </button>
-            {pdfSuccessMessage && (
-              <span
-                style={{
-                  fontSize: 10,
-                  color: 'var(--color-success)',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  marginRight: 4,
-                }}
-              >
-                <CheckCircle size={12} />
-                {pdfSuccessMessage}
-              </span>
-            )}
-            <button
-              onClick={handleExportPDF}
-              disabled={isGeneratingPdf}
-              className="btn btn-primary"
-              style={{
-                padding: '5px 12px',
-                fontSize: 11,
-                opacity: isGeneratingPdf ? 0.75 : 1,
-                cursor: isGeneratingPdf ? 'wait' : 'pointer',
-              }}
-              title="Generate a real PDF report using Electron webContents.printToPDF"
-            >
-              <Printer size={13} />
-              {isGeneratingPdf ? 'GENERATING PDF...' : 'EXPORT PDF'}
-            </button>
-            <button onClick={closeReportModal} className="btn btn-ghost" style={{ padding: '5px 8px' }}>
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-
-        {/* Project Settings / Report Customization Bar (Excluded from Print) */}
-        <div
-          className="no-print"
-          style={{
-            padding: '10px 20px',
-            background: '#f1f5f9',
-            borderBottom: '1px solid var(--border-strong)',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 12,
-            fontSize: 11,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)', fontWeight: 700 }}>
-            <Settings2 size={13} />
-            <span>Settings:</span>
-          </div>
-
-          <div className="form-row-inline">
-            <label className="form-label-subtle">Customer:</label>
-            <input
-              type="text"
-              value={projectSettings.customerName}
-              onChange={(e) => setProjectSettings({ customerName: e.target.value })}
-              placeholder="e.g. Acme Industrial Ltd"
-              className="form-input-scada"
-              style={{ width: 190 }}
-            />
-          </div>
-
-          <div className="form-row-inline">
-            <label className="form-label-subtle">Report Ref:</label>
-            <input
-              type="text"
-              value={projectSettings.certificateRef}
-              onChange={(e) => {
-                const val = e.target.value;
-                setProjectSettings({
-                  certificateRef: val,
-                  isCustomRef: val.trim().length > 0,
-                });
-              }}
-              placeholder="e.g. FAT-2026-001"
-              className="form-input-scada"
-              style={{ width: 150 }}
-            />
-          </div>
-
-          <div className="form-row-inline">
-            <label className="form-label-subtle">Authority:</label>
-            <input
-              type="text"
-              value={projectSettings.clientAuthority || ''}
-              onChange={(e) => setProjectSettings({ clientAuthority: e.target.value })}
-              placeholder="Client Authority"
-              className="form-input-scada"
-              style={{ width: 160 }}
-            />
-          </div>
-
-          <div className="form-row-inline">
-            <label className="form-label-subtle">Lead:</label>
-            <input
-              type="text"
-              value={projectSettings.commissioningLead || ''}
-              onChange={(e) => setProjectSettings({ commissioningLead: e.target.value })}
-              placeholder="Commissioning Lead"
-              className="form-input-scada"
-              style={{ width: 160 }}
-            />
-          </div>
-
-          <div className="form-row-inline">
-            <label className="form-label-subtle">Organization:</label>
-            <input
-              type="text"
-              value={projectSettings.organization || ''}
-              onChange={(e) => setProjectSettings({ organization: e.target.value })}
-              placeholder="e.g. Lead Organization"
-              className="form-input-scada"
-              style={{ width: 160 }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Logo:</label>
-            <label
-              className="btn btn-ghost"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                background: '#ffffff',
-                color: '#0f172a',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <Upload size={12} />
-              {projectSettings.uploadedLogo ? 'Change Logo' : 'Upload Logo'}
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      setProjectSettings({ uploadedLogo: reader.result as string });
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-            </label>
-            {projectSettings.uploadedLogo && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setProjectSettings({ uploadedLogo: '' })}
-                style={{ padding: '2px 5px', fontSize: 10, color: '#ef4444' }}
-                title="Remove Logo"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        </div>
+        {/* Project Settings Bar */}
+        <FatReportSettingsBar
+          projectSettings={projectSettings}
+          setProjectSettings={setProjectSettings}
+        />
 
         {/* Printable Report Document Body */}
         <div
@@ -552,75 +351,7 @@ export const FatReportModal: React.FC = () => {
           </div>
 
           {/* Test Case Breakdown Table */}
-          <div style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, borderBottom: '1px solid #e2e8f0', paddingBottom: 4, marginBottom: 8 }}>
-              2. Test Execution & Assertion Log (Time-Based Stepped Scans)
-            </h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #cbd5e1', width: '15%' }}>Test ID & Scans</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #cbd5e1', width: '30%' }}>Procedure & Specification</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #cbd5e1', width: '45%' }}>Assertions & Measured Dynamics</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #cbd5e1', width: '10%' }}>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '16px 8px', textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>
-                      No tests executed
-                    </td>
-                  </tr>
-                ) : (
-                  results.map((r) => (
-                    <tr key={r.testId} style={{ borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' }}>
-                      <td className="mono" style={{ padding: '8px 8px', fontWeight: 700 }}>
-                        <div>{r.testId}</div>
-                        <div style={{ fontSize: 9, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
-                          {r.scansExecuted ? `${r.scansExecuted} scans (${((r.scansExecuted * 100) / 1000).toFixed(1)}s)` : `${r.durationMs} ms`}
-                          {r.timeDriftMs !== undefined && r.timeDriftMs > 0 && (
-                            <div style={{ fontSize: 8.5, color: '#0284c7', marginTop: 1 }}>
-                              +{r.timeDriftMs}ms drift ({r.timeAdvanceMode === 'measured' ? 'sync' : 'nominal'})
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{r.title}</div>
-                        <div style={{ color: '#64748b', fontSize: 9, marginTop: 2 }}>Ref: {r.clause}</div>
-                      </td>
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {r.assertions.map((a, aIdx) => (
-                            <div key={aIdx} style={{ fontSize: 9.5, lineHeight: 1.35, color: '#334155' }}>
-                              <span style={{ fontWeight: 600, color: a.passed ? '#166534' : '#991b1b', marginRight: 4 }}>
-                                {a.passed ? '✓' : '✗'} [{a.tag}]:
-                              </span>
-                              <span>{a.message}</span>
-                              {a.responseTimeMs !== undefined && (
-                                <span className="mono" style={{ marginLeft: 5, fontWeight: 700, color: a.passed ? '#15803d' : '#dc2626' }}>
-                                  [⏱ {a.responseTimeMs} ms{a.timingLimitMs ? ` / limit ${a.timingLimitMs} ms` : ''}{a.timingToleranceMs ? ` (tol +${a.timingToleranceMs}ms)` : ''}]
-                                </span>
-                              )}
-                              <span style={{ color: '#64748b', marginLeft: 4 }}>
-                                (Exp: {String(a.expected)} | Act: {String(a.actual)})
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td style={{ padding: '8px 8px' }}>
-                        <span style={{ fontWeight: 700, color: r.passed ? '#15803d' : '#dc2626' }}>
-                          {r.passed ? 'PASS' : 'FAIL'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <FatReportTable results={results} />
 
           {/* Interlock Verification Matrix */}
           <div style={{ marginBottom: 24 }}>
@@ -650,20 +381,7 @@ export const FatReportModal: React.FC = () => {
           </div>
 
           {/* Signatures Block */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 30, marginTop: 30, paddingTop: 16, borderTop: '1px solid #cbd5e1' }}>
-            <div>
-              <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.commissioningLead || 'Commissioning Lead Engineer'}</div>
-              {projectSettings.organization && (
-                <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.organization}</div>
-              )}
-            </div>
-            <div>
-              <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.clientAuthority || 'Client Acceptance Authority'}</div>
-              <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.customerName || 'Client Authority'}</div>
-            </div>
-          </div>
+          <FatReportSignatures projectSettings={projectSettings} />
         </div>
       </div>
     </div>
