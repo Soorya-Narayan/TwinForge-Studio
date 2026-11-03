@@ -49,6 +49,7 @@ export interface ElectronBridge {
       error?: string;
     }>;
     readTags: (tags: string[]) => Promise<Record<string, any>>;
+    readNodeDataTypes?: (tags: string[]) => Promise<Record<string, string>>;
     writeTags: (tags: Record<string, { value: any; dataType?: string }>) => Promise<{ success: boolean; error?: string }>;
     startLocalServer: (port?: number) => Promise<{ success: boolean; endpointUrl?: string; error?: string }>;
     stopLocalServer: () => Promise<{ success: boolean }>;

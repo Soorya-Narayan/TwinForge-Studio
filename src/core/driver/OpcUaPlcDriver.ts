@@ -200,6 +200,8 @@ export class OpcUaPlcDriver implements Driver {
   private writeLock = new AsyncLock('write');
   private readLock = new AsyncLock('read');
 
+  public serverNodeDataTypes: Record<string, TagDataType> = {};
+
   constructor(endpointOrOptions?: string | OpcUaConnectionOptions) {
     if (typeof endpointOrOptions === 'string') {
       this.endpointUrl = endpointOrOptions;
@@ -238,12 +240,22 @@ export class OpcUaPlcDriver implements Driver {
    * Looks up the configured OPC UA DataType for a tag, falling back to DEFAULT_OPCUA_TAGS or Float for analogs.
    */
   public getTagDataType(tag: string): TagDataType {
+    const plcNodeId = this.resolvePlcNodeId(tag);
+    if (this.serverNodeDataTypes[plcNodeId]) {
+      return this.serverNodeDataTypes[plcNodeId];
+    }
+    if (this.serverNodeDataTypes[tag]) {
+      return this.serverNodeDataTypes[tag];
+    }
     if (this.tagTypeMap && this.tagTypeMap[tag]) {
       return this.tagTypeMap[tag];
     }
     const def = DEFAULT_OPCUA_TAGS.find((d) => d.tag === tag);
     if (def) {
       return def.dataType;
+    }
+    if (tag === 'SEQ') {
+      return 'Int32';
     }
     if (tag.startsWith('DI_') || tag.endsWith('_PB') || tag.endsWith('_SW') || tag.endsWith('_ZSO') || tag.endsWith('_ZSC')) {
       return 'Boolean';
@@ -359,11 +371,39 @@ export class OpcUaPlcDriver implements Driver {
     if (res.success) {
       this.status.connected = true;
       this.state = 'CONNECTED';
+      await this.discoverServerDataTypes();
       await this.syncOutputsFromPlc();
     } else {
       this.status.connected = false;
       this.state = 'DISCONNECTED';
       throw new Error(res.error || 'Failed to connect to OPC UA server');
+    }
+  }
+
+  /**
+   * Discover node DataTypes from the connected OPC UA server
+   */
+  public async discoverServerDataTypes(): Promise<void> {
+    const api = this.customApi || getElectronOpcUa();
+    if (!api || typeof api.readNodeDataTypes !== 'function') return;
+
+    try {
+      const tagsToQuery = Array.from(
+        new Set([
+          ...DEFAULT_OPCUA_TAGS.map((d) => d.tag),
+          ...DEFAULT_OPCUA_TAGS.map((d) => d.defaultNodeId),
+          ...Object.keys(this.tagMap),
+          ...Object.values(this.tagMap),
+        ])
+      );
+      const types = await api.readNodeDataTypes(tagsToQuery);
+      if (types) {
+        for (const [k, v] of Object.entries(types)) {
+          this.serverNodeDataTypes[k] = v as TagDataType;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to read node DataTypes from OPC UA server:', err);
     }
   }
 
@@ -382,6 +422,7 @@ export class OpcUaPlcDriver implements Driver {
     this.status.connected = false;
     this.state = 'OFFLINE';
     this.outputs = {}; // Invalidate stale outputs upon disconnect
+    this.serverNodeDataTypes = {};
     this.isWriting = false;
     this.isReading = false;
     this.writeLock.abortAll(new Error(`OPC UA driver disconnected (${this.endpointUrl})`));
@@ -491,13 +532,24 @@ export class OpcUaPlcDriver implements Driver {
 
       for (const [tag, value] of Object.entries(inputs)) {
         const plcNodeId = this.resolvePlcNodeId(tag);
-        let dataType: TagDataType = this.getTagDataType(tag);
+        let dataType: TagDataType | undefined =
+          this.serverNodeDataTypes[plcNodeId] ||
+          this.serverNodeDataTypes[tag] ||
+          this.tagTypeMap[tag];
+
+        if (!dataType) {
+          const def = DEFAULT_OPCUA_TAGS.find((d) => d.tag === tag);
+          if (def) {
+            dataType = def.dataType;
+          }
+        }
+
         if (!dataType) {
           if (typeof value === 'boolean') {
             dataType = 'Boolean';
           } else if (typeof value === 'string') {
             dataType = 'String';
-          } else if (tag === 'SEQ' || Number.isInteger(value)) {
+          } else if (tag === 'SEQ') {
             dataType = 'Int32';
           } else {
             dataType = 'Float';

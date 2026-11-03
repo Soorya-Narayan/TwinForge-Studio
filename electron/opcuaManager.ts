@@ -290,6 +290,56 @@ export class OpcUaManager {
   }
 
   /**
+   * Read DataType attributes for given tags from connected OPC UA server
+   */
+  public async readNodeDataTypes(tags: string[]): Promise<Record<string, string>> {
+    if (!this.session || !this.connected) {
+      return {};
+    }
+
+    try {
+      const nodesToRead: ReadValueIdOptions[] = tags.map((t) => ({
+        nodeId: this.formatNodeId(t),
+        attributeId: AttributeIds.DataType,
+      }));
+
+      const dataValues = await this.session.read(nodesToRead);
+      const result: Record<string, string> = {};
+
+      dataValues.forEach((dv, index) => {
+        const tag = tags[index];
+        if (dv.statusCode.equals(StatusCodes.Good) && dv.value?.value) {
+          const typeNodeId = dv.value.value.toString();
+          let typeName: string | undefined;
+          if (typeNodeId.endsWith('i=10') || typeNodeId === 'ns=0;i=10') {
+            typeName = 'Float';
+          } else if (typeNodeId.endsWith('i=11') || typeNodeId === 'ns=0;i=11') {
+            typeName = 'Double';
+          } else if (typeNodeId.endsWith('i=6') || typeNodeId === 'ns=0;i=6') {
+            typeName = 'Int32';
+          } else if (typeNodeId.endsWith('i=4') || typeNodeId === 'ns=0;i=4') {
+            typeName = 'Int16';
+          } else if (typeNodeId.endsWith('i=1') || typeNodeId === 'ns=0;i=1') {
+            typeName = 'Boolean';
+          } else if (typeNodeId.endsWith('i=12') || typeNodeId === 'ns=0;i=12') {
+            typeName = 'String';
+          }
+
+          if (typeName) {
+            result[tag] = typeName;
+            result[this.formatNodeId(tag)] = typeName;
+          }
+        }
+      });
+
+      return result;
+    } catch (err: any) {
+      console.warn('Error reading OPC UA node data types:', err?.message || String(err));
+      return {};
+    }
+  }
+
+  /**
    * Write multiple tags to the connected OPC UA Server
    */
   public async writeTags(tags: Record<string, { value: any; dataType?: string }>): Promise<{ success: boolean; error?: string }> {
@@ -321,7 +371,7 @@ export class OpcUaManager {
           opcDataType = DataType.String;
           val = String(val);
         } else if (typeof val === 'number') {
-          if (Number.isInteger(val)) {
+          if (tag === 'SEQ' || tag.endsWith(';s=SEQ') || tag.endsWith('.SEQ')) {
             opcDataType = DataType.Int32;
             val = Math.trunc(val);
           } else {

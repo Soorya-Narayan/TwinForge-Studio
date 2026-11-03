@@ -51,6 +51,7 @@ export interface ElectronAPI {
       error?: string;
     }>;
     readTags: (tags: string[]) => Promise<Record<string, any>>;
+    readNodeDataTypes: (tags: string[]) => Promise<Record<string, string>>;
     writeTags: (tags: Record<string, { value: any; dataType?: string }>) => Promise<{ success: boolean; error?: string }>;
     startLocalServer: (port?: number) => Promise<{ success: boolean; endpointUrl?: string; error?: string }>;
     stopLocalServer: () => Promise<{ success: boolean }>;
@@ -69,6 +70,7 @@ const api: ElectronAPI = {
     disconnect: () => ipcRenderer.invoke('opcua:disconnect'),
     getStatus: () => ipcRenderer.invoke('opcua:getStatus'),
     readTags: (tags) => ipcRenderer.invoke('opcua:readTags', tags),
+    readNodeDataTypes: (tags) => ipcRenderer.invoke('opcua:readNodeDataTypes', tags),
     writeTags: (tags) => ipcRenderer.invoke('opcua:writeTags', tags),
     startLocalServer: (port) => ipcRenderer.invoke('opcua:startLocalServer', port),
     stopLocalServer: () => ipcRenderer.invoke('opcua:stopLocalServer'),

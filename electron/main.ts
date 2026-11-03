@@ -286,6 +286,10 @@ ipcMain.handle('opcua:readTags', async (_event, tags: string[]) => {
   return opcuaManager.readTags(tags);
 });
 
+ipcMain.handle('opcua:readNodeDataTypes', async (_event, tags: string[]) => {
+  return opcuaManager.readNodeDataTypes(tags);
+});
+
 ipcMain.handle('opcua:writeTags', async (_event, tags: Record<string, { value: any; dataType?: string }>) => {
   return opcuaManager.writeTags(tags);
 });
