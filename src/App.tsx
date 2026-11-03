@@ -73,76 +73,57 @@ export function App() {
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', background: '#e2e8f0', padding: 3, borderRadius: 6, gap: 2 }}>
+        <nav className="nav-segmented-tabs" aria-label="Main Navigation">
           <button
             onClick={() => setActiveTab('MIMIC')}
-            className={`btn ${activeTab === 'MIMIC' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'MIMIC' ? 'active' : ''}`}
           >
             PROCESS MIMIC
           </button>
           <button
             onClick={() => setActiveTab('TRENDS')}
-            className={`btn ${activeTab === 'TRENDS' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'TRENDS' ? 'active' : ''}`}
           >
             TREND RECORDER
           </button>
           <button
             onClick={() => setActiveTab('FAT')}
-            className={`btn ${activeTab === 'FAT' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'FAT' ? 'active' : ''}`}
           >
             FAT SUITE {results.length > 0 && `(${results.filter((r) => r.passed).length}/${results.length})`}
           </button>
           <button
             onClick={() => setActiveTab('FAULTS')}
-            className={`btn ${activeTab === 'FAULTS' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'FAULTS' ? 'active' : ''}`}
           >
             FAULT DECK {faults.length > 0 && `(${faults.length})`}
           </button>
           <button
             onClick={() => setActiveTab('TAGS')}
-            className={`btn ${activeTab === 'TAGS' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'TAGS' ? 'active' : ''}`}
           >
             TAG WATCH
           </button>
           <button
             onClick={() => setActiveTab('MODELER')}
-            className={`btn ${activeTab === 'MODELER' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'MODELER' ? 'active' : ''}`}
           >
             P&ID MODELER
           </button>
           <button
             onClick={() => setActiveTab('TEMPLATES')}
-            className={`btn ${activeTab === 'TEMPLATES' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ padding: '5px 12px', fontSize: 11 }}
+            className={`nav-tab-btn ${activeTab === 'TEMPLATES' ? 'active' : ''}`}
           >
             SITE TEMPLATES
           </button>
-        </div>
+        </nav>
 
         {/* Diagnostics & Plant Status Indicators */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Active Plant Chip (Clickable to switch) */}
           <button
             onClick={() => setActiveTab('TEMPLATES')}
-            className="btn btn-ghost"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              fontSize: 11,
-              background: '#f8fafc',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 4,
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-            }}
+            className="header-action-btn"
             title="Click to view and switch plant templates"
           >
             <Factory size={13} color="var(--color-primary)" />
@@ -159,18 +140,10 @@ export function App() {
           {/* PLC Driver & OPC UA Status Chip */}
           <button
             onClick={() => setShowOpcUaModal(true)}
-            className="btn btn-ghost"
+            className="header-action-btn"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              fontSize: 11,
-              background: driverMode === 'OPCUA' ? '#f0fdf4' : '#f8fafc',
-              border: `1px solid ${driverMode === 'OPCUA' ? '#bbf7d0' : 'var(--border-subtle)'}`,
-              borderRadius: 4,
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
+              background: driverMode === 'OPCUA' ? '#f0fdf4' : '#ffffff',
+              borderColor: driverMode === 'OPCUA' ? '#bbf7d0' : 'var(--border-strong)',
             }}
             title="Configure PLC Driver & OPC UA Hardware Connection"
           >
@@ -182,16 +155,33 @@ export function App() {
           </button>
 
           {hasTrippedInterlock && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, background: '#fee2e2', padding: '4px 8px', borderRadius: 4, border: '1px solid #fca5a5' }}>
+            <div
+              style={{
+                height: 32,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '0 10px',
+                borderRadius: 5,
+                background: '#fee2e2',
+                border: '1px solid #fca5a5',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--color-danger)',
+                whiteSpace: 'nowrap',
+              }}
+            >
               <span className="led led-alarm" />
-              <span className="mono" style={{ color: 'var(--color-danger)', fontWeight: 700 }}>
-                INTERLOCK TRIP
-              </span>
+              <span className="mono">INTERLOCK TRIP</span>
             </div>
           )}
 
           {results.length > 0 && (
-            <button onClick={openReportModal} className="btn btn-success" style={{ fontSize: 11, padding: '5px 10px' }}>
+            <button
+              onClick={openReportModal}
+              className="btn btn-success"
+              style={{ height: 32, padding: '0 12px', fontSize: 11, fontWeight: 700 }}
+            >
               FAT REPORT
             </button>
           )}

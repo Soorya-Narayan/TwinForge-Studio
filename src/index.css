@@ -90,6 +90,9 @@ body {
   text-decoration: none;
   user-select: none;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
 }
 
 .btn-primary {
@@ -139,6 +142,74 @@ body {
   color: #ffffff;
   border-color: #0369a1;
 }
+
+/* Nav Segmented Control */
+.nav-segmented-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 3px;
+  border-radius: 6px;
+  gap: 2px;
+}
+
+.nav-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+  letter-spacing: 0.02em;
+}
+
+.nav-tab-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.nav-tab-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.25);
+}
+
+/* Header Action Buttons */
+.header-action-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.header-action-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
 
 /* Precision Engineering Chips & Badges */
 .badge {

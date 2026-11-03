@@ -38,26 +38,28 @@ export const FatSuitePanel: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+            {/* Scan Mode Toggle Pill */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 11,
                 background: '#f8fafc',
-                padding: '4px 8px',
-                borderRadius: 4,
-                border: '1px solid var(--border-subtle)',
+                padding: '0 6px 0 10px',
+                borderRadius: 5,
+                border: '1px solid var(--border-strong)',
+                height: 32,
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>SCAN:</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em' }}>SCAN:</span>
               <button
                 type="button"
                 onClick={() => setScanMode(scanMode === 'lockstep' ? 'classic' : 'lockstep')}
                 disabled={isRunningSuite}
                 style={{
-                  padding: '2px 8px',
+                  height: 22,
+                  padding: '0 8px',
                   fontSize: 10,
                   fontWeight: 700,
                   borderRadius: 3,
@@ -65,6 +67,8 @@ export const FatSuitePanel: React.FC = () => {
                   cursor: isRunningSuite ? 'not-allowed' : 'pointer',
                   background: scanMode === 'lockstep' ? '#0284c7' : '#94a3b8',
                   color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
                 title="Lockstep: Write inputs (SEQ = n) -> Wait PLC SEQ_ACK echo -> Read outputs -> Tick engine"
               >
@@ -72,25 +76,27 @@ export const FatSuitePanel: React.FC = () => {
               </button>
             </div>
 
+            {/* Time Mode Toggle Pill */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 11,
                 background: '#f8fafc',
-                padding: '4px 8px',
-                borderRadius: 4,
-                border: '1px solid var(--border-subtle)',
+                padding: '0 6px 0 10px',
+                borderRadius: 5,
+                border: '1px solid var(--border-strong)',
+                height: 32,
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>TIME:</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em' }}>TIME:</span>
               <button
                 type="button"
                 onClick={() => setTimeAdvanceMode(timeAdvanceMode === 'measured' ? 'nominal' : 'measured')}
                 disabled={isRunningSuite}
                 style={{
-                  padding: '2px 8px',
+                  height: 22,
+                  padding: '0 8px',
                   fontSize: 10,
                   fontWeight: 700,
                   borderRadius: 3,
@@ -98,6 +104,8 @@ export const FatSuitePanel: React.FC = () => {
                   cursor: isRunningSuite ? 'not-allowed' : 'pointer',
                   background: timeAdvanceMode === 'measured' ? '#10b981' : '#f59e0b',
                   color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
                 title={
                   timeAdvanceMode === 'measured'
@@ -109,17 +117,25 @@ export const FatSuitePanel: React.FC = () => {
               </button>
             </div>
 
+            {/* Run Full FAT Suite */}
             <button
               onClick={runAllTests}
               className="btn btn-primary"
               disabled={isRunningSuite}
+              style={{ height: 32, padding: '0 16px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
             >
-              <Play size={14} />
+              <Play size={13} />
               {isRunningSuite ? 'EXECUTING SUITE...' : 'RUN FULL FAT SUITE'}
             </button>
+
+            {/* FAT Report Modal Trigger */}
             {results.length > 0 && (
-              <button onClick={openReportModal} className="btn btn-success">
-                <FileText size={14} />
+              <button
+                onClick={openReportModal}
+                className="btn btn-success"
+                style={{ height: 32, padding: '0 14px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                <FileText size={13} />
                 FAT REPORT
               </button>
             )}
@@ -255,30 +271,36 @@ export const FatSuitePanel: React.FC = () => {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 100, flexShrink: 0, gap: 8 }}>
                   {result?.timeDriftMs !== undefined && result.timeDriftMs > 0 && (
                     <span
-                      style={{ fontSize: 9, color: '#0284c7', fontFamily: 'monospace' }}
+                      style={{ fontSize: 9, color: '#0284c7', fontFamily: 'monospace', whiteSpace: 'nowrap' }}
                       title={`Cumulative time drift: +${result.timeDriftMs}ms (${result.timeAdvanceMode === 'measured' ? 'physics compensated' : 'nominal'}) · Avg I/O latency: ${result.avgIoLatencyMs ?? 0}ms/scan`}
                     >
                       +{result.timeDriftMs}ms drift
                     </span>
                   )}
                   {result ? (
-                    result.passed ? (
-                      <span className="badge badge-success" style={{ fontSize: 10 }}>
-                        <CheckCircle2 size={12} /> PASS
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className={`badge ${result.passed ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: 10, padding: '3px 8px' }}>
+                        {result.passed ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                        {result.passed ? 'PASS' : 'FAIL'}
                       </span>
-                    ) : (
-                      <span className="badge badge-danger" style={{ fontSize: 10 }}>
-                        <XCircle size={12} /> FAIL
-                      </span>
-                    )
+                      <button
+                        onClick={() => runSingleTest(tc.id)}
+                        className="btn btn-ghost"
+                        style={{ padding: '0 8px', height: 24, fontSize: 10, fontWeight: 600 }}
+                        disabled={isRunningSuite}
+                        title="Re-run this scenario"
+                      >
+                        RE-RUN
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => runSingleTest(tc.id)}
                       className="btn btn-ghost"
-                      style={{ padding: '3px 8px', fontSize: 11 }}
+                      style={{ padding: '0 12px', height: 28, fontSize: 11, fontWeight: 600 }}
                       disabled={isRunningSuite}
                     >
                       EXECUTE
