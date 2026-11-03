@@ -6,7 +6,7 @@
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle, Download } from 'lucide-react';
+import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle, Download, Upload } from 'lucide-react';
 
 export const FatReportModal: React.FC = () => {
   const showReportModal = useFatStore((s) => s.showReportModal);
@@ -366,6 +366,54 @@ export const FatReportModal: React.FC = () => {
               }}
             />
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Logo:</label>
+            <label
+              className="btn btn-ghost"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                background: '#ffffff',
+                color: '#0f172a',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <Upload size={12} />
+              {projectSettings.uploadedLogo ? 'Change Logo' : 'Upload Logo'}
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setProjectSettings({ uploadedLogo: reader.result as string });
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+            </label>
+            {projectSettings.uploadedLogo && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setProjectSettings({ uploadedLogo: '' })}
+                style={{ padding: '2px 5px', fontSize: 10, color: '#ef4444' }}
+                title="Remove Logo"
+              >
+                Remove
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Printable Report Document Body */}
@@ -383,11 +431,13 @@ export const FatReportModal: React.FC = () => {
           {/* Document Header with Banner */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: 16, marginBottom: 20 }}>
             <div>
-              <img
-                src="./goosebanner.png"
-                alt={`${projectSettings.customerName} Banner`}
-                style={{ height: 46, objectFit: 'contain', marginBottom: 8, display: 'block' }}
-              />
+              {projectSettings.uploadedLogo && (
+                <img
+                  src={projectSettings.uploadedLogo}
+                  alt={projectSettings.customerName ? `${projectSettings.customerName} Logo` : 'Report Logo'}
+                  style={{ height: 46, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+                />
+              )}
               <h1 style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
                 FACTORY ACCEPTANCE TEST REPORT
               </h1>

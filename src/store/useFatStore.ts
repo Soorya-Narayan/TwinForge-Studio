@@ -35,6 +35,7 @@ export interface ReportProjectSettings {
   customerName: string;
   commissioningLead?: string;
   clientAuthority?: string;
+  uploadedLogo?: string;
   isCustomRef?: boolean;
 }
 
@@ -729,6 +730,7 @@ export const useFatStore = create<FatStore>()(
           customerName: state.projectSettings.customerName,
           commissioningLead: state.projectSettings.commissioningLead,
           clientAuthority: state.projectSettings.clientAuthority,
+          uploadedLogo: state.projectSettings.uploadedLogo,
           ...(state.projectSettings.isCustomRef
             ? {
                 certificateRef: state.projectSettings.certificateRef,
