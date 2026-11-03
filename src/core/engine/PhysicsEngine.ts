@@ -388,6 +388,9 @@ export class PhysicsEngine {
     const dtMin = dt / 60.0;
 
     for (const tank of this.topology.tanks) {
+      if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE') && (tank.id === 'TK-BALANCE' || tank.id === 'TK-PRODUCT')) {
+        continue;
+      }
       const state = this.states.get(tank.id);
       if (!state) continue;
 
@@ -529,7 +532,7 @@ export class PhysicsEngine {
         const netBalFlow = rawFlow - feedFlow + divertFlow;
         const deltaBal = netBalFlow * dtMin;
         const newBalVol = Math.max(50, Math.min(600, (balTank.volumeL ?? 450) + deltaBal));
-        balTank.volumeL = Number(newBalVol.toFixed(2));
+        balTank.volumeL = Number(newBalVol.toFixed(4));
         balTank.levelPct = Number(((newBalVol / 600) * 100).toFixed(2));
       }
 

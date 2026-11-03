@@ -245,7 +245,25 @@ export class RawMilkSupplyCircuit {
       ];
 
       const res = solveSeriesOperatingPoint(
-        (q) => this.pump.getHeadM(q, currentSpeedRatio > 0.05 ? currentSpeedRatio : 0.05),
+        (q) => {
+          let h = this.pump.getHeadM(q, currentSpeedRatio > 0.05 ? currentSpeedRatio : 0.05);
+          // Account for cavitation degradation during operating point solve
+          const pDropSuct = this.suctionPipe.pressureDropBar(q, fluid);
+          const pSuctAbsBar = Math.max(0, pSiloAbsBar - pDropSuct);
+          const pVapPa = CentrifugalPumpModel.getWaterVapourPressurePa(fluid.temperatureC);
+          const pSuctPa = pSuctAbsBar * 100000;
+          const rhoG = fluid.densityKgM3 * GRAVITY_M_S2;
+          const D = this.suctionPipe.diameterMm / 1000;
+          const A = (Math.PI / 4) * D * D;
+          const v = A > 0 ? (q / (3600 * 1000)) / A : 0;
+          const npsha = Math.max(0, (pSuctPa - pVapPa) / rhoG + (v * v) / (2 * GRAVITY_M_S2));
+          const npshr = this.pump.npshrRatedM * Math.pow(q / Math.max(1, this.pump.ratedFlowLph), 2);
+          if (npsha < npshr && q > 100) {
+            const pen = Math.max(0, 1 - 1.5 * ((npshr - npsha) / Math.max(0.1, npshr)));
+            h *= pen;
+          }
+          return h;
+        },
         elements,
         fluid,
         {
@@ -265,7 +283,19 @@ export class RawMilkSupplyCircuit {
       const pSuctionDrop = this.suctionPipe.pressureDropBar(solvedFlowLph, fluid);
       pSuctionBar = Math.max(0, pSiloAbsBar - pSuctionDrop);
 
-      const pumpHeadM = this.pump.getHeadM(solvedFlowLph, currentSpeedRatio);
+      const pVapPa = CentrifugalPumpModel.getWaterVapourPressurePa(fluid.temperatureC);
+      const pSuctPa = pSuctionBar * 100000;
+      const rhoG = fluid.densityKgM3 * GRAVITY_M_S2;
+      const D = this.suctionPipe.diameterMm / 1000;
+      const A = (Math.PI / 4) * D * D;
+      const v = A > 0 ? (solvedFlowLph / (3600 * 1000)) / A : 0;
+      const npsha = Math.max(0, (pSuctPa - pVapPa) / rhoG + (v * v) / (2 * GRAVITY_M_S2));
+      const npshr = this.pump.npshrRatedM * Math.pow(solvedFlowLph / Math.max(1, this.pump.ratedFlowLph), 2);
+      let pumpHeadM = this.pump.getHeadM(solvedFlowLph, currentSpeedRatio);
+      if (npsha < npshr && solvedFlowLph > 100) {
+        const pen = Math.max(0, 1 - 1.5 * ((npshr - npsha) / Math.max(0.1, npshr)));
+        pumpHeadM *= pen;
+      }
       const pumpDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * pumpHeadM) / 100000;
       pDischargeBar = pSuctionBar + pumpDeltaPBar;
     } else if (isPumpRunning && !isPv1Passable) {

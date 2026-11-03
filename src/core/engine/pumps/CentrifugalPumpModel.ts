@@ -246,13 +246,12 @@ export class CentrifugalPumpModel {
     // Motor Current
     let currentA = 0;
     if (this.speedRatio > 0.01) {
-      currentA = this.ratedCurrentA * (pShaftKw / (this.ratedPowerKw * this.motorEfficiency));
-    }
-
-    // Overload fault multiplier
-    const overloadFault = this.faults.get('motor_overload');
-    if (overloadFault?.value) {
-      currentA *= overloadFault.value;
+      const overloadFault = this.faults.get('motor_overload');
+      if (overloadFault?.value !== undefined) {
+        currentA = this.ratedCurrentA * overloadFault.value;
+      } else {
+        currentA = this.ratedCurrentA * (pShaftKw / (this.ratedPowerKw * this.motorEfficiency));
+      }
     }
 
     // Thermal Overload Integration: max(0, (I/I_rated)² - 1)
