@@ -79,38 +79,37 @@ export class GenericPlcDriver implements Driver {
 
   public tick(dtMs: number): void {
     void dtMs;
-    // Lockstep sequence-number handshake echo
-    if (this.inputs['SEQ'] !== undefined) {
-      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
-    }
 
-    if (this.state === 'STOPPED' || this.state === 'EMERGENCY_STOP') {
-      return;
-    }
+    if (this.state !== 'STOPPED' && this.state !== 'EMERGENCY_STOP') {
+      // Evaluate standard pump cavitation interlocks
+      for (const p of this.topology.pumps) {
+        const il = this.interlocks.get(`IL-${p.tag}`);
+        if (!il) continue;
 
-    // Evaluate standard pump cavitation interlocks
-    for (const p of this.topology.pumps) {
-      const il = this.interlocks.get(`IL-${p.tag}`);
-      if (!il) continue;
+        // Find suction tank if directly connected
+        const suction = this.topology.connections.find((c) => c.toNode === p.id);
+        if (suction) {
+          const levelTag = `${suction.fromNode}_LT`;
+          const level = Number(this.inputs[levelTag] ?? 50);
 
-      // Find suction tank if directly connected
-      const suction = this.topology.connections.find((c) => c.toNode === p.id);
-      if (suction) {
-        const levelTag = `${suction.fromNode}_LT`;
-        const level = Number(this.inputs[levelTag] ?? 50);
-
-        if (level < 5) {
-          il.isOk = false;
-          il.tripped = true;
-          this.outputs[`${p.tag}_START`] = false; // Emergency trip
-        } else {
-          il.isOk = true;
+          if (level < 5) {
+            il.isOk = false;
+            il.tripped = true;
+            this.outputs[`${p.tag}_START`] = false; // Emergency trip
+          } else {
+            il.isOk = true;
+          }
         }
       }
     }
 
     // Mirror PLC state machine token to outputs
     (this.outputs as any)['PLC_STATE'] = this.state;
+
+    // Lockstep sequence-number handshake echo (must be at the end of scan after all outputs are computed)
+    if (this.inputs['SEQ'] !== undefined) {
+      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
+    }
   }
 
   public async resetPrecondition(
@@ -151,7 +150,7 @@ export class GenericPlcDriver implements Driver {
 
   public emergencyStop(): void {
     this.state = 'EMERGENCY_STOP';
-    this.clearAllCommands();
+    this.clearAllOutputs();
   }
 
   public resetSystem(): void {
@@ -173,9 +172,14 @@ export class GenericPlcDriver implements Driver {
     }
   }
 
-  private clearAllCommands(): void {
+  public clearAllOutputs(): void {
     for (const k of Object.keys(this.outputs)) {
+      if (k === 'SEQ_ACK' || k === 'PLC_STATE') continue;
       this.outputs[k] = typeof this.outputs[k] === 'number' ? 0 : false;
     }
+  }
+
+  public clearAllCommands(): void {
+    this.clearAllOutputs();
   }
 }

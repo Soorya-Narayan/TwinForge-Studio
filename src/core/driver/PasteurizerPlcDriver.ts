@@ -97,10 +97,6 @@ export class PasteurizerPlcDriver implements Driver {
 
   public tick(dtMs: number): void {
     void dtMs;
-    // Lockstep sequence-number handshake echo
-    if (this.inputs['SEQ'] !== undefined) {
-      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
-    }
 
     // 1. Evaluate Legal Safety Interlocks
     this.evaluateInterlocks();
@@ -110,6 +106,11 @@ export class PasteurizerPlcDriver implements Driver {
 
     // Mirror PLC state machine token to outputs
     (this.outputs as any)['PLC_STATE'] = this.state;
+
+    // Lockstep sequence-number handshake echo (must be at the end of scan after all outputs are computed)
+    if (this.inputs['SEQ'] !== undefined) {
+      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
+    }
   }
 
   public async resetPrecondition(

@@ -109,11 +109,6 @@ export class MockPlcDriver implements Driver {
   public tick(dtMs: number): void {
     const dtSeconds = dtMs / 1000.0;
 
-    // Lockstep sequence-number handshake echo
-    if (this.inputs['SEQ'] !== undefined) {
-      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
-    }
-
     // 1. Evaluate Interlock Matrix
     this.evaluateInterlocks();
 
@@ -124,6 +119,11 @@ export class MockPlcDriver implements Driver {
 
     // Mirror PLC state machine token to outputs
     (this.outputs as any)['PLC_STATE'] = this.state;
+
+    // Lockstep sequence-number handshake echo (must be at the end of scan after all outputs are computed)
+    if (this.inputs['SEQ'] !== undefined) {
+      this.outputs['SEQ_ACK'] = Number(this.inputs['SEQ']);
+    }
   }
 
   public async resetPrecondition(
@@ -303,13 +303,13 @@ export class MockPlcDriver implements Driver {
 
   public abortBatch(): void {
     this.state = 'ABORTED';
-    this.clearAllCommands();
+    this.clearAllOutputs();
   }
 
   public resetBatch(): void {
     this.state = 'IDLE';
     this.recipe.mixTimerS = 0;
-    this.clearAllCommands();
+    this.clearAllOutputs();
     (this.outputs as any)['PLC_STATE'] = 'IDLE';
     // Reset tripped interlocks
     for (const il of this.interlocks.values()) {
@@ -317,10 +317,14 @@ export class MockPlcDriver implements Driver {
     }
   }
 
-  private clearAllCommands(): void {
+  public clearAllOutputs(): void {
     for (const key of Object.keys(this.outputs)) {
       if (key === 'SEQ_ACK' || key === 'PLC_STATE') continue;
       this.outputs[key] = typeof this.outputs[key] === 'number' ? 0 : false;
     }
+  }
+
+  public clearAllCommands(): void {
+    this.clearAllOutputs();
   }
 }
