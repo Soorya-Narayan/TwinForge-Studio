@@ -201,7 +201,10 @@ export class PhysicsEngine {
 
       // Check command tag (e.g., V101_CMD or tag name directly)
       const cmdRaw = commands[`${valve.tag}_CMD`] ?? commands[valve.tag] ?? commands[valve.id];
-      const targetPct = typeof cmdRaw === 'number' ? cmdRaw : cmdRaw ? 100 : 0;
+      const isOnOff = valve.type === 'on_off_valve';
+      const targetPct = isOnOff
+        ? (cmdRaw ? 100 : 0)
+        : (typeof cmdRaw === 'number' ? cmdRaw : cmdRaw ? 100 : 0);
 
       const ratePctPerSec = 100.0 / Math.max(0.1, valve.travelTimeS);
       const maxDelta = ratePctPerSec * dt;
@@ -344,6 +347,11 @@ export class PhysicsEngine {
   }
 
   private propagateFlow(nodeId: string, flow: number, outgoing: Map<string, PipeConnection[]>): void {
+    // If we reached a tank, fluid accumulates in the vessel; do not propagate flow out of its drain/outlet!
+    const isTank = this.topology.tanks.some((t) => t.id === nodeId);
+    if (isTank) {
+      return;
+    }
     const conns = outgoing.get(nodeId) ?? [];
     for (const c of conns) {
       this.connectionFlows.set(c.id, flow);

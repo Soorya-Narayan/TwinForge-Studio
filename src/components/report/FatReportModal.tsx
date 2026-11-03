@@ -6,6 +6,7 @@
 import React from 'react';
 import { useFatStore } from '../../store/useFatStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { computeEvidenceFingerprint } from '../../core/report/fingerprint';
 import { Printer, CheckCircle, ShieldCheck, X, Settings2, XCircle, AlertCircle, Download, Upload } from 'lucide-react';
 
 export const FatReportModal: React.FC = () => {
@@ -83,26 +84,11 @@ export const FatReportModal: React.FC = () => {
         timestamp: reportTimestamp || '',
       };
 
-      const payloadString = JSON.stringify(payloadObject, null, 2);
-      if (isMounted) {
-        setRawPayload(payloadString);
-      }
-
       try {
-        if (typeof crypto !== 'undefined' && crypto.subtle) {
-          const encoder = new TextEncoder();
-          const data = encoder.encode(payloadString);
-          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-          if (isMounted) {
-            setRunFingerprint(hex);
-          }
-        } else {
-          // Fallback if Web Crypto is unavailable
-          if (isMounted) {
-            setRunFingerprint('UNAVAILABLE');
-          }
+        const { payloadString, hexFingerprint } = await computeEvidenceFingerprint(payloadObject);
+        if (isMounted) {
+          setRawPayload(payloadString);
+          setRunFingerprint(hexFingerprint);
         }
       } catch (err) {
         console.error('Failed to compute run fingerprint:', err);
