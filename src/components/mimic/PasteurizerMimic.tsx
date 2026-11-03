@@ -101,17 +101,7 @@ export const PasteurizerMimic: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', overflowY: 'auto', paddingBottom: 20 }}>
       {/* 1. SCADA Operator Control Toolbar */}
-      <div
-        className="industrial-card"
-        style={{
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
+      <div className="industrial-card scada-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={running ? pause : start}
@@ -127,7 +117,7 @@ export const PasteurizerMimic: React.FC = () => {
             RESET
           </button>
 
-          <div style={{ display: 'flex', gap: 2, background: '#e2e8f0', padding: 2, borderRadius: 4, marginLeft: 6 }}>
+          <div className="scada-speed-group" style={{ marginLeft: 6 }}>
             {[1, 2, 5, 10].map((s) => (
               <button
                 key={s}
@@ -152,18 +142,7 @@ export const PasteurizerMimic: React.FC = () => {
         {/* Real-time Status Banners */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Diversion Status */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#f8fafc',
-              padding: '4px 10px',
-              borderRadius: 4,
-              border: '1px solid var(--border-subtle)',
-              fontSize: 11,
-            }}
-          >
+          <div className="scada-telemetry-pill">
             <span style={{ color: 'var(--text-muted)' }}>FLOW DIVERSION:</span>
             <span
               className={`badge ${isForwardFlow ? 'badge-success' : isDiverted ? 'badge-danger' : 'badge-neutral'}`}
@@ -174,18 +153,7 @@ export const PasteurizerMimic: React.FC = () => {
           </div>
 
           {/* Holding Tube TT5 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#f8fafc',
-              padding: '4px 10px',
-              borderRadius: 4,
-              border: '1px solid var(--border-subtle)',
-              fontSize: 11,
-            }}
-          >
+          <div className="scada-telemetry-pill">
             <span style={{ color: 'var(--text-muted)' }}>HOLDING TUBE (TT5):</span>
             <span
               className="mono"
@@ -197,18 +165,7 @@ export const PasteurizerMimic: React.FC = () => {
           </div>
 
           {/* Differential Pressure Check */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#f8fafc',
-              padding: '4px 10px',
-              borderRadius: 4,
-              border: '1px solid var(--border-subtle)',
-              fontSize: 11,
-            }}
-          >
+          <div className="scada-telemetry-pill">
             <span style={{ color: 'var(--text-muted)' }}>DP (PT4-PT2):</span>
             <span className="mono" style={{ fontWeight: 800, color: dpSafe ? '#059669' : '#dc2626' }}>
               +{(pt4 - pt2).toFixed(2)} bar

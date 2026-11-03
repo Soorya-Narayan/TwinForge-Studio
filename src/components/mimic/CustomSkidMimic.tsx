@@ -43,17 +43,7 @@ export const CustomSkidMimic: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', overflowY: 'auto', paddingBottom: 20 }}>
       {/* 1. SCADA Operator Control Toolbar */}
-      <div
-        className="industrial-card"
-        style={{
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
+      <div className="industrial-card scada-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={running ? pause : start}
@@ -69,7 +59,7 @@ export const CustomSkidMimic: React.FC = () => {
             RESET
           </button>
 
-          <div style={{ display: 'flex', gap: 2, background: '#e2e8f0', padding: 2, borderRadius: 4, marginLeft: 6 }}>
+          <div className="scada-speed-group" style={{ marginLeft: 6 }}>
             {[1, 2, 5, 10].map((s) => (
               <button
                 key={s}
@@ -93,12 +83,12 @@ export const CustomSkidMimic: React.FC = () => {
 
         {/* Skid Status Chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f8fafc', padding: '4px 10px', borderRadius: 4, border: '1px solid var(--border-subtle)', fontSize: 11 }}>
+          <div className="scada-telemetry-pill">
             <span style={{ color: 'var(--text-muted)' }}>TEMPLATE:</span>
             <strong style={{ color: 'var(--color-primary)' }}>{customMeta?.name ?? 'Custom Process Skid'}</strong>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f8fafc', padding: '4px 10px', borderRadius: 4, border: '1px solid var(--border-subtle)', fontSize: 11 }}>
+          <div className="scada-telemetry-pill">
             <span style={{ color: 'var(--text-muted)' }}>STATE:</span>
             <span className={`badge ${running ? 'badge-success' : 'badge-neutral'}`}>
               {running ? 'RUNNING' : 'STOPPED'}

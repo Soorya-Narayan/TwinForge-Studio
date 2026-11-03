@@ -291,27 +291,20 @@ export const FatReportModal: React.FC = () => {
             <span>Settings:</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Customer:</label>
+          <div className="form-row-inline">
+            <label className="form-label-subtle">Customer:</label>
             <input
               type="text"
               value={projectSettings.customerName}
               onChange={(e) => setProjectSettings({ customerName: e.target.value })}
               placeholder="e.g. Acme Industrial Ltd"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                width: 190,
-                background: '#ffffff',
-                color: '#0f172a',
-              }}
+              className="form-input-scada"
+              style={{ width: 190 }}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Report Ref:</label>
+          <div className="form-row-inline">
+            <label className="form-label-subtle">Report Ref:</label>
             <input
               type="text"
               value={projectSettings.certificateRef}
@@ -323,72 +316,44 @@ export const FatReportModal: React.FC = () => {
                 });
               }}
               placeholder="e.g. FAT-2026-001"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                width: 150,
-                background: '#ffffff',
-                color: '#0f172a',
-              }}
+              className="form-input-scada"
+              style={{ width: 150 }}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Authority:</label>
+          <div className="form-row-inline">
+            <label className="form-label-subtle">Authority:</label>
             <input
               type="text"
               value={projectSettings.clientAuthority || ''}
               onChange={(e) => setProjectSettings({ clientAuthority: e.target.value })}
               placeholder="Client Authority"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                width: 160,
-                background: '#ffffff',
-                color: '#0f172a',
-              }}
+              className="form-input-scada"
+              style={{ width: 160 }}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Lead:</label>
+          <div className="form-row-inline">
+            <label className="form-label-subtle">Lead:</label>
             <input
               type="text"
               value={projectSettings.commissioningLead || ''}
               onChange={(e) => setProjectSettings({ commissioningLead: e.target.value })}
               placeholder="Commissioning Lead"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                width: 160,
-                background: '#ffffff',
-                color: '#0f172a',
-              }}
+              className="form-input-scada"
+              style={{ width: 160 }}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ color: '#475569', fontWeight: 600 }}>Organization:</label>
+          <div className="form-row-inline">
+            <label className="form-label-subtle">Organization:</label>
             <input
               type="text"
               value={projectSettings.organization || ''}
               onChange={(e) => setProjectSettings({ organization: e.target.value })}
               placeholder="e.g. Lead Organization"
-              style={{
-                padding: '3px 8px',
-                fontSize: 11,
-                border: '1px solid #cbd5e1',
-                borderRadius: 4,
-                width: 160,
-                background: '#ffffff',
-                color: '#0f172a',
-              }}
+              className="form-input-scada"
+              style={{ width: 160 }}
             />
           </div>
 

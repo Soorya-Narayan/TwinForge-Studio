@@ -103,33 +103,9 @@ export const PheInspectorDrawer: React.FC<PheInspectorDrawerProps> = ({
   };
 
   return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        width: '560px',
-        maxWidth: '96vw',
-        background: '#ffffff',
-        boxShadow: '-8px 0 32px rgba(15, 23, 42, 0.18)',
-        zIndex: 1200,
-        display: 'flex',
-        flexDirection: 'column',
-        borderLeft: '1px solid var(--border-strong)',
-      }}
-    >
+    <div className="scada-drawer-overlay">
       {/* 1. Header Bar */}
-      <div
-        style={{
-          padding: '14px 18px',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#f8fafc',
-        }}
-      >
+      <div className="scada-drawer-header">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
