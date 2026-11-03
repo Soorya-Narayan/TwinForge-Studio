@@ -47,7 +47,7 @@
   - Automated scenario runner executing sequences mapped to Functional Design Specification (FDS) clauses.
   - Step-by-step stimulus injection and scan-by-scan assertion validation.
   - Dual execution backends: in-process mock drivers for offline testing, and live Hardware-in-the-Loop (HIL) execution against external PLCs over OPC UA.
-  - Synchronous lockstep scan mode (`Write inputs → Wait PLC scan → Read outputs → Tick engine`) ensuring deterministic I/O exchange without scan lag or race conditions.
+  - Stepped scan mode (`Write inputs → Scan interval delay (dtMs) → Read outputs → Tick engine`) providing ordered sequential I/O pacing between the test harness and PLC.
   - Live execution telemetry, failure diagnostics, and pass/fail reporting.
 - **FAT Inspection & Export Report**:
   - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation Run Fingerprint (SHA-256).
