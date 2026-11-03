@@ -231,7 +231,7 @@ export const useFatStore = create<FatStore>()(
     const simStore = useSimulationStore.getState();
     const wasLiveRunning = isPartOfSuite ? false : simStore.running;
     if (!isPartOfSuite) {
-      simStore.setFatRunning(true);
+      await simStore.setFatRunning(true);
     }
 
     const currentSkid = simStore.activeSkid;
@@ -682,7 +682,7 @@ export const useFatStore = create<FatStore>()(
 
     const simStore = useSimulationStore.getState();
     const wasLiveRunning = simStore.running;
-    simStore.setFatRunning(true);
+    await simStore.setFatRunning(true);
 
     try {
       for (let i = 0; i < scenarios.length; i++) {

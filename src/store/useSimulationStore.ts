@@ -78,7 +78,7 @@ interface SimulationStore {
   resetOpcuaTagTypes: () => void;
   setInterlockDefinitions: (defs: InterlockDefinition[]) => void;
   resetInterlockDefinitions: () => void;
-  setFatRunning: (active: boolean) => void;
+  setFatRunning: (active: boolean) => Promise<void>;
   start: () => void;
   pause: () => void;
   step: () => void;
@@ -104,13 +104,15 @@ const initialPlc = new PasteurizerPlcDriver(initialInterlockDefs);
 export const useSimulationStore = create<SimulationStore>((set, get) => {
   let timerId: number | null = null;
   let isTicking = false;
+  let currentTickPromise: Promise<void> | null = null;
 
   const tickOnce = async () => {
     if (get().isFatRunning) return;
     if (isTicking) return;
     isTicking = true;
 
-    try {
+    const promise = (async () => {
+      try {
       const { engine, plc, trendHistory, activeSkid } = get();
 
       // 1. PLC reads its inputs and evaluates its internal state machine
@@ -173,10 +175,15 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     const nextTrend = [...trendHistory, dataPoint].slice(-600); // 60s window at 100ms
 
-    set({ snapshot: snap, faults: engine.getFaults(), trendHistory: nextTrend });
-    } finally {
-      isTicking = false;
-    }
+      set({ snapshot: snap, faults: engine.getFaults(), trendHistory: nextTrend });
+      } finally {
+        isTicking = false;
+        currentTickPromise = null;
+      }
+    })();
+
+    currentTickPromise = promise;
+    await promise;
   };
 
   const startLoop = () => {
@@ -196,7 +203,6 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       clearInterval(timerId);
       timerId = null;
     }
-    isTicking = false;
     set({ running: false });
   };
 
@@ -386,9 +392,16 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       set({ interlockDefinitions: DEFAULT_INTERLOCK_DEFINITIONS });
     },
 
-    setFatRunning: (active: boolean) => {
+    setFatRunning: async (active: boolean) => {
       if (active) {
         stopLoop();
+        if (currentTickPromise) {
+          try {
+            await currentTickPromise;
+          } catch (err) {
+            console.warn('Error awaiting in-flight live tick before FAT:', err);
+          }
+        }
       }
       set({ isFatRunning: active });
     },
