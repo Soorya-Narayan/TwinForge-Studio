@@ -798,7 +798,8 @@ export class OpcUaPlcDriver implements Driver {
 
     while (Date.now() - startTime < timeoutMs) {
       await this.syncOutputsFromPlc();
-      lastKnownState = this.state ?? String(this.outputs['PLC_STATE'] ?? '');
+      const plcStateTag = (this.outputs as any)['PLC_STATE'];
+      lastKnownState = plcStateTag !== undefined && plcStateTag !== '' ? String(plcStateTag) : this.state;
 
       if (validStates.includes(lastKnownState)) {
         return; // Verified known state!

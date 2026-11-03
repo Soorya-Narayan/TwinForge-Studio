@@ -48,6 +48,10 @@
   - Step-by-step stimulus injection and scan-by-scan assertion validation.
   - Dual execution backends: in-process mock drivers for offline testing, and live Hardware-in-the-Loop (HIL) execution against external PLCs over OPC UA.
   - Lockstep scan mode with sequence-number handshake (`Write inputs (SEQ = n) → Wait PLC SEQ_ACK echo → Read outputs → Tick engine`) ensuring verified scan cycle synchronization with timeout protection.
+  - **Time Drift Compensation & HIL Timing Tolerance**:
+    - **Physical Time Drift in HIL**: Each lockstep scan step requires IPC/OPC UA network communication ($t_{\text{write}} + t_{\text{scan}} + t_{\text{handshake}} + t_{\text{read}}$). While the nominal scan duration is `dtMs` (e.g. 100 ms), real wall-clock elapsed time per scan is $dtMs + \Delta t_{\text{latency}}$ (typically 120–160 ms). Real PLC timers (TON, TOF) and watchdog clocks run in real wall-clock time.
+    - **Measured Elapsed Time Advancement (`MEASURED SYNC`)**: The simulation engine advances plant physics (fluid flow, tank mass balance, thermal inertia, valve travel) by the measured elapsed wall-clock duration of each scan, keeping simulated physics in exact temporal lockstep with real PLC timers.
+    - **Nominal Stepping with HIL Timing Tolerance (`NOMINAL`)**: When running with fixed nominal `dtMs` stepping, all temporal assertions define a documented HIL timing tolerance ($\pm 1$ scan cycle or $+100$ ms) to prevent network round-trip jitter from causing false test rejections.
   - Live execution telemetry, failure diagnostics, and pass/fail reporting.
 - **FAT Inspection & Export Report**:
   - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation Run Fingerprint (SHA-256).

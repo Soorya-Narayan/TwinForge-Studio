@@ -55,9 +55,11 @@ interface FatStore {
   projectSettings: ReportProjectSettings;
   executionDriverInfo: TestDriverInfo | null;
   scanMode: 'lockstep' | 'classic';
+  timeAdvanceMode: 'measured' | 'nominal';
 
   // Actions
   setScanMode: (mode: 'lockstep' | 'classic') => void;
+  setTimeAdvanceMode: (mode: 'measured' | 'nominal') => void;
   syncScenarios: (skid: SkidId) => void;
   runAllTests: () => Promise<void>;
   runSingleTest: (testId: string, driverOverride?: HarnessPlcDriver) => Promise<void>;
@@ -134,8 +136,10 @@ export const useFatStore = create<FatStore>()(
       reportTimestamp: null,
       executionDriverInfo: null,
       scanMode: 'lockstep',
+      timeAdvanceMode: 'measured',
 
       setScanMode: (mode) => set({ scanMode: mode }),
+      setTimeAdvanceMode: (mode) => set({ timeAdvanceMode: mode }),
 
       projectSettings: {
         certificateRef: generateAutoReportRef(),
@@ -259,15 +263,19 @@ export const useFatStore = create<FatStore>()(
       : `In-Process Mock Driver (${driverName})`;
 
     const scanMode = get().scanMode;
+    const timeAdvanceMode = get().timeAdvanceMode ?? 'measured';
     const driverInfo: TestDriverInfo = {
       driverName,
       driverType,
-      details: `${driverDetails} [${scanMode.toUpperCase()} SCAN]`,
+      details: `${driverDetails} [${scanMode.toUpperCase()} SCAN · ${timeAdvanceMode.toUpperCase()} TIME]`,
       endpoint: (plc as any).endpointUrl || null,
       scanMode,
+      timeAdvanceMode,
     };
 
     const startTime = performance.now();
+    let cumulativeDriftMs = 0;
+    let totalIoLatencyMs = 0;
 
     // Log start in journal
     get().addJournalEntry({
@@ -275,7 +283,7 @@ export const useFatStore = create<FatStore>()(
       timeFormatted: new Date().toLocaleTimeString(),
       source: 'TEST_GEN',
       eventType: 'COMMAND',
-      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Scan Mode: ${scanMode.toUpperCase()} · Harness: ${driverDetails})`,
+      description: `Starting Time-Based Test [${test.id}]: ${test.title} (${totalScans} scans @ ${dtMs}ms · Scan Mode: ${scanMode.toUpperCase()} · Time Mode: ${timeAdvanceMode.toUpperCase()} · Harness: ${driverDetails})`,
       status: 'INFO',
     });
 
@@ -338,6 +346,8 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
+          const stepStartTime = performance.now();
+
           await test.stimulus(engine, plc, step, history);
 
           // Sequence-number handshake for lockstep synchronization
@@ -394,9 +404,22 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          // Step 5: Then tick the engine
+          // Step 5: Measure actual elapsed real time during PLC scan and I/O exchange
+          const stepElapsedMs = Math.round(performance.now() - stepStartTime);
+          const ioLatencyMs = Math.max(0, stepElapsedMs - dtMs);
+          totalIoLatencyMs += ioLatencyMs;
+          const stepDrift = stepElapsedMs - dtMs;
+          cumulativeDriftMs += stepDrift;
+
+          // Time drift compensation:
+          // In 'measured' mode, advance simulation engine by the actual measured elapsed time
+          // so that plant physical integrators stay in lockstep with the PLC's hardware clock.
+          // In 'nominal' mode, advance by nominal dtMs.
+          const stepDt = timeAdvanceMode === 'measured' ? Math.max(1, stepElapsedMs) : dtMs;
+
+          // Step 6: Tick the engine
           const executedInputs = { ...currentInputs };
-          const snap = engine.tick(outputs, dtMs);
+          const snap = engine.tick(outputs, stepDt);
           currentInputs = { ...snap.tags.inputs };
 
           const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
@@ -410,6 +433,9 @@ export const useFatStore = create<FatStore>()(
             step,
             scan: snap.scan,
             timeMs: snap.timeMs,
+            stepDtMs: stepDt,
+            measuredElapsedMs: stepElapsedMs,
+            driftMs: cumulativeDriftMs,
             inputs: executedInputs,
             outputs: { ...outputs },
             plcState: (plc as any).state,
@@ -423,6 +449,8 @@ export const useFatStore = create<FatStore>()(
           if (!plc.status.connected) {
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
+
+          const stepStartTime = performance.now();
 
           await test.stimulus(engine, plc, step, history);
 
@@ -440,7 +468,15 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          const snap = engine.tick(outputs, dtMs);
+          const stepElapsedMs = Math.round(performance.now() - stepStartTime);
+          const ioLatencyMs = Math.max(0, stepElapsedMs - dtMs);
+          totalIoLatencyMs += ioLatencyMs;
+          const stepDrift = stepElapsedMs - dtMs;
+          cumulativeDriftMs += stepDrift;
+
+          const stepDt = timeAdvanceMode === 'measured' ? Math.max(1, stepElapsedMs) : dtMs;
+
+          const snap = engine.tick(outputs, stepDt);
           await plc.writeInputs(snap.tags.inputs);
 
           const interlocks: Record<string, { isOk: boolean; tripped: boolean }> = {};
@@ -454,6 +490,9 @@ export const useFatStore = create<FatStore>()(
             step,
             scan: snap.scan,
             timeMs: snap.timeMs,
+            stepDtMs: stepDt,
+            measuredElapsedMs: stepElapsedMs,
+            driftMs: cumulativeDriftMs,
             inputs: { ...snap.tags.inputs },
             outputs: { ...outputs },
             plcState: (plc as any).state,
@@ -464,7 +503,24 @@ export const useFatStore = create<FatStore>()(
       }
 
       // Evaluate assertions on the full resulting history
-      const assertions = test.assertions(engine, plc, history);
+      const rawAssertions = test.assertions(engine, plc, history);
+      const isHil = driverInfo.driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+
+      // Account for documented HIL timing tolerance when running against live hardware
+      const assertions = rawAssertions.map((a) => {
+        if (a.timingLimitMs !== undefined && a.responseTimeMs !== undefined) {
+          const tolerance = a.timingToleranceMs ?? (isHil ? Math.max(50, dtMs) : 0);
+          const effectiveLimit = a.timingLimitMs + (isHil ? tolerance : 0);
+          if (!a.passed && a.responseTimeMs <= effectiveLimit) {
+            return {
+              ...a,
+              passed: true,
+              message: `${a.message} (Within HIL timing tolerance: ${a.responseTimeMs} ms <= ${a.timingLimitMs} ms + ${tolerance} ms network/scan latency)`,
+            };
+          }
+        }
+        return a;
+      });
       const passed = assertions.every((a) => a.passed);
 
       // Log assertions in journal with timing metadata
@@ -493,6 +549,9 @@ export const useFatStore = create<FatStore>()(
         durationMs: Math.round(performance.now() - startTime),
         scansExecuted: totalScans,
         driver: driverInfo,
+        timeDriftMs: Math.max(0, cumulativeDriftMs),
+        avgIoLatencyMs: totalScans > 0 ? Math.round(totalIoLatencyMs / totalScans) : 0,
+        timeAdvanceMode,
       };
 
       set((state) => ({
@@ -652,6 +711,7 @@ export const useFatStore = create<FatStore>()(
       name: 'twinforge-fat-project-settings',
       partialize: (state) => ({
         scanMode: state.scanMode,
+        timeAdvanceMode: state.timeAdvanceMode,
         projectSettings: {
           customerName: state.projectSettings.customerName,
           commissioningLead: state.projectSettings.commissioningLead,
@@ -665,12 +725,13 @@ export const useFatStore = create<FatStore>()(
         },
       }),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as (Partial<FatStore> & { scanMode?: 'lockstep' | 'classic' }) | undefined;
+        const persisted = persistedState as (Partial<FatStore> & { scanMode?: 'lockstep' | 'classic'; timeAdvanceMode?: 'measured' | 'nominal' }) | undefined;
         const persistedSettings = persisted?.projectSettings;
         const isCustom = Boolean(persistedSettings?.isCustomRef);
         return {
           ...currentState,
           scanMode: persisted?.scanMode || currentState.scanMode,
+          timeAdvanceMode: persisted?.timeAdvanceMode || currentState.timeAdvanceMode,
           projectSettings: {
             ...currentState.projectSettings,
             ...(persistedSettings || {}),

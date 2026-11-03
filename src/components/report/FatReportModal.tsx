@@ -539,6 +539,11 @@ export const FatReportModal: React.FC = () => {
                         <div>{r.testId}</div>
                         <div style={{ fontSize: 9, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
                           {r.scansExecuted ? `${r.scansExecuted} scans (${((r.scansExecuted * 100) / 1000).toFixed(1)}s)` : `${r.durationMs} ms`}
+                          {r.timeDriftMs !== undefined && r.timeDriftMs > 0 && (
+                            <div style={{ fontSize: 8.5, color: '#0284c7', marginTop: 1 }}>
+                              +{r.timeDriftMs}ms drift ({r.timeAdvanceMode === 'measured' ? 'sync' : 'nominal'})
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '8px 8px' }}>
@@ -555,7 +560,7 @@ export const FatReportModal: React.FC = () => {
                               <span>{a.message}</span>
                               {a.responseTimeMs !== undefined && (
                                 <span className="mono" style={{ marginLeft: 5, fontWeight: 700, color: a.passed ? '#15803d' : '#dc2626' }}>
-                                  [⏱ {a.responseTimeMs} ms{a.timingLimitMs ? ` / limit ${a.timingLimitMs} ms` : ''}]
+                                  [⏱ {a.responseTimeMs} ms{a.timingLimitMs ? ` / limit ${a.timingLimitMs} ms` : ''}{a.timingToleranceMs ? ` (tol +${a.timingToleranceMs}ms)` : ''}]
                                 </span>
                               )}
                               <span style={{ color: '#64748b', marginLeft: 4 }}>

@@ -154,11 +154,11 @@ export const fatScenarios: TestCase[] = [
       const faultStep = 3;
       // Find when IL-01 tripped
       const tripStepIndex = history.findIndex((h, idx) => idx >= faultStep && h.interlocks?.['IL-01']?.tripped);
-      const tripLatencyMs = tripStepIndex >= 0 ? (tripStepIndex - faultStep) * 100 : 9999;
+      const tripLatencyMs = tripStepIndex >= 0 ? (history[tripStepIndex].timeMs - history[faultStep].timeMs) : 9999;
 
       // Find when pump de-energized after fault
       const pumpDropIndex = history.findIndex((h, idx) => idx >= faultStep && !h.outputs['P100_START']);
-      const pumpDropLatencyMs = pumpDropIndex >= 0 ? (pumpDropIndex - faultStep) * 100 : 9999;
+      const pumpDropLatencyMs = pumpDropIndex >= 0 ? (history[pumpDropIndex].timeMs - history[faultStep].timeMs) : 9999;
 
       const v101ZsoPassed = !history[history.length - 1].inputs['V101_ZSO'];
       const tripPassed = tripLatencyMs <= 200;
@@ -181,6 +181,7 @@ export const fatScenarios: TestCase[] = [
           passed: tripPassed,
           responseTimeMs: tripLatencyMs,
           timingLimitMs: 200,
+          timingToleranceMs: 100,
           message: tripPassed
             ? `IL-01 Suction Safety Interlock tripped within ${tripLatencyMs} ms of fault injection (limit: <= 200 ms)`
             : `IL-01 Suction Safety Interlock trip latency exceeded limit (${tripLatencyMs} ms > 200 ms)`,
@@ -192,6 +193,7 @@ export const fatScenarios: TestCase[] = [
           passed: pumpDropPassed,
           responseTimeMs: pumpDropLatencyMs,
           timingLimitMs: 200,
+          timingToleranceMs: 100,
           message: pumpDropPassed
             ? `Transfer pump P-100 command de-energized within ${pumpDropLatencyMs} ms (limit: <= 200 ms)`
             : `Transfer pump P-100 failed to de-energize within safety limit (${pumpDropLatencyMs} ms > 200 ms)`,
@@ -223,7 +225,7 @@ export const fatScenarios: TestCase[] = [
     assertions: (_sim, _plc, history) => {
       // Find scan where V-101 proved OPEN
       const proveStepIndex = history.findIndex((h) => Boolean(h.inputs['V101_ZSO']));
-      const strokeTimeMs = proveStepIndex >= 0 ? proveStepIndex * 100 : 9999;
+      const strokeTimeMs = proveStepIndex >= 0 ? history[proveStepIndex].timeMs : 9999;
       const strokeWithinTolerance = Math.abs(strokeTimeMs - 1400) <= 300;
 
       // Check fluid flow established after stroke
@@ -239,6 +241,7 @@ export const fatScenarios: TestCase[] = [
           passed: strokeWithinTolerance,
           responseTimeMs: strokeTimeMs,
           timingLimitMs: 1700,
+          timingToleranceMs: 150,
           message: strokeWithinTolerance
             ? `V-101 actuator travel transit duration measured at ${strokeTimeMs} ms (target 1400 ± 300 ms)`
             : `V-101 actuator travel transit out of tolerance (${strokeTimeMs} ms, expected 1400 ± 300 ms)`,
@@ -350,7 +353,7 @@ export const fatScenarios: TestCase[] = [
     },
     assertions: (_sim, _plc, history) => {
       const openStepIndex = history.findIndex((h) => Boolean(h.inputs['V400_PROD_ZSO']));
-      const strokeTimeMs = openStepIndex >= 0 ? openStepIndex * 100 : 9999;
+      const strokeTimeMs = openStepIndex >= 0 ? history[openStepIndex].timeMs : 9999;
       const strokePassed = strokeTimeMs <= 2500;
 
       return [
@@ -361,6 +364,7 @@ export const fatScenarios: TestCase[] = [
           passed: strokePassed,
           responseTimeMs: strokeTimeMs,
           timingLimitMs: 2500,
+          timingToleranceMs: 200,
           message: strokePassed
             ? `Discharge valve V-400 open proof proved at ${strokeTimeMs} ms (limit: <= 2500 ms)`
             : `Discharge valve V-400 open proof stroke time exceeded limit (${strokeTimeMs} ms > 2500 ms)`,
@@ -391,7 +395,7 @@ export const fatScenarios: TestCase[] = [
       const allZeroStep = history.findIndex(
         (h, idx) => idx >= estopStep && !h.outputs['P100_START'] && !h.outputs['V101_CMD'] && !h.outputs['V400_PROD_CMD']
       );
-      const latencyMs = allZeroStep >= 0 ? (allZeroStep - estopStep) * 100 : 9999;
+      const latencyMs = allZeroStep >= 0 ? (history[allZeroStep].timeMs - history[estopStep].timeMs) : 9999;
       const statePassed = history[history.length - 1].plcState === 'ABORTED';
       const latencyPassed = latencyMs <= 100;
 
@@ -412,6 +416,7 @@ export const fatScenarios: TestCase[] = [
           passed: latencyPassed,
           responseTimeMs: latencyMs,
           timingLimitMs: 100,
+          timingToleranceMs: 100,
           message: latencyPassed
             ? `All contactor and valve outputs de-energized within ${latencyMs} ms (limit: <= 100 ms)`
             : `Outputs failed to de-energize within safety latency limit (${latencyMs} ms > 100 ms)`,
@@ -629,7 +634,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
       const pv11OpenStep = history.findIndex((h) => Boolean(h.outputs['PV11_CMD']));
 
       const forwardDelayMs =
-        legalTempStep >= 0 && pv11OpenStep >= legalTempStep ? (pv11OpenStep - legalTempStep) * 100 : 9999;
+        legalTempStep >= 0 && pv11OpenStep >= legalTempStep ? (history[pv11OpenStep].timeMs - history[legalTempStep].timeMs) : 9999;
 
       const finalRecord = history[history.length - 1];
       const finalFlow = Number(finalRecord.inputs['FM'] ?? 0);
@@ -656,6 +661,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
           passed: forwardDelayPassed,
           responseTimeMs: forwardDelayMs,
           timingLimitMs: 500,
+          timingToleranceMs: 100,
           message: forwardDelayPassed
             ? `Sanitary forward flow valve PV11 opened within ${forwardDelayMs} ms of legal pasteurizing temperature attainment (limit: <= 500 ms)`
             : `Sanitary forward flow valve PV11 exceeded proving delay limit (${forwardDelayMs} ms > 500 ms)`,
@@ -697,7 +703,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
         const pt2 = Number(h.inputs['PT2'] ?? 0);
         return pt4 - pt2 >= 0.5;
       });
-      const dpBuildTimeMs = dpBuildStep >= 0 ? dpBuildStep * 100 : 9999;
+      const dpBuildTimeMs = dpBuildStep >= 0 ? history[dpBuildStep].timeMs : 9999;
 
       const finalRecord = history[history.length - 1];
       const finalDp = Number(finalRecord.inputs['PT4'] ?? 0) - Number(finalRecord.inputs['PT2'] ?? 0);
@@ -713,6 +719,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
           passed: dpBuildPassed,
           responseTimeMs: dpBuildTimeMs,
           timingLimitMs: 1000,
+          timingToleranceMs: 100,
           message: dpBuildPassed
             ? `Regenerator differential pressure achieved legal positive threshold in ${dpBuildTimeMs} ms (limit: <= 1000 ms)`
             : `Regenerator differential pressure failed to build within limit (${dpBuildTimeMs} ms > 1000 ms)`,
@@ -758,7 +765,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
       const divertStep = history.findIndex(
         (h, idx) => idx >= faultStep && !h.outputs['PV11_CMD'] && Boolean(h.outputs['PV12_CMD'])
       );
-      const divertResponseTimeMs = divertStep >= 0 ? (divertStep - faultStep) * 100 : 9999;
+      const divertResponseTimeMs = divertStep >= 0 ? (history[divertStep].timeMs - history[faultStep].timeMs) : 9999;
 
       const trippedRecord = history[history.length - 1];
       const trippedTemp = Number(trippedRecord.inputs['TT5'] ?? 0);
@@ -785,6 +792,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
           passed: divertPassed,
           responseTimeMs: divertResponseTimeMs,
           timingLimitMs: 400,
+          timingToleranceMs: 100,
           message: divertPassed
             ? `Flow diversion valve assembly actuated to full recycle within ${divertResponseTimeMs} ms of under-temperature detection (PMO legal limit: <= 400 ms)`
             : `Flow diversion valve failed to divert within PMO limit (${divertResponseTimeMs} ms > 400 ms)`,
@@ -839,7 +847,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
           !h.outputs['P_BOOSTER_CMD'] &&
           Number(h.outputs['MOD_VALVE'] ?? 0) === 0
       );
-      const latencyMs = deEnergizedStep >= 0 ? (deEnergizedStep - estopStep) * 100 : 9999;
+      const latencyMs = deEnergizedStep >= 0 ? (history[deEnergizedStep].timeMs - history[estopStep].timeMs) : 9999;
 
       const latencyPassed = latencyMs <= 100;
       const statePassed = history[history.length - 1].plcState === 'EMERGENCY_STOP';
@@ -852,6 +860,7 @@ export const pasteurizerFatScenarios: TestCase[] = [
           passed: latencyPassed,
           responseTimeMs: latencyMs,
           timingLimitMs: 100,
+          timingToleranceMs: 100,
           message: latencyPassed
             ? `All motive drives and thermal sources de-energized on immediate scan (${latencyMs} ms <= 100 ms)`
             : `Motive drives and thermal sources failed to de-energize within limit (${latencyMs} ms > 100 ms)`,

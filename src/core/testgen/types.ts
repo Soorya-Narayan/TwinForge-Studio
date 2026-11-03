@@ -17,6 +17,9 @@ export interface ScanHistoryRecord {
   step: number;
   scan: number;
   timeMs: number;
+  stepDtMs?: number;          // Actual dt applied to the simulation for this step (ms)
+  measuredElapsedMs?: number; // Measured wall-clock time elapsed during PLC scan and I/O exchange (ms)
+  driftMs?: number;           // Cumulative time drift from nominal duration (ms)
   inputs: Record<string, boolean | number>;
   outputs: Record<string, boolean | number>;
   plcState?: string;
@@ -32,6 +35,7 @@ export interface TestAssertion {
   message: string;
   responseTimeMs?: number;
   timingLimitMs?: number;
+  timingToleranceMs?: number; // Documented HIL tolerance for network jitter and I/O latency (ms)
 }
 
 export interface TestCase {
@@ -56,6 +60,7 @@ export interface TestDriverInfo {
   details: string;
   endpoint?: string | null;
   scanMode?: 'lockstep' | 'classic';
+  timeAdvanceMode?: 'measured' | 'nominal';
 }
 
 export interface TestResult {
@@ -69,5 +74,8 @@ export interface TestResult {
   durationMs: number;
   scansExecuted?: number;
   driver?: TestDriverInfo;
+  timeDriftMs?: number;       // Cumulative time drift between wall-clock elapsed and nominal simulated time (ms)
+  avgIoLatencyMs?: number;    // Average I/O communication latency per scan cycle (ms)
+  timeAdvanceMode?: 'measured' | 'nominal';
 }
 

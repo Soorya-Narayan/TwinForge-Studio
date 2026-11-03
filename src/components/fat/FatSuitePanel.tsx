@@ -14,6 +14,8 @@ export const FatSuitePanel: React.FC = () => {
   const isRunningSuite = useFatStore((s) => s.isRunningSuite);
   const scanMode = useFatStore((s) => s.scanMode);
   const setScanMode = useFatStore((s) => s.setScanMode);
+  const timeAdvanceMode = useFatStore((s) => s.timeAdvanceMode);
+  const setTimeAdvanceMode = useFatStore((s) => s.setTimeAdvanceMode);
   const journal = useFatStore((s) => s.journal);
   const runAllTests = useFatStore((s) => s.runAllTests);
   const runSingleTest = useFatStore((s) => s.runSingleTest);
@@ -49,7 +51,7 @@ export const FatSuitePanel: React.FC = () => {
                 border: '1px solid var(--border-subtle)',
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>SCAN MODE:</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>SCAN:</span>
               <button
                 type="button"
                 onClick={() => setScanMode(scanMode === 'lockstep' ? 'classic' : 'lockstep')}
@@ -67,6 +69,43 @@ export const FatSuitePanel: React.FC = () => {
                 title="Lockstep: Write inputs (SEQ = n) -> Wait PLC SEQ_ACK echo -> Read outputs -> Tick engine"
               >
                 {scanMode === 'lockstep' ? 'LOCKSTEP' : 'CLASSIC'}
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                background: '#f8fafc',
+                padding: '4px 8px',
+                borderRadius: 4,
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>TIME:</span>
+              <button
+                type="button"
+                onClick={() => setTimeAdvanceMode(timeAdvanceMode === 'measured' ? 'nominal' : 'measured')}
+                disabled={isRunningSuite}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  borderRadius: 3,
+                  border: 'none',
+                  cursor: isRunningSuite ? 'not-allowed' : 'pointer',
+                  background: timeAdvanceMode === 'measured' ? '#10b981' : '#f59e0b',
+                  color: '#ffffff',
+                }}
+                title={
+                  timeAdvanceMode === 'measured'
+                    ? 'Measured Sync: Advance plant physics by measured real-world elapsed time (syncs plant physics with PLC hardware clock, eliminating time drift)'
+                    : 'Nominal Stepped: Advance plant physics strictly by nominal dtMs (with documented HIL timing tolerance for I/O network jitter)'
+                }
+              >
+                {timeAdvanceMode === 'measured' ? 'MEASURED SYNC' : 'NOMINAL'}
               </button>
             </div>
 
@@ -217,6 +256,14 @@ export const FatSuitePanel: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {result?.timeDriftMs !== undefined && result.timeDriftMs > 0 && (
+                    <span
+                      style={{ fontSize: 9, color: '#0284c7', fontFamily: 'monospace' }}
+                      title={`Cumulative time drift: +${result.timeDriftMs}ms (${result.timeAdvanceMode === 'measured' ? 'physics compensated' : 'nominal'}) · Avg I/O latency: ${result.avgIoLatencyMs ?? 0}ms/scan`}
+                    >
+                      +{result.timeDriftMs}ms drift
+                    </span>
+                  )}
                   {result ? (
                     result.passed ? (
                       <span className="badge badge-success" style={{ fontSize: 10 }}>
