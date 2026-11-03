@@ -93,21 +93,23 @@ export const createIsolatedTestHarness = (
     engine = new PhysicsEngine(topology, stepMs);
   }
 
-  // Wire driver for testing: preserve OPC UA driver when selected or provided
+  // Wire driver for testing: only wire OPC UA driver when there is a live connected session
   const simStore = typeof useSimulationStore !== 'undefined' ? useSimulationStore.getState() : undefined;
   const liveCandidate = driverOverride ?? simStore?.plc;
+
+  const hasLiveOpcUaSession = Boolean(
+    liveCandidate &&
+    liveCandidate.status?.driverType === 'opcua' &&
+    liveCandidate.status?.connected &&
+    ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean((liveCandidate as any).customApi))
+  );
 
   if (driverOverride) {
     plc = driverOverride;
     if (typeof (plc as any).setSkid === 'function') {
       (plc as any).setSkid(skid);
     }
-  } else if (simStore?.driverMode === 'OPCUA' && liveCandidate) {
-    plc = liveCandidate;
-    if (typeof (plc as any).setSkid === 'function') {
-      (plc as any).setSkid(skid);
-    }
-  } else if (liveCandidate && liveCandidate.status?.driverType === 'opcua') {
+  } else if (hasLiveOpcUaSession && liveCandidate) {
     plc = liveCandidate;
     if (typeof (plc as any).setSkid === 'function') {
       (plc as any).setSkid(skid);
@@ -256,9 +258,15 @@ export const useFatStore = create<FatStore>()(
     // Isolate each test with a fresh engine and PLC instance calibrated to test dtMs
     const { engine, plc } = createIsolatedTestHarness(currentSkid, simStore.customTopology, dtMs, driverOverride);
 
-    const driverName = plc.constructor?.name || 'MockPlcDriver';
-    const driverType = plc.status.driverType;
-    const driverDetails = driverType === 'opcua'
+    const hasLiveElectronSession = Boolean(
+      plc.status.driverType === 'opcua' &&
+      plc.status.connected &&
+      ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean((plc as any).customApi))
+    );
+
+    const driverName = plc.constructor?.name || (hasLiveElectronSession ? 'OpcUaPlcDriver' : 'MockPlcDriver');
+    const driverType = hasLiveElectronSession ? 'opcua' : 'mock';
+    const driverDetails = hasLiveElectronSession
       ? `Real PLC via node-opcua (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
       : `In-Process Mock Driver (${driverName})`;
 
