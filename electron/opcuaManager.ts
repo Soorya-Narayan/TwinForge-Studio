@@ -55,6 +55,12 @@ export interface OpcUaStatus {
   error?: string;
 }
 
+export const LOOPBACK_CREDENTIALS: Record<string, string[]> = {
+  admin: ['admin', 'password'],
+  operator: ['operator', 'password'],
+  twinforge: ['twinforge', 'password'],
+};
+
 export class OpcUaManager {
   private client: OPCUAClient | null = null;
   private session: ClientSession | null = null;
@@ -423,11 +429,12 @@ export class OpcUaManager {
           buildDate: new Date(),
         },
         userManager: {
-          isValidUser(userName: string, _password: string) {
-            if (userName === 'admin' || userName === 'operator' || userName === 'twinforge') {
-              return true;
-            }
-            return Boolean(userName && userName.toLowerCase() !== 'anonymous');
+          isValidUser(userName: string, password: string) {
+            if (!userName || typeof userName !== 'string') return false;
+            if (!password || typeof password !== 'string') return false;
+            const validPasswords = LOOPBACK_CREDENTIALS[userName.toLowerCase()];
+            if (!validPasswords) return false;
+            return validPasswords.includes(password);
           },
           getUserRoles(_user: string) {
             return [];
@@ -527,7 +534,10 @@ export class OpcUaManager {
               return true;
             }
             const username = context.getUserName ? context.getUserName() : '';
-            return Boolean(username && username.toLowerCase() !== 'anonymous');
+            if (!username || username.toLowerCase() === 'anonymous') {
+              return false;
+            }
+            return Boolean(LOOPBACK_CREDENTIALS[username.toLowerCase()]);
           };
         }
 
