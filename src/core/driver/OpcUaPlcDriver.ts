@@ -347,21 +347,23 @@ export class OpcUaPlcDriver implements Driver {
     }
 
     const api = this.customApi || getElectronOpcUa();
-    if (api) {
-      const res = await api.connect(connOpts);
-      if (res.success) {
-        this.status.connected = true;
-        this.state = 'CONNECTED';
-        await this.syncOutputsFromPlc();
-      } else {
-        this.status.connected = false;
-        this.state = 'DISCONNECTED';
-        throw new Error(res.error || 'Failed to connect to OPC UA server');
-      }
-    } else {
-      // Browser/headless fallback (mock connected state for demonstration when running without Electron)
+    if (!api) {
+      this.status.connected = false;
+      this.state = 'DISCONNECTED';
+      throw new Error(
+        `OPC UA connect failed: Electron OPC UA API (window.electronAPI.opcua) is unavailable (${this.endpointUrl}).`
+      );
+    }
+
+    const res = await api.connect(connOpts);
+    if (res.success) {
       this.status.connected = true;
-      this.state = 'EMULATED_CONNECTED';
+      this.state = 'CONNECTED';
+      await this.syncOutputsFromPlc();
+    } else {
+      this.status.connected = false;
+      this.state = 'DISCONNECTED';
+      throw new Error(res.error || 'Failed to connect to OPC UA server');
     }
   }
 
@@ -482,12 +484,6 @@ export class OpcUaPlcDriver implements Driver {
     try {
       const api = this.customApi || getElectronOpcUa();
       if (!api) {
-        if (this.state === 'EMULATED_CONNECTED') {
-          if (inputs['SEQ'] !== undefined) {
-            this.outputs['SEQ_ACK'] = Number(inputs['SEQ']);
-          }
-          return;
-        }
         throw new Error(`Cannot write inputs: Electron OPC UA API is unavailable (${this.endpointUrl})`);
       }
 
@@ -567,10 +563,7 @@ export class OpcUaPlcDriver implements Driver {
       );
     }
 
-    if (this.state === 'EMULATED_CONNECTED') {
-      this.outputs['SEQ_ACK'] = expectedSeq;
-      return;
-    }
+
 
     const startTime = performance.now();
     while (Number(this.outputs['SEQ_ACK']) !== expectedSeq) {
@@ -646,9 +639,6 @@ export class OpcUaPlcDriver implements Driver {
     try {
       const api = this.customApi || getElectronOpcUa();
       if (!api) {
-        if (this.state === 'EMULATED_CONNECTED') {
-          return;
-        }
         throw new Error(`Cannot read outputs: Electron OPC UA API is unavailable (${this.endpointUrl})`);
       }
 
@@ -732,11 +722,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public async resetBatch(): Promise<void> {
-    if (this.state === 'EMULATED_CONNECTED') {
-      this.state = 'IDLE';
-      (this.outputs as any)['PLC_STATE'] = 'IDLE';
-      return;
-    }
+
     await this.writeCommandTags('resetBatch', {
       RESET_CMD: true,
       E_STOP_PB: true,
@@ -746,11 +732,7 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public async resetSystem(): Promise<void> {
-    if (this.state === 'EMULATED_CONNECTED') {
-      this.state = this.activeSkid === 'BATCH_MIXING' ? 'IDLE' : 'STOPPED';
-      (this.outputs as any)['PLC_STATE'] = this.state;
-      return;
-    }
+
     if (this.activeSkid === 'BATCH_MIXING') {
       await this.resetBatch();
     } else {
@@ -786,11 +768,7 @@ export class OpcUaPlcDriver implements Driver {
     // 1. Command reset to the PLC
     await this.resetSystem();
 
-    if (this.state === 'EMULATED_CONNECTED') {
-      this.state = validStates[0];
-      (this.outputs as any)['PLC_STATE'] = this.state;
-      return;
-    }
+
 
     // 2. Poll and verify that the PLC reached the expected known state
     const startTime = Date.now();
