@@ -7,28 +7,31 @@
 
 export type TagDirection = 'INPUT' | 'OUTPUT';
 
+export type TagDataType = 'Boolean' | 'Float' | 'Double' | 'Int16' | 'Int32' | 'String';
+
 export interface TagDefinition {
   tag: string;
   name: string;
   skid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'COMMON';
   direction: TagDirection; // INPUT: Sensor feedback written to PLC; OUTPUT: Command read from PLC
-  dataType: 'Boolean' | 'Double' | 'String' | 'Int32';
+  dataType: TagDataType;
   defaultNodeId: string;
   description: string;
 }
 
 export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   // Pasteurizer Skid Inputs (Simulator Sensors -> PLC Input registers)
-  { tag: 'TT1', name: 'Raw Milk In Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT1', description: 'Raw milk intake temperature (°C)' },
-  { tag: 'TT2', name: 'Pre-heat Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT2', description: 'Pre-heating exit temperature (°C)' },
-  { tag: 'TT3', name: 'Heating Section Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT3', description: 'Hot water heating zone exit temperature (°C)' },
-  { tag: 'TT4', name: 'Regeneration Exit Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT4', description: 'Pasteurized milk regen exit temperature (°C)' },
-  { tag: 'TT5', name: 'Holding Tube Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT5', description: 'Critical legal pasteurization temperature sensor (°C)' },
-  { tag: 'FM', name: 'Product Flow Rate', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=FM', description: 'Electromagnetic flow meter reading (L/h)' },
-  { tag: 'PT2', name: 'Booster Pump Inlet Pressure', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=PT2', description: 'Raw regeneration side pressure (bar)' },
-  { tag: 'PT4', name: 'Pasteurized Outlet Pressure', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=PT4', description: 'Pasteurized regeneration side pressure (bar)' },
-  { tag: 'LT_BALANCE', name: 'Balance Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=LT_BALANCE', description: 'Constant level tank inventory level (%)' },
-  { tag: 'LT_PRODUCT', name: 'Product Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=LT_PRODUCT', description: 'Finished pasteurized milk tank level (%)' },
+  // Real PLCs (Siemens S7 REAL, Rockwell REAL) use 32-bit single-precision Float
+  { tag: 'TT1', name: 'Raw Milk In Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT1', description: 'Raw milk intake temperature (°C)' },
+  { tag: 'TT2', name: 'Pre-heat Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT2', description: 'Pre-heating exit temperature (°C)' },
+  { tag: 'TT3', name: 'Heating Section Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT3', description: 'Hot water heating zone exit temperature (°C)' },
+  { tag: 'TT4', name: 'Regeneration Exit Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT4', description: 'Pasteurized milk regen exit temperature (°C)' },
+  { tag: 'TT5', name: 'Holding Tube Temp', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT5', description: 'Critical legal pasteurization temperature sensor (°C)' },
+  { tag: 'FM', name: 'Product Flow Rate', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=FM', description: 'Electromagnetic flow meter reading (L/h)' },
+  { tag: 'PT2', name: 'Booster Pump Inlet Pressure', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=PT2', description: 'Raw regeneration side pressure (bar)' },
+  { tag: 'PT4', name: 'Pasteurized Outlet Pressure', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=PT4', description: 'Pasteurized regeneration side pressure (bar)' },
+  { tag: 'LT_BALANCE', name: 'Balance Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=LT_BALANCE', description: 'Constant level tank inventory level (%)' },
+  { tag: 'LT_PRODUCT', name: 'Product Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=LT_PRODUCT', description: 'Finished pasteurized milk tank level (%)' },
 
   // Pasteurizer Skid Outputs (PLC Control Outputs -> Simulator Actuators)
   { tag: 'P_FEED_CMD', name: 'Feed Pump Run Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_FEED_CMD', description: 'Variable speed positive displacement feed pump run' },
@@ -36,16 +39,16 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'P_HOT_WATER_CMD', name: 'HW Circulation Pump Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_HOT_WATER_CMD', description: 'Hot water loop circulation pump' },
   { tag: 'PV11_CMD', name: 'FDV Forward Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=PV11_CMD', description: 'Flow diversion valve forward route (energized = forward)' },
   { tag: 'PV12_CMD', name: 'FDV Divert Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=PV12_CMD', description: 'Flow diversion valve recycle divert route to balance tank' },
-  { tag: 'MOD_VALVE', name: 'Steam Modulating Valve', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=MOD_VALVE', description: 'Modulating steam control valve position (0-100%)' },
+  { tag: 'MOD_VALVE', name: 'Steam Modulating Valve', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=MOD_VALVE', description: 'Modulating steam control valve position (0-100%)' },
   { tag: 'IL-FDV', name: 'FDV Interlock Status', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-FDV', description: 'Legal pasteurization temperature permissive status' },
   { tag: 'IL-DIFF', name: 'Differential Interlock Status', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-DIFF', description: 'Sanitary positive differential pressure status' },
 
   // Batch Mixing Inputs (Simulator Sensors -> PLC Input registers)
-  { tag: 'TK100_LT', name: 'Mix Tank 100 Level', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TK100_LT', description: 'Batch mixing tank inventory level (%)' },
-  { tag: 'TK400_LT', name: 'Discharge Tank 400 Level', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TK400_LT', description: 'Finished batch storage tank level (%)' },
-  { tag: 'TT100', name: 'Mix Tank Temperature', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=TT100', description: 'Tank batch temperature (°C)' },
-  { tag: 'FT100', name: 'Transfer Flow Rate', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=FT100', description: 'Flow sensor on pump transfer header (L/min)' },
-  { tag: 'PT100', name: 'Transfer Pressure', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Double', defaultNodeId: 'ns=1;s=PT100', description: 'Pump discharge line pressure (bar)' },
+  { tag: 'TK100_LT', name: 'Mix Tank 100 Level', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TK100_LT', description: 'Batch mixing tank inventory level (%)' },
+  { tag: 'TK400_LT', name: 'Discharge Tank 400 Level', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TK400_LT', description: 'Finished batch storage tank level (%)' },
+  { tag: 'TT100', name: 'Mix Tank Temperature', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=TT100', description: 'Tank batch temperature (°C)' },
+  { tag: 'FT100', name: 'Transfer Flow Rate', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=FT100', description: 'Flow sensor on pump transfer header (L/min)' },
+  { tag: 'PT100', name: 'Transfer Pressure', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=PT100', description: 'Pump discharge line pressure (bar)' },
   { tag: 'V101_ZSO', name: 'Suction Valve Open Switch', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=V101_ZSO', description: 'Limit switch feedback: valve 101 fully open' },
   { tag: 'E_STOP_PB', name: 'Emergency Stop Pushbutton', skid: 'BATCH_MIXING', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=E_STOP_PB', description: 'Field safety emergency stop contact (NC contact = true)' },
 
@@ -192,6 +195,43 @@ export function saveStoredTagMap(map: Record<string, string>): void {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(TAG_MAP_STORAGE_KEY, JSON.stringify(map));
+    }
+  } catch {
+    // Ignore storage write errors in restricted contexts
+  }
+}
+
+export const TAG_TYPE_MAP_STORAGE_KEY = 'twinforge_opcua_tag_types';
+
+export function getDefaultTagTypeMap(): Record<string, TagDataType> {
+  const map: Record<string, TagDataType> = {};
+  for (const def of DEFAULT_OPCUA_TAGS) {
+    map[def.tag] = def.dataType;
+  }
+  return map;
+}
+
+export function loadStoredTagTypeMap(): Record<string, TagDataType> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(TAG_TYPE_MAP_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          return { ...getDefaultTagTypeMap(), ...parsed };
+        }
+      }
+    }
+  } catch {
+    // Ignore storage parse errors and fallback
+  }
+  return getDefaultTagTypeMap();
+}
+
+export function saveStoredTagTypeMap(map: Record<string, TagDataType>): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(TAG_TYPE_MAP_STORAGE_KEY, JSON.stringify(map));
     }
   } catch {
     // Ignore storage write errors in restricted contexts

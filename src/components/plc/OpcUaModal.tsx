@@ -40,8 +40,10 @@ import {
   generateSiemensDbTagMap,
   generateRockwellTagMap,
   generateCodesysTagMap,
+  getDefaultTagTypeMap,
   type TagDefinition,
   type TagDirection,
+  type TagDataType,
 } from '../../core/driver/opcuaTagMap';
 import {
   type InterlockDefinition,
@@ -59,6 +61,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
   const opcuaEndpoint = useSimulationStore((s) => s.opcuaEndpoint);
   const opcuaSecurityOptions = useSimulationStore((s) => s.opcuaSecurityOptions);
   const opcuaTagMap = useSimulationStore((s) => s.opcuaTagMap);
+  const opcuaTagTypes = useSimulationStore((s) => s.opcuaTagTypes);
   const setDriverMode = useSimulationStore((s) => s.setDriverMode);
   const connectOpcUa = useSimulationStore((s) => s.connectOpcUa);
   const disconnectOpcUa = useSimulationStore((s) => s.disconnectOpcUa);
@@ -67,6 +70,8 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
   const activeSkid = useSimulationStore((s) => s.activeSkid);
   const setOpcuaTagMap = useSimulationStore((s) => s.setOpcuaTagMap);
   const resetOpcuaTagMap = useSimulationStore((s) => s.resetOpcuaTagMap);
+  const setOpcuaTagType = useSimulationStore((s) => s.setOpcuaTagType);
+  const resetOpcuaTagTypes = useSimulationStore((s) => s.resetOpcuaTagTypes);
   const interlockDefinitions = useSimulationStore((s) => s.interlockDefinitions);
   const setInterlockDefinitions = useSimulationStore((s) => s.setInterlockDefinitions);
   const resetInterlockDefinitions = useSimulationStore((s) => s.resetInterlockDefinitions);
@@ -119,18 +124,25 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
     tag: string;
     description: string;
     direction: 'INPUT' | 'OUTPUT';
+    dataType: TagDataType;
     nodeId: string;
   }>({
     tag: '',
     description: '',
     direction: 'OUTPUT',
+    dataType: 'Float',
     nodeId: '',
   });
 
   const defaultTagMap = getDefaultTagMap();
-  const modifiedTagCount = Object.keys(opcuaTagMap).filter(
-    (tag) => opcuaTagMap[tag] && opcuaTagMap[tag] !== (defaultTagMap[tag] ?? `ns=1;s=${tag}`)
-  ).length;
+  const defaultTagTypes = getDefaultTagTypeMap();
+  const modifiedTagCount =
+    Object.keys(opcuaTagMap).filter(
+      (tag) => opcuaTagMap[tag] && opcuaTagMap[tag] !== (defaultTagMap[tag] ?? `ns=1;s=${tag}`)
+    ).length +
+    Object.keys(opcuaTagTypes).filter(
+      (tag) => opcuaTagTypes[tag] && opcuaTagTypes[tag] !== defaultTagTypes[tag]
+    ).length;
 
   if (!isOpen) return null;
 
@@ -255,10 +267,14 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
 
   const handleResetSingleTag = (tag: string) => {
     const defaultNodeId = defaultTagMap[tag] ?? `ns=1;s=${tag}`;
+    const def = DEFAULT_OPCUA_TAGS.find((d) => d.tag === tag);
     setOpcuaTagMap({
       ...opcuaTagMap,
       [tag]: defaultNodeId,
     });
+    if (def) {
+      setOpcuaTagType(tag, def.dataType);
+    }
   };
 
   const handleApplySiemensPreset = () => {
@@ -290,9 +306,10 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
 
   const handleResetAllTags = () => {
     resetOpcuaTagMap();
+    resetOpcuaTagTypes();
     setStatusMsg({
       type: 'info',
-      text: 'Reset all PLC tag mappings to factory default (ns=1;s=TAG)',
+      text: 'Reset all PLC tag mappings and data types to factory default (ns=1;s=TAG)',
     });
   };
 
@@ -304,13 +321,17 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
       ...opcuaTagMap,
       [tagKey]: nodeId,
     });
-    setNewTagForm({ tag: '', description: '', direction: 'OUTPUT', nodeId: '' });
+    setOpcuaTagType(tagKey, newTagForm.dataType);
+    setNewTagForm({ tag: '', description: '', direction: 'OUTPUT', dataType: 'Float', nodeId: '' });
     setShowAddTag(false);
-    setStatusMsg({ type: 'success', text: `Added custom tag mapping: ${tagKey} -> ${nodeId}` });
+    setStatusMsg({ type: 'success', text: `Added custom tag mapping: ${tagKey} -> ${nodeId} (${newTagForm.dataType})` });
   };
 
   const allTagDefs: (TagDefinition & { isCustom?: boolean })[] = [
-    ...DEFAULT_OPCUA_TAGS,
+    ...DEFAULT_OPCUA_TAGS.map((d) => ({
+      ...d,
+      dataType: opcuaTagTypes[d.tag] || d.dataType,
+    })),
     ...Object.keys(opcuaTagMap)
       .filter((k) => !DEFAULT_OPCUA_TAGS.some((d) => d.tag === k))
       .map((k) => ({
@@ -318,7 +339,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
         name: k,
         skid: 'COMMON' as const,
         direction: (k.includes('CMD') || k.includes('START') || k.includes('IL-') || k.includes('MOD_') ? 'OUTPUT' : 'INPUT') as TagDirection,
-        dataType: 'Double' as const,
+        dataType: (opcuaTagTypes[k] || 'Float') as TagDataType,
         defaultNodeId: `ns=1;s=${k}`,
         description: 'User-defined custom tag',
         isCustom: true,
@@ -1338,7 +1359,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                     borderRadius: 6,
                     padding: '12px 14px',
                     display: 'grid',
-                    gridTemplateColumns: '1.2fr 1fr 2fr auto',
+                    gridTemplateColumns: '1fr 0.9fr 0.9fr 1.8fr auto',
                     gap: 10,
                     alignItems: 'end',
                   }}
@@ -1380,6 +1401,30 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                     >
                       <option value="INPUT">INPUT (Sensor → PLC)</option>
                       <option value="OUTPUT">OUTPUT (PLC → Actuator)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 2 }}>
+                      Data Type:
+                    </label>
+                    <select
+                      value={newTagForm.dataType}
+                      onChange={(e) => setNewTagForm({ ...newTagForm, dataType: e.target.value as TagDataType })}
+                      style={{
+                        width: '100%',
+                        padding: '5px 8px',
+                        fontSize: 11,
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 4,
+                        background: '#ffffff',
+                      }}
+                    >
+                      <option value="Float">Float (32-bit REAL)</option>
+                      <option value="Double">Double (64-bit)</option>
+                      <option value="Int16">Int16 (16-bit INT)</option>
+                      <option value="Int32">Int32 (32-bit DINT)</option>
+                      <option value="Boolean">Boolean (BOOL)</option>
+                      <option value="String">String</option>
                     </select>
                   </div>
                   <div>
@@ -1446,10 +1491,10 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                       <th style={{ padding: '8px 12px', fontWeight: 700, color: '#334155', width: '28%' }}>
                         Internal Simulator Tag
                       </th>
-                      <th style={{ padding: '8px 10px', fontWeight: 700, color: '#334155', width: '18%' }}>
+                      <th style={{ padding: '8px 10px', fontWeight: 700, color: '#334155', width: '22%' }}>
                         Direction / Type
                       </th>
-                      <th style={{ padding: '8px 12px', fontWeight: 700, color: '#334155', width: '46%' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: 700, color: '#334155', width: '42%' }}>
                         Real PLC NodeId (Addressing)
                       </th>
                       <th style={{ padding: '8px 8px', fontWeight: 700, color: '#334155', width: '8%', textAlign: 'center' }}>
@@ -1467,7 +1512,10 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                     ) : (
                       filteredTags.map((def) => {
                         const currentAddress = opcuaTagMap[def.tag] ?? def.defaultNodeId;
-                        const isModified = currentAddress !== def.defaultNodeId;
+                        const defaultTypes = getDefaultTagTypeMap();
+                        const isAddressModified = currentAddress !== def.defaultNodeId;
+                        const isTypeModified = def.dataType !== (defaultTypes[def.tag] ?? (def.direction === 'INPUT' && def.tag.startsWith('DI_') ? 'Boolean' : 'Float'));
+                        const isModified = isAddressModified || isTypeModified;
 
                         return (
                           <tr
@@ -1507,21 +1555,44 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                             {/* Direction & Data Type */}
                             <td style={{ padding: '8px 10px', verticalAlign: 'middle' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-                                <span
-                                  style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    padding: '2px 6px',
-                                    borderRadius: 3,
-                                    background: def.direction === 'INPUT' ? '#eff6ff' : '#fef3c7',
-                                    color: def.direction === 'INPUT' ? '#1e40af' : '#92400e',
-                                    border: `1px solid ${def.direction === 'INPUT' ? '#bfdbfe' : '#fde68a'}`,
-                                  }}
-                                >
-                                  {def.direction === 'INPUT' ? 'INPUT (Feedback)' : 'OUTPUT (Command)'}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%' }}>
+                                  <span
+                                    style={{
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      padding: '1px 5px',
+                                      borderRadius: 3,
+                                      background: def.direction === 'INPUT' ? '#eff6ff' : '#fef3c7',
+                                      color: def.direction === 'INPUT' ? '#1e40af' : '#92400e',
+                                      border: `1px solid ${def.direction === 'INPUT' ? '#bfdbfe' : '#fde68a'}`,
+                                    }}
+                                  >
+                                    {def.direction === 'INPUT' ? 'INPUT' : 'OUTPUT'}
+                                  </span>
+                                  <select
+                                    value={def.dataType}
+                                    onChange={(e) => setOpcuaTagType(def.tag, e.target.value as TagDataType)}
+                                    style={{
+                                      fontSize: 10,
+                                      fontFamily: 'monospace',
+                                      padding: '1px 4px',
+                                      border: `1px solid ${isTypeModified ? '#86efac' : 'var(--border-strong)'}`,
+                                      borderRadius: 3,
+                                      background: isTypeModified ? '#ecfdf5' : '#ffffff',
+                                      color: '#0f172a',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <option value="Float">Float (32-bit REAL)</option>
+                                    <option value="Double">Double (64-bit)</option>
+                                    <option value="Int16">Int16 (16-bit INT)</option>
+                                    <option value="Int32">Int32 (32-bit DINT)</option>
+                                    <option value="Boolean">Boolean (BOOL)</option>
+                                    <option value="String">String</option>
+                                  </select>
+                                </div>
                                 <span style={{ fontSize: 9, color: '#64748b' }}>
-                                  {def.dataType} · {def.skid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer' : def.skid === 'BATCH_MIXING' ? 'Batch Mixing' : 'Custom'}
+                                  {def.skid === 'PASTEURIZER_10KLPH' ? 'Pasteurizer' : def.skid === 'BATCH_MIXING' ? 'Batch Mixing' : 'Custom'}
                                 </span>
                               </div>
                             </td>
@@ -1552,7 +1623,7 @@ export const OpcUaModal: React.FC<OpcUaModalProps> = ({ isOpen, onClose }) => {
                                 <button
                                   type="button"
                                   onClick={() => handleResetSingleTag(def.tag)}
-                                  title="Reset to default NodeId"
+                                  title="Reset to default NodeId and data type"
                                   className="btn btn-ghost"
                                   style={{ padding: '4px 6px', color: '#64748b' }}
                                 >

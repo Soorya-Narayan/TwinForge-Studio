@@ -6,7 +6,13 @@
  */
 
 import type { Driver, DriverStatus } from './Driver';
-import { loadStoredTagMap, getOutputTagsForSkid, DEFAULT_OPCUA_TAGS } from './opcuaTagMap';
+import {
+  loadStoredTagMap,
+  getOutputTagsForSkid,
+  DEFAULT_OPCUA_TAGS,
+  loadStoredTagTypeMap,
+  type TagDataType,
+} from './opcuaTagMap';
 import {
   createInterlocksMapForSkid,
   loadStoredInterlockDefinitions,
@@ -37,6 +43,7 @@ export interface OpcUaConnectionOptions {
   certificatePath?: string;
   privateKeyPath?: string;
   tagMap?: Record<string, string>;
+  tagTypeMap?: Record<string, TagDataType>;
   activeSkid?: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM';
   interlockDefinitions?: InterlockDefinition[];
   concurrencyMode?: OpcUaConcurrencyMode;
@@ -155,6 +162,7 @@ export class OpcUaPlcDriver implements Driver {
   public serverRunning: boolean = false;
   public state: string = 'OFFLINE';
   public tagMap: Record<string, string> = {};
+  public tagTypeMap: Record<string, TagDataType> = {};
   public activeSkid: 'PASTEURIZER_10KLPH' | 'BATCH_MIXING' | 'CUSTOM' = 'PASTEURIZER_10KLPH';
   public interlockDefinitions: InterlockDefinition[] = [];
 
@@ -197,12 +205,14 @@ export class OpcUaPlcDriver implements Driver {
       this.endpointUrl = endpointOrOptions;
       this.securityOptions.endpointUrl = endpointOrOptions;
       this.tagMap = loadStoredTagMap();
+      this.tagTypeMap = loadStoredTagTypeMap();
       this.activeSkid = 'PASTEURIZER_10KLPH';
       this.interlockDefinitions = loadStoredInterlockDefinitions();
     } else if (endpointOrOptions) {
       this.securityOptions = { ...this.securityOptions, ...endpointOrOptions };
       this.endpointUrl = endpointOrOptions.endpointUrl || this.endpointUrl;
       this.tagMap = endpointOrOptions.tagMap ? { ...endpointOrOptions.tagMap } : loadStoredTagMap();
+      this.tagTypeMap = endpointOrOptions.tagTypeMap ? { ...endpointOrOptions.tagTypeMap } : loadStoredTagTypeMap();
       this.activeSkid = endpointOrOptions.activeSkid || 'PASTEURIZER_10KLPH';
       this.interlockDefinitions = endpointOrOptions.interlockDefinitions
         ? [...endpointOrOptions.interlockDefinitions]
@@ -215,12 +225,30 @@ export class OpcUaPlcDriver implements Driver {
       }
     } else {
       this.tagMap = loadStoredTagMap();
+      this.tagTypeMap = loadStoredTagTypeMap();
       this.activeSkid = 'PASTEURIZER_10KLPH';
       this.interlockDefinitions = loadStoredInterlockDefinitions();
     }
 
     this.outputTags = this.getActiveOutputTags();
     this.interlocks = createInterlocksMapForSkid(this.activeSkid, this.interlockDefinitions);
+  }
+
+  /**
+   * Looks up the configured OPC UA DataType for a tag, falling back to DEFAULT_OPCUA_TAGS or Float for analogs.
+   */
+  public getTagDataType(tag: string): TagDataType {
+    if (this.tagTypeMap && this.tagTypeMap[tag]) {
+      return this.tagTypeMap[tag];
+    }
+    const def = DEFAULT_OPCUA_TAGS.find((d) => d.tag === tag);
+    if (def) {
+      return def.dataType;
+    }
+    if (tag.startsWith('DI_') || tag.endsWith('_PB') || tag.endsWith('_SW') || tag.endsWith('_ZSO') || tag.endsWith('_ZSC')) {
+      return 'Boolean';
+    }
+    return 'Float';
   }
 
   /**
@@ -276,6 +304,20 @@ export class OpcUaPlcDriver implements Driver {
    */
   public getTagMap(): Record<string, string> {
     return { ...this.tagMap };
+  }
+
+  /**
+   * Set or update tag data types (internal simulator tag -> OPC UA TagDataType)
+   */
+  public setTagTypeMap(tagTypeMap: Record<string, TagDataType>): void {
+    this.tagTypeMap = { ...this.tagTypeMap, ...tagTypeMap };
+  }
+
+  /**
+   * Get active tag data types table
+   */
+  public getTagTypeMap(): Record<string, TagDataType> {
+    return { ...this.tagTypeMap };
   }
 
   /**
@@ -453,9 +495,17 @@ export class OpcUaPlcDriver implements Driver {
 
       for (const [tag, value] of Object.entries(inputs)) {
         const plcNodeId = this.resolvePlcNodeId(tag);
-        let dataType: string = typeof value === 'boolean' ? 'Boolean' : typeof value === 'string' ? 'String' : 'Double';
-        if (tag === 'SEQ' || Number.isInteger(value)) {
-          dataType = 'Int32';
+        let dataType: TagDataType = this.getTagDataType(tag);
+        if (!dataType) {
+          if (typeof value === 'boolean') {
+            dataType = 'Boolean';
+          } else if (typeof value === 'string') {
+            dataType = 'String';
+          } else if (tag === 'SEQ' || Number.isInteger(value)) {
+            dataType = 'Int32';
+          } else {
+            dataType = 'Float';
+          }
         }
         writePayload[plcNodeId] = {
           value,

@@ -13,7 +13,15 @@ import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
-import { loadStoredTagMap, saveStoredTagMap, getDefaultTagMap } from '../core/driver/opcuaTagMap';
+import {
+  loadStoredTagMap,
+  saveStoredTagMap,
+  getDefaultTagMap,
+  loadStoredTagTypeMap,
+  saveStoredTagTypeMap,
+  getDefaultTagTypeMap,
+  type TagDataType,
+} from '../core/driver/opcuaTagMap';
 import {
   loadStoredInterlockDefinitions,
   saveStoredInterlockDefinitions,
@@ -46,6 +54,7 @@ interface SimulationStore {
   opcuaEndpoint: string;
   opcuaSecurityOptions?: OpcUaConnectionOptions;
   opcuaTagMap: Record<string, string>;
+  opcuaTagTypes: Record<string, TagDataType>;
   interlockDefinitions: InterlockDefinition[];
   running: boolean;
   isFatRunning: boolean;
@@ -65,6 +74,8 @@ interface SimulationStore {
   stopLocalOpcUaServer: () => Promise<void>;
   setOpcuaTagMap: (map: Record<string, string>) => void;
   resetOpcuaTagMap: () => void;
+  setOpcuaTagType: (tag: string, dataType: TagDataType) => void;
+  resetOpcuaTagTypes: () => void;
   setInterlockDefinitions: (defs: InterlockDefinition[]) => void;
   resetInterlockDefinitions: () => void;
   setFatRunning: (active: boolean) => void;
@@ -202,6 +213,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     driverMode: 'MOCK',
     opcuaEndpoint: 'opc.tcp://127.0.0.1:4840',
     opcuaTagMap: loadStoredTagMap(),
+    opcuaTagTypes: loadStoredTagTypeMap(),
     interlockDefinitions: initialInterlockDefs,
     running: false,
     isFatRunning: false,
@@ -214,10 +226,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       stopLoop();
       const currentDefs = get().interlockDefinitions;
       const opts: OpcUaConnectionOptions = typeof endpointOrOptions === 'string'
-        ? { endpointUrl: endpointOrOptions, tagMap: get().opcuaTagMap, activeSkid: get().activeSkid, interlockDefinitions: currentDefs }
+        ? { endpointUrl: endpointOrOptions, tagMap: get().opcuaTagMap, tagTypeMap: get().opcuaTagTypes, activeSkid: get().activeSkid, interlockDefinitions: currentDefs }
         : endpointOrOptions
-        ? { tagMap: get().opcuaTagMap, activeSkid: get().activeSkid, interlockDefinitions: currentDefs, ...endpointOrOptions }
-        : { endpointUrl: get().opcuaEndpoint, tagMap: get().opcuaTagMap, activeSkid: get().activeSkid, interlockDefinitions: currentDefs };
+        ? { tagMap: get().opcuaTagMap, tagTypeMap: get().opcuaTagTypes, activeSkid: get().activeSkid, interlockDefinitions: currentDefs, ...endpointOrOptions }
+        : { endpointUrl: get().opcuaEndpoint, tagMap: get().opcuaTagMap, tagTypeMap: get().opcuaTagTypes, activeSkid: get().activeSkid, interlockDefinitions: currentDefs };
       const endpoint = opts.endpointUrl || get().opcuaEndpoint;
       opts.endpointUrl = endpoint;
 
@@ -284,6 +296,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         username: 'admin',
         password: 'password',
         tagMap: get().opcuaTagMap,
+        tagTypeMap: get().opcuaTagTypes,
         activeSkid: get().activeSkid,
         interlockDefinitions: get().interlockDefinitions,
       };
@@ -333,6 +346,26 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         plc.setTagMap(defaultMap);
       }
       set({ opcuaTagMap: defaultMap });
+    },
+
+    setOpcuaTagType: (tag: string, dataType: TagDataType) => {
+      const newTypes = { ...get().opcuaTagTypes, [tag]: dataType };
+      saveStoredTagTypeMap(newTypes);
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.setTagTypeMap(newTypes);
+      }
+      set({ opcuaTagTypes: newTypes });
+    },
+
+    resetOpcuaTagTypes: () => {
+      const defaultTypes = getDefaultTagTypeMap();
+      saveStoredTagTypeMap(defaultTypes);
+      const { plc } = get();
+      if (plc instanceof OpcUaPlcDriver) {
+        plc.setTagTypeMap(defaultTypes);
+      }
+      set({ opcuaTagTypes: defaultTypes });
     },
 
     setInterlockDefinitions: (defs: InterlockDefinition[]) => {

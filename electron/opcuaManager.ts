@@ -299,20 +299,34 @@ export class OpcUaManager {
 
     try {
       const nodesToWrite: WriteValueOptions[] = Object.entries(tags).map(([tag, item]) => {
-        let opcDataType = DataType.Double;
+        let opcDataType = DataType.Float;
         let val = item.value;
 
-        if (typeof val === 'boolean' || item.dataType === 'Boolean') {
+        if (item.dataType === 'Float') {
+          opcDataType = DataType.Float;
+          val = Math.fround(Number(val));
+        } else if (item.dataType === 'Double') {
+          opcDataType = DataType.Double;
+          val = Number(val);
+        } else if (item.dataType === 'Int16') {
+          opcDataType = DataType.Int16;
+          val = Math.trunc(Number(val));
+        } else if (item.dataType === 'Int32') {
+          opcDataType = DataType.Int32;
+          val = Math.trunc(Number(val));
+        } else if (item.dataType === 'Boolean' || typeof val === 'boolean') {
           opcDataType = DataType.Boolean;
           val = Boolean(val);
-        } else if (typeof val === 'string' || item.dataType === 'String') {
+        } else if (item.dataType === 'String' || typeof val === 'string') {
           opcDataType = DataType.String;
           val = String(val);
         } else if (typeof val === 'number') {
-          if (Number.isInteger(val) && (item.dataType === 'Int32' || item.dataType === 'Int16')) {
+          if (Number.isInteger(val)) {
             opcDataType = DataType.Int32;
+            val = Math.trunc(val);
           } else {
-            opcDataType = DataType.Double;
+            opcDataType = DataType.Float;
+            val = Math.fround(val);
           }
         }
 
@@ -384,12 +398,12 @@ export class OpcUaManager {
 
         // Common skid tags
         const defaultTags: Array<{ name: string; type: DataType; initial: any }> = [
-          // Batch Skid
-          { name: 'TK100_LT', type: DataType.Double, initial: 75.0 },
-          { name: 'TK400_LT', type: DataType.Double, initial: 10.0 },
-          { name: 'TT100', type: DataType.Double, initial: 24.5 },
-          { name: 'FT100', type: DataType.Double, initial: 0.0 },
-          { name: 'PT100', type: DataType.Double, initial: 1.2 },
+          // Batch Skid (Siemens & Rockwell REAL tags are 32-bit Float)
+          { name: 'TK100_LT', type: DataType.Float, initial: 75.0 },
+          { name: 'TK400_LT', type: DataType.Float, initial: 10.0 },
+          { name: 'TT100', type: DataType.Float, initial: 24.5 },
+          { name: 'FT100', type: DataType.Float, initial: 0.0 },
+          { name: 'PT100', type: DataType.Float, initial: 1.2 },
           { name: 'P100_START', type: DataType.Boolean, initial: false },
           { name: 'V101_CMD', type: DataType.Boolean, initial: false },
           { name: 'V101_ZSO', type: DataType.Boolean, initial: false },
@@ -404,22 +418,22 @@ export class OpcUaManager {
           { name: 'E_STOP_PB', type: DataType.Boolean, initial: true },
 
           // Pasteurizer Skid
-          { name: 'LT_BALANCE', type: DataType.Double, initial: 60.0 },
-          { name: 'LT_PRODUCT', type: DataType.Double, initial: 15.0 },
-          { name: 'TT1', type: DataType.Double, initial: 4.0 },
-          { name: 'TT2', type: DataType.Double, initial: 65.0 },
-          { name: 'TT3', type: DataType.Double, initial: 85.0 },
-          { name: 'TT4', type: DataType.Double, initial: 72.0 },
-          { name: 'TT5', type: DataType.Double, initial: 88.5 }, // Holding tube
-          { name: 'FM', type: DataType.Double, initial: 10000.0 },
-          { name: 'PT2', type: DataType.Double, initial: 2.5 },
-          { name: 'PT4', type: DataType.Double, initial: 4.2 },
+          { name: 'LT_BALANCE', type: DataType.Float, initial: 60.0 },
+          { name: 'LT_PRODUCT', type: DataType.Float, initial: 15.0 },
+          { name: 'TT1', type: DataType.Float, initial: 4.0 },
+          { name: 'TT2', type: DataType.Float, initial: 65.0 },
+          { name: 'TT3', type: DataType.Float, initial: 85.0 },
+          { name: 'TT4', type: DataType.Float, initial: 72.0 },
+          { name: 'TT5', type: DataType.Float, initial: 88.5 }, // Holding tube
+          { name: 'FM', type: DataType.Float, initial: 10000.0 },
+          { name: 'PT2', type: DataType.Float, initial: 2.5 },
+          { name: 'PT4', type: DataType.Float, initial: 4.2 },
           { name: 'P_FEED_CMD', type: DataType.Boolean, initial: true },
           { name: 'P_BOOSTER_CMD', type: DataType.Boolean, initial: true },
           { name: 'P_HOT_WATER_CMD', type: DataType.Boolean, initial: true },
           { name: 'PV11_CMD', type: DataType.Boolean, initial: true }, // Forward
           { name: 'PV12_CMD', type: DataType.Boolean, initial: false }, // Divert
-          { name: 'MOD_VALVE', type: DataType.Double, initial: 45.0 },
+          { name: 'MOD_VALVE', type: DataType.Float, initial: 45.0 },
           { name: 'IL-FDV', type: DataType.Boolean, initial: true },
           { name: 'IL-DIFF', type: DataType.Boolean, initial: true },
           // Lockstep Handshake & Reset Tags
@@ -442,6 +456,10 @@ export class OpcUaManager {
                 ? 'String'
                 : tag.type === DataType.Int32
                 ? 'Int32'
+                : tag.type === DataType.Int16
+                ? 'Int16'
+                : tag.type === DataType.Float
+                ? 'Float'
                 : 'Double',
             value: { dataType: tag.type, value: tag.initial },
           });
