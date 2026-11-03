@@ -69,6 +69,7 @@ export const FatReportModal: React.FC = () => {
         customerName: projectSettings.customerName,
         commissioningLead: projectSettings.commissioningLead,
         clientAuthority: projectSettings.clientAuthority,
+        organization: projectSettings.organization,
         plcPlatform: {
           driverName: harnessDriver.driverName,
           driverType: harnessDriver.driverType,
@@ -387,6 +388,25 @@ export const FatReportModal: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ color: '#475569', fontWeight: 600 }}>Organization:</label>
+            <input
+              type="text"
+              value={projectSettings.organization || ''}
+              onChange={(e) => setProjectSettings({ organization: e.target.value })}
+              placeholder="e.g. Lead Organization"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 160,
+                background: '#ffffff',
+                color: '#0f172a',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={{ color: '#475569', fontWeight: 600 }}>Logo:</label>
             <label
               className="btn btn-ghost"
@@ -683,7 +703,9 @@ export const FatReportModal: React.FC = () => {
             <div>
               <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{projectSettings.commissioningLead || 'Commissioning Lead Engineer'}</div>
-              <div style={{ fontSize: 9, color: '#64748b' }}>TwinForge Commissioning Systems</div>
+              {projectSettings.organization && (
+                <div style={{ fontSize: 9, color: '#64748b' }}>{projectSettings.organization}</div>
+              )}
             </div>
             <div>
               <div style={{ borderBottom: '1px solid #94a3b8', height: 35, marginBottom: 6 }}></div>
