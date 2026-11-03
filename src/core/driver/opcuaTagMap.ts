@@ -32,8 +32,12 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'PT4', name: 'Pasteurized Outlet Pressure', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=PT4', description: 'Pasteurized regeneration side pressure (bar)' },
   { tag: 'LT_BALANCE', name: 'Balance Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=LT_BALANCE', description: 'Constant level tank inventory level (%)' },
   { tag: 'LT_PRODUCT', name: 'Product Tank Level', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=LT_PRODUCT', description: 'Finished pasteurized milk tank level (%)' },
+  { tag: 'P_RAW_RUN_FB', name: 'Raw Pump Run Feedback', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_RUN_FB', description: 'Raw milk transfer pump run confirmation feedback' },
+  { tag: 'P_RAW_CURRENT', name: 'Raw Pump Motor Current', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=P_RAW_CURRENT', description: 'Raw milk transfer pump motor active current (A)' },
+  { tag: 'P_RAW_FAULT', name: 'Raw Pump Fault / Overload Trip', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_FAULT', description: 'Raw milk transfer pump thermal trip or motor fault' },
 
   // Pasteurizer Skid Outputs (PLC Control Outputs -> Simulator Actuators)
+  { tag: 'P_RAW_START', name: 'Raw Milk Pump Start Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_START', description: 'Raw milk transfer pump run command from PLC' },
   { tag: 'P_FEED_CMD', name: 'Feed Pump Run Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_FEED_CMD', description: 'Variable speed positive displacement feed pump run' },
   { tag: 'P_BOOSTER_CMD', name: 'Booster Pump Run Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_BOOSTER_CMD', description: 'Sanitary booster pump forward run' },
   { tag: 'P_HOT_WATER_CMD', name: 'HW Circulation Pump Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_HOT_WATER_CMD', description: 'Hot water loop circulation pump' },
@@ -67,6 +71,7 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
 ];
 
 export const PASTEURIZER_OUTPUT_TAGS: string[] = [
+  'P_RAW_START',
   'P_FEED_CMD',
   'P_BOOSTER_CMD',
   'P_HOT_WATER_CMD',
@@ -100,6 +105,9 @@ export const PASTEURIZER_INPUT_TAGS: string[] = [
   'PT4',
   'LT_BALANCE',
   'LT_PRODUCT',
+  'P_RAW_RUN_FB',
+  'P_RAW_CURRENT',
+  'P_RAW_FAULT',
 ];
 
 export const BATCH_MIXING_INPUT_TAGS: string[] = [

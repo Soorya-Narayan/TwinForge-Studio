@@ -5,6 +5,7 @@
  */
 
 import type { PlantTopology } from '../engine/PhysicsEngine';
+import { DEFAULT_P_RAW_CONFIG } from '../engine/circuits/RawMilkSupplyCircuit';
 
 export const milkPasteurizerSkid: PlantTopology = {
   tanks: [
@@ -152,8 +153,21 @@ export const milkPasteurizerSkid: PlantTopology = {
       tag: 'P_RAW',
       type: 'centrifugal_pump',
       description: 'Raw Milk Transfer Pump (Feed from silos to Balance Tank)',
-      maxFlowLpm: 180,
-      rampUpTimeS: 1.0,
+      maxFlowLpm: 267,
+      rampUpTimeS: 2.0,
+      hasVfd: false,
+      ratedSpeedRpm: 2900,
+      shutoffHeadM: 32,
+      ratedHeadM: 24,
+      ratedFlowLph: 12000,
+      maxFlowLph: 16000,
+      ratedPowerKw: 2.2,
+      ratedCurrentA: 4.8,
+      motorEfficiency: 0.85,
+      coastDownTauS: 3.0,
+      npshrRatedM: 2.5,
+      source: 'placeholder',
+      centrifugalConfig: DEFAULT_P_RAW_CONFIG,
     },
     {
       id: 'P-FEED',

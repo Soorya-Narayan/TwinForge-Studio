@@ -18,6 +18,7 @@ import type {
   HeatExchangerConfig,
 } from './types';
 import { PHEAssemblyModel } from './phe/index';
+import { RawMilkSupplyCircuit } from './circuits/index';
 
 export interface PlantTopology {
   tanks: TankConfig[];
@@ -41,6 +42,9 @@ export class PhysicsEngine {
 
   // High-fidelity Plate Heat Exchanger assembly for pasteurizer skids
   public pheAssembly?: PHEAssemblyModel;
+
+  // Dedicated Raw Milk Supply Circuit (Silo -> P-RAW -> PV-1 -> Balance Tank)
+  public rawMilkCircuit?: RawMilkSupplyCircuit;
 
   constructor(topology: PlantTopology, stepMs: number = 100) {
     this.topology = topology;
@@ -68,8 +72,11 @@ export class PhysicsEngine {
 
     if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
       this.pheAssembly = new PHEAssemblyModel();
+      const pRawPump = this.topology.pumps.find((p) => p.id === 'P-RAW');
+      this.rawMilkCircuit = new RawMilkSupplyCircuit(pRawPump?.centrifugalConfig);
     } else {
       this.pheAssembly = undefined;
+      this.rawMilkCircuit = undefined;
     }
 
     // Initialize tanks
@@ -116,13 +123,28 @@ export class PhysicsEngine {
   public setFault(fault: DeviceFault): void {
     if (fault.mode === 'none') {
       this.faults.delete(fault.deviceId);
+      if (this.rawMilkCircuit) {
+        if (fault.deviceId === 'P-RAW' || fault.deviceId === 'P_RAW') {
+          this.rawMilkCircuit.clearAllFaults();
+        } else if (fault.deviceId === 'RAW_SUPPLY' || fault.deviceId === 'SILO') {
+          this.rawMilkCircuit.clearFault('raw_supply_empty');
+        }
+      }
     } else {
       this.faults.set(fault.deviceId, fault);
+      if (this.rawMilkCircuit) {
+        if (fault.deviceId === 'P-RAW' || fault.deviceId === 'P_RAW') {
+          this.rawMilkCircuit.applyFault(fault.mode, fault.value);
+        } else if (fault.mode === 'raw_supply_empty') {
+          this.rawMilkCircuit.applyFault('raw_supply_empty', fault.value);
+        }
+      }
     }
   }
 
   public clearAllFaults(): void {
     this.faults.clear();
+    this.rawMilkCircuit?.clearAllFaults();
   }
 
   public getFaults(): DeviceFault[] {
@@ -149,7 +171,7 @@ export class PhysicsEngine {
     this.solveFlowPaths();
 
     // 3. INTEGRATE: Update tank levels, mass balance, and thermodynamics
-    this.integrateMassAndHeat(dtSeconds);
+    this.integrateMassAndHeat(dtSeconds, plcCommands);
 
     // 4. SENSE & PUBLISH: Produce feedback inputs for PLC
     const plcInputs = this.generatePlcInputs();
@@ -225,6 +247,9 @@ export class PhysicsEngine {
 
   private advancePumps(commands: Record<string, boolean | number>, dt: number): void {
     for (const pump of this.topology.pumps) {
+      if (this.rawMilkCircuit && pump.id === 'P-RAW') {
+        continue;
+      }
       const state = this.states.get(pump.id);
       if (!state) continue;
 
@@ -359,7 +384,7 @@ export class PhysicsEngine {
     }
   }
 
-  private integrateMassAndHeat(dt: number): void {
+  private integrateMassAndHeat(dt: number, commands: Record<string, boolean | number> = {}): void {
     const dtMin = dt / 60.0;
 
     for (const tank of this.topology.tanks) {
@@ -471,13 +496,31 @@ export class PhysicsEngine {
       const balTank = this.states.get('TK-BALANCE');
       const prodTank = this.states.get('TK-PRODUCT');
       const pFeed = this.states.get('P-FEED');
-      const pRaw = this.states.get('P-RAW');
       const pv1 = this.states.get('PV-1');
       const pv11 = this.states.get('PV-11');
       const pv12 = this.states.get('PV-12');
 
       const feedFlow = ((pFeed?.speedPct ?? 0) / 100) * 166.7;
-      const rawFlow = (pv1?.isOpen && (pRaw?.speedPct ?? 0) > 10) ? 166.7 : 0;
+      let rawFlow = 0;
+      if (this.rawMilkCircuit) {
+        const cmdRaw = commands['P_RAW_START'] ?? commands['P_RAW'] ?? commands['P-RAW'];
+        const spRaw = commands['P_RAW_SPEED_SP'] ?? commands['P_RAW_SPD_SP'];
+        const pv1Pos = pv1?.positionPct ?? (pv1?.isOpen ? 100 : 0);
+        const circuitOut = this.rawMilkCircuit.step(dt, {
+          startCmd: Boolean(cmdRaw),
+          speedSpPct: typeof spRaw === 'number' ? spRaw : undefined,
+          pv1PositionPct: pv1Pos,
+          balanceTankLevelPct: balTank?.levelPct,
+        });
+        rawFlow = circuitOut.flowLpm;
+        const pRaw = this.states.get('P-RAW');
+        if (pRaw) {
+          pRaw.speedPct = circuitOut.pumpState.speedPct;
+          pRaw.isRunning = (circuitOut.pumpState.speedPct ?? 0) > 10;
+        }
+        this.connectionFlows.set('PIPE-RAW-IN', Math.max(0, rawFlow));
+        this.connectionFlows.set('PIPE-PV1-BAL', Math.max(0, rawFlow));
+      }
       const divertFlow = pv12?.isOpen ? feedFlow : 0;
       const forwardFlow = pv11?.isOpen ? feedFlow : 0;
 
@@ -516,6 +559,14 @@ export class PhysicsEngine {
 
     // Pumps -> Running feedback
     for (const pump of this.topology.pumps) {
+      if (this.rawMilkCircuit && pump.id === 'P-RAW') {
+        const out = this.rawMilkCircuit.getOutputs();
+        inputs[`${pump.tag}_RUN_FB`] = out.pumpState.runFeedback;
+        inputs[`${pump.tag}_SPD_ACT`] = out.pumpState.speedPct;
+        inputs[`${pump.tag}_CURRENT`] = out.pumpState.currentA;
+        inputs[`${pump.tag}_FAULT`] = out.pumpState.fault;
+        continue;
+      }
       const state = this.states.get(pump.id);
       const isRunning = (state?.speedPct ?? 0) > 10;
       inputs[`${pump.tag}_RUN_FB`] = isRunning;
@@ -676,6 +727,15 @@ export class PhysicsEngine {
       }
       if (!metrics.isLegalHoldingTime && isFinite(metrics.holdingTubeResidenceTimeS) && metrics.holdingTubeResidenceTimeS > 0) {
         alarms.push('ALARM_LEGAL_UNDER_HOLDING_TIME');
+      }
+    }
+
+    if (this.rawMilkCircuit) {
+      const circuitOut = this.rawMilkCircuit.getOutputs();
+      for (const a of circuitOut.alarms) {
+        if (!alarms.includes(a)) {
+          alarms.push(a);
+        }
       }
     }
 

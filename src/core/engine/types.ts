@@ -42,6 +42,19 @@ export interface PumpConfig extends BaseDeviceConfig {
   maxFlowLpm: number;        // Maximum rated flow in liters/min
   rampUpTimeS: number;       // Time to reach 100% speed
   headM?: number;
+  hasVfd?: boolean;
+  ratedSpeedRpm?: number;
+  shutoffHeadM?: number;
+  ratedHeadM?: number;
+  ratedFlowLph?: number;
+  maxFlowLph?: number;
+  ratedPowerKw?: number;
+  ratedCurrentA?: number;
+  motorEfficiency?: number;
+  coastDownTauS?: number;
+  npshrRatedM?: number;
+  source?: 'datasheet' | 'placeholder';
+  centrifugalConfig?: import('./pumps/types').CentrifugalPumpConfig;
 }
 
 export interface HeatExchangerConfig extends BaseDeviceConfig {
@@ -67,6 +80,11 @@ export type FaultMode =
   | 'travel_delay'
   | 'pump_trip'
   | 'pump_cavitation'
+  | 'impeller_wear'
+  | 'suction_blockage'
+  | 'motor_overload'
+  | 'run_feedback_fail'
+  | 'raw_supply_empty'
   | 'sensor_offset'
   | 'wire_break'
   | 'plate_leak'
@@ -86,6 +104,7 @@ export interface DevicePhysicalState {
   positionPct?: number;      // Valves (0 - 100%)
   isOpen?: boolean;          // Valves proof
   speedPct?: number;         // Pumps (0 - 100%)
+  isRunning?: boolean;       // Pumps running status
   volumeL?: number;          // Tanks
   levelPct?: number;         // Tanks (0 - 100%)
   temperatureC?: number;     // Fluid / media temp
