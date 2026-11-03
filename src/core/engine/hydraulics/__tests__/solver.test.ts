@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PipeElement } from '../elements';
+import { PipeElement, ValveElement, StaticHeadElement } from '../elements';
 import { solveSeriesOperatingPoint } from '../solver';
 import { RAW_MILK_FLUID } from '../types';
 import { RawMilkSupplyCircuit } from '../../circuits/RawMilkSupplyCircuit';
@@ -52,5 +52,56 @@ describe('Hydraulic Operating Point Solver', () => {
 
     const dischargePipeNodeP = out.nodePressuresBar!['PIPE-DISCHARGE'];
     expect(dischargePipeNodeP).toBeLessThan(pumpDischargeNodeP);
+  });
+
+  it('verifies general solver invariant: for any series circuit whose start and end are both at atmospheric pressure, the last node pressure equals the start pressure at the solved flow', () => {
+    const pAtmBar = 1.01325;
+    const dropStatic = new StaticHeadElement({
+      id: 'STATIC-DROP',
+      deltaZM: { value: -3.5, source: 'placeholder' },
+    });
+    const pipeSuction = new PipeElement({
+      id: 'PIPE-SUCTION-GEN',
+      lengthM: { value: 8.0, source: 'placeholder' },
+      diameterMm: { value: 50.0, source: 'placeholder' },
+      fittingsK: { value: 2.5, source: 'placeholder' },
+    });
+    const pipeDischarge = new PipeElement({
+      id: 'PIPE-DISCHARGE-GEN',
+      lengthM: { value: 18.0, source: 'placeholder' },
+      diameterMm: { value: 50.0, source: 'placeholder' },
+      fittingsK: { value: 5.0, source: 'placeholder' },
+    });
+    const valve = new ValveElement({
+      id: 'VALVE-GEN',
+      Kv: { value: 45.0, source: 'placeholder' },
+      positionPct: 90,
+    });
+    const riseStatic = new StaticHeadElement({
+      id: 'STATIC-RISE',
+      deltaZM: { value: 2.5, source: 'placeholder' },
+    });
+
+    const elements = [dropStatic, pipeSuction, pipeDischarge, valve, riseStatic];
+    const pumpHeadFn = (q: number) => 30.0 - 5e-8 * q * q;
+
+    const res = solveSeriesOperatingPoint(
+      pumpHeadFn,
+      elements,
+      RAW_MILK_FLUID,
+      {
+        inletPressureBar: pAtmBar,
+        pumpIndex: 2,
+        pumpId: 'pump',
+      }
+    );
+
+    expect(res.noForwardFlow).toBe(false);
+    expect(res.pressuresBar).toBeDefined();
+
+    // The last element in elements is 'STATIC-RISE'
+    const lastNodeP = res.pressuresBar['STATIC-RISE'];
+    expect(lastNodeP).toBeDefined();
+    expect(lastNodeP).toBeCloseTo(pAtmBar, 3);
   });
 });

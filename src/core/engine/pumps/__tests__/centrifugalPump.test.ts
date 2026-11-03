@@ -378,5 +378,84 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
     expect(snap.tags.inputs['P_RAW_RUNOUT']).toBe(true);
     expect(snap.alarms).toContain('P_RAW_RUNOUT');
   });
+
+  // 14. Pressure walk elevation datum & outlet boundary invariants (Tests 1-4)
+  describe('Elevation datum consistency & outlet boundary invariants', () => {
+    it('14.1 verifies outlet boundary invariant with top inlet: last node equals 1.01325 bar abs within 0.001 bar', () => {
+      const circuit = new RawMilkSupplyCircuit();
+      let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+
+      expect(out.nodePressuresBar).toBeDefined();
+      const lastNodeP = out.nodePressuresBar!['PUMP-TO-INLET'];
+      expect(lastNodeP).toBeDefined();
+      expect(Math.abs(lastNodeP - 1.01325)).toBeLessThan(0.001);
+    });
+
+    it('14.2 verifies outlet boundary invariant with bottom submerged inlet: last node equals atmospheric plus tank liquid head within 0.001 bar', () => {
+      const circuit = new RawMilkSupplyCircuit({
+        balanceTankInletType: 'bottom',
+        balanceTankInletElevationM: 1.2,
+        balanceTankBottomElevationM: 1.2,
+        balanceTankMaxLiquidHeightM: 0.8,
+      });
+
+      // 50% tank level => 0.4 m liquid column above bottom inlet
+      const levelPct = 50;
+      let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100, balanceTankLevelPct: levelPct });
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100, balanceTankLevelPct: levelPct });
+      }
+
+      expect(out.nodePressuresBar).toBeDefined();
+      const lastNodeP = out.nodePressuresBar!['PUMP-TO-INLET'];
+      expect(lastNodeP).toBeDefined();
+
+      const expectedLiquidHeadM = 0.4;
+      const expectedLiquidHeadBar = (1032 * GRAVITY_M_S2 * expectedLiquidHeadM) / 100000;
+      const expectedOutletP = 1.01325 + expectedLiquidHeadBar;
+
+      expect(Math.abs(lastNodeP - expectedOutletP)).toBeLessThan(0.001);
+    });
+
+    it('14.3 verifies suction pressure equals atmospheric + silo head - suction pipe loss (~1.123 bar abs) and pump node equals dischargePressureBar', () => {
+      const circuit = new RawMilkSupplyCircuit();
+      let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+
+      expect(out.nodePressuresBar).toBeDefined();
+      const suctionPipeP = out.nodePressuresBar!['PIPE-SUCTION'];
+      const pumpNodeP = out.nodePressuresBar!['pump'];
+
+      // Suction pressure is ~1.123 bar abs
+      expect(out.suctionPressureBar).toBeCloseTo(1.123, 2);
+      expect(suctionPipeP).toBeCloseTo(out.suctionPressureBar, 3);
+
+      // Verify suction pipe loss formula explicitly:
+      const pAtmBar = 1.01325;
+      const siloHeadBar = (1032 * GRAVITY_M_S2 * circuit.siloLevelM) / 100000;
+      const suctionPipeLossBar = circuit.suctionPipe.pressureDropBar(out.flowLph, RAW_MILK_FLUID);
+      const expectedSuctionBar = pAtmBar + siloHeadBar - suctionPipeLossBar;
+      expect(out.suctionPressureBar).toBeCloseTo(expectedSuctionBar, 3);
+
+      // Pump node equals dischargePressureBar
+      expect(pumpNodeP).toBeCloseTo(out.dischargePressureBar, 3);
+    });
+
+    it('14.4 verifies flow is unchanged from before this fix (17,465 L/h +- 1 L/h for the placeholder case)', () => {
+      const circuit = new RawMilkSupplyCircuit();
+      let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+
+      expect(Math.abs(out.flowLph - 17465)).toBeLessThanOrEqual(1.0);
+    });
+  });
 });
+
 

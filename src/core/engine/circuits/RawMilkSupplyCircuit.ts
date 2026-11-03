@@ -88,7 +88,8 @@ export class RawMilkSupplyCircuit {
   public readonly suctionPipe: PipeElement;
   public readonly dischargePipe: PipeElement;
   public readonly pv1Valve: ValveElement;
-  public readonly staticHead: StaticHeadElement;
+  public readonly siloToSuction: StaticHeadElement;
+  public readonly pumpToInlet: StaticHeadElement;
 
   // Boundary conditions
   public siloLevelM: number = 3.0; // Level above pump suction (placeholder)
@@ -150,18 +151,36 @@ export class RawMilkSupplyCircuit {
       positionPct: 100,
     });
 
-    // Static Head: net elevation difference from silo to balance tank inlet
-    // Δz = z_inlet - z_silo = 2.0 - 3.0 = -1.0 m
-    this.staticHead = new StaticHeadElement({
-      id: 'STATIC-HEAD',
-      deltaZM: { value: -1.0, source: 'placeholder' },
+    // Static Head Elements:
+    // 1. SILO-TO-SUCTION: drop from silo liquid surface down to pump centreline: Δz = -siloLevelM (adds pressure)
+    this.siloToSuction = new StaticHeadElement({
+      id: 'SILO-TO-SUCTION',
+      deltaZM: { value: -this.siloLevelM, source: 'placeholder' },
     });
+
+    // 2. PUMP-TO-INLET: rise from pump centreline up to balance tank inlet: Δz = downstreamHeadM
+    this.pumpToInlet = new StaticHeadElement({
+      id: 'PUMP-TO-INLET',
+      deltaZM: { value: this.balanceTankInletElevationM, source: 'placeholder' },
+    });
+
+    const initStaticBar = (1032 * GRAVITY_M_S2 * this.siloLevelM) / 100000;
+    const initSuctionBar = 1.01325 + initStaticBar;
 
     this.lastOutputs = {
       flowLph: 0,
       flowLpm: 0,
-      suctionPressureBar: 1.01325 + (1032 * GRAVITY_M_S2 * 3.0) / 100000,
-      dischargePressureBar: 1.01325 + (1032 * GRAVITY_M_S2 * 3.0) / 100000,
+      suctionPressureBar: initSuctionBar,
+      dischargePressureBar: initSuctionBar,
+      nodePressuresBar: {
+        inlet: 1.01325,
+        'SILO-TO-SUCTION': initSuctionBar,
+        'PIPE-SUCTION': initSuctionBar,
+        pump: initSuctionBar,
+        'PIPE-DISCHARGE': initSuctionBar,
+        'PV-1': initSuctionBar,
+        'PUMP-TO-INLET': 1.01325,
+      },
       pumpState: this.pump.getState(),
       alarms: [],
     };
@@ -245,9 +264,11 @@ export class RawMilkSupplyCircuit {
       downstreamHeadM = Math.max(this.balanceTankInletElevationM, liquidSurfaceElevationM);
     }
 
-    // Net static head update: downstream head minus silo liquid surface elevation
-    const netDeltaZM = downstreamHeadM - effectiveSiloLevelM;
-    this.staticHead.deltaZM = netDeltaZM;
+    // Static Head Elements update:
+    // 1. SILO-TO-SUCTION: drop from silo surface to pump centerline adds pressure (Δz = -siloLevelM)
+    this.siloToSuction.deltaZM = -effectiveSiloLevelM;
+    // 2. PUMP-TO-INLET: rise from pump centerline up to tank inlet (or liquid surface for submerged bottom inlet)
+    this.pumpToInlet.deltaZM = downstreamHeadM;
 
     // Silo suction pressure at pump inlet (absolute)
     const pAtmBar = 1.01325;
@@ -276,6 +297,15 @@ export class RawMilkSupplyCircuit {
         flowLpm: 0,
         suctionPressureBar: pAtmBar,
         dischargePressureBar: pAtmBar,
+        nodePressuresBar: {
+          inlet: pAtmBar,
+          'SILO-TO-SUCTION': pAtmBar,
+          'PIPE-SUCTION': pAtmBar,
+          pump: pAtmBar,
+          'PIPE-DISCHARGE': pAtmBar,
+          'PV-1': pAtmBar,
+          'PUMP-TO-INLET': pAtmBar,
+        },
         pumpState,
         alarms,
       };
@@ -293,10 +323,11 @@ export class RawMilkSupplyCircuit {
     if (isPumpRunning && isPv1Passable) {
       // 1. Pump is running and PV-1 is passable: solve operating point
       const elements = [
+        this.siloToSuction,
         this.suctionPipe,
         this.dischargePipe,
-        this.staticHead,
         this.pv1Valve,
+        this.pumpToInlet,
       ];
 
       const res = solveSeriesOperatingPoint(
@@ -324,13 +355,18 @@ export class RawMilkSupplyCircuit {
         {
           maxFlowLph: this.pump.ratedFlowLph * 1.5,
           toleranceLph: 1.0,
-          inletPressureBar: pSiloAbsBar,
-          pumpIndex: 1,
+          inletPressureBar: pAtmBar,
+          pumpIndex: 2,
           pumpId: 'pump',
         }
       );
 
-      nodePressuresBar = res.pressuresBar;
+      nodePressuresBar = { ...res.pressuresBar };
+      if (this.balanceTankInletType === 'bottom') {
+        const tankLiquidHeadM = Math.max(0, downstreamHeadM - this.balanceTankInletElevationM);
+        const tankLiquidHeadBar = (fluid.densityKgM3 * GRAVITY_M_S2 * tankLiquidHeadM) / 100000;
+        nodePressuresBar['PUMP-TO-INLET'] = Number((res.pressuresBar['PUMP-TO-INLET'] + tankLiquidHeadBar).toFixed(4));
+      }
 
       if (!res.noForwardFlow) {
         solvedFlowLph = res.flowLph;
@@ -338,32 +374,25 @@ export class RawMilkSupplyCircuit {
         solvedFlowLph = 0;
       }
 
-      // Calculate pressures
-      const pSuctionDrop = this.suctionPipe.pressureDropBar(solvedFlowLph, fluid);
-      pSuctionBar = Math.max(0, pSiloAbsBar - pSuctionDrop);
-
-      const pVapPa = CentrifugalPumpModel.getWaterVapourPressurePa(fluid.temperatureC);
-      const pSuctPa = pSuctionBar * 100000;
-      const rhoG = fluid.densityKgM3 * GRAVITY_M_S2;
-      const D = this.suctionPipe.diameterMm / 1000;
-      const A = (Math.PI / 4) * D * D;
-      const v = A > 0 ? (solvedFlowLph / (3600 * 1000)) / A : 0;
-      const npsha = Math.max(0, (pSuctPa - pVapPa) / rhoG + (v * v) / (2 * GRAVITY_M_S2));
-      const npshr = this.pump.npshrRatedM * Math.pow(solvedFlowLph / Math.max(1, this.pump.ratedFlowLph), 2);
-      let pumpHeadM = this.pump.getHeadM(solvedFlowLph, currentSpeedRatio);
-      if (npsha < npshr && solvedFlowLph > 100) {
-        const pen = Math.max(0, 1 - 1.5 * ((npshr - npsha) / Math.max(0.1, npshr)));
-        pumpHeadM *= pen;
-      }
-      const pumpDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * pumpHeadM) / 100000;
-      pDischargeBar = pSuctionBar + pumpDeltaPBar;
+      // Read suction and discharge pressures from solver's node pressures as single source of truth
+      pSuctionBar = nodePressuresBar['PIPE-SUCTION'];
+      pDischargeBar = nodePressuresBar['pump'];
     } else if (isPumpRunning && !isPv1Passable) {
       // 2. PV-1 is closed while pump runs: flow = 0, discharge pressure = shut-off head
       solvedFlowLph = 0;
-      pSuctionBar = pSiloAbsBar;
+      pSuctionBar = Number(pSiloAbsBar.toFixed(4));
       const shutOffHeadM = this.pump.getHeadM(0, currentSpeedRatio);
       const shutOffDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * shutOffHeadM) / 100000;
-      pDischargeBar = pSuctionBar + shutOffDeltaPBar;
+      pDischargeBar = Number((pSuctionBar + shutOffDeltaPBar).toFixed(4));
+      nodePressuresBar = {
+        inlet: pAtmBar,
+        'SILO-TO-SUCTION': pSuctionBar,
+        'PIPE-SUCTION': pSuctionBar,
+        pump: pDischargeBar,
+        'PIPE-DISCHARGE': pDischargeBar,
+        'PV-1': pDischargeBar,
+        'PUMP-TO-INLET': pAtmBar,
+      };
     } else if (!isPumpRunning && isPv1Passable) {
       // 3. Pump is stopped and PV-1 is open: compute gravity flow from static head
       // Reverse flow is possible ONLY for a bottom (submerged) inlet, when the liquid surface is above the silo level.
@@ -377,18 +406,15 @@ export class RawMilkSupplyCircuit {
           drivingHeadM = effectiveSiloLevelM - this.balanceTankInletElevationM;
           isReverse = false;
         } else {
-          // Silo surface at or below top inlet: cannot flow uphill and cannot reverse flow from top inlet
           drivingHeadM = 0;
           isReverse = false;
         }
       } else {
         // Bottom inlet:
         if (effectiveSiloLevelM > downstreamHeadM) {
-          // Forward gravity flow into tank
           drivingHeadM = effectiveSiloLevelM - downstreamHeadM;
           isReverse = false;
         } else if (liquidSurfaceElevationM > effectiveSiloLevelM) {
-          // Tank liquid surface is above silo level -> reverse gravity flow!
           drivingHeadM = liquidSurfaceElevationM - effectiveSiloLevelM;
           isReverse = true;
         } else {
@@ -398,51 +424,105 @@ export class RawMilkSupplyCircuit {
       }
 
       if (drivingHeadM > 1e-4) {
-        // Solve gravity flow using bisection
         const pumpStoppedK = 20.0;
         const origDischargeK = this.dischargePipe.fittingsK;
         this.dischargePipe.fittingsK = 6.0 + pumpStoppedK;
 
-        const drivingDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * drivingHeadM) / 100000;
-
-        let low = 0;
-        let high = 20000;
-        let gravQ = 0;
-
-        for (let i = 0; i < 50; i++) {
-          gravQ = 0.5 * (low + high);
-          if (high - low < 1.0) break;
-
-          const lossBar =
-            this.suctionPipe.pressureDropBar(gravQ, fluid) +
-            this.dischargePipe.pressureDropBar(gravQ, fluid) +
-            this.pv1Valve.pressureDropBar(gravQ, fluid);
-
-          if (lossBar < drivingDeltaPBar) {
-            low = gravQ;
-          } else {
-            high = gravQ;
-          }
-        }
-        this.dischargePipe.fittingsK = origDischargeK;
-
         if (isReverse) {
+          const drivingDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * drivingHeadM) / 100000;
+          let low = 0;
+          let high = 20000;
+          let gravQ = 0;
+
+          for (let i = 0; i < 50; i++) {
+            gravQ = 0.5 * (low + high);
+            if (high - low < 1.0) break;
+
+            const lossBar =
+              this.suctionPipe.pressureDropBar(gravQ, fluid) +
+              this.dischargePipe.pressureDropBar(gravQ, fluid) +
+              this.pv1Valve.pressureDropBar(gravQ, fluid);
+
+            if (lossBar < drivingDeltaPBar) {
+              low = gravQ;
+            } else {
+              high = gravQ;
+            }
+          }
+
           solvedFlowLph = -gravQ;
           alarms.push('RAW_REVERSE_FLOW');
+          pSuctionBar = Number((pSiloAbsBar + this.suctionPipe.pressureDropBar(gravQ, fluid)).toFixed(4));
+          pDischargeBar = pSuctionBar;
+          nodePressuresBar = {
+            inlet: pAtmBar,
+            'SILO-TO-SUCTION': Number(pSiloAbsBar.toFixed(4)),
+            'PIPE-SUCTION': pSuctionBar,
+            pump: pDischargeBar,
+            'PIPE-DISCHARGE': pDischargeBar,
+            'PV-1': pDischargeBar,
+            'PUMP-TO-INLET': Number((pAtmBar + (fluid.densityKgM3 * GRAVITY_M_S2 * Math.max(0, downstreamHeadM - this.balanceTankInletElevationM)) / 100000).toFixed(4)),
+          };
         } else {
-          solvedFlowLph = gravQ;
+          // Forward gravity flow using solver with pumpHeadFn = () => 0
+          const elements = [
+            this.siloToSuction,
+            this.suctionPipe,
+            this.dischargePipe,
+            this.pv1Valve,
+            this.pumpToInlet,
+          ];
+          const gravRes = solveSeriesOperatingPoint(
+            () => 0,
+            elements,
+            fluid,
+            {
+              maxFlowLph: 20000,
+              toleranceLph: 1.0,
+              inletPressureBar: pAtmBar,
+              pumpIndex: 2,
+              pumpId: 'pump',
+            }
+          );
+          solvedFlowLph = gravRes.noForwardFlow ? 0 : gravRes.flowLph;
+          nodePressuresBar = { ...gravRes.pressuresBar };
+          if (this.balanceTankInletType === 'bottom') {
+            const tankLiquidHeadM = Math.max(0, downstreamHeadM - this.balanceTankInletElevationM);
+            const tankLiquidHeadBar = (fluid.densityKgM3 * GRAVITY_M_S2 * tankLiquidHeadM) / 100000;
+            nodePressuresBar['PUMP-TO-INLET'] = Number((gravRes.pressuresBar['PUMP-TO-INLET'] + tankLiquidHeadBar).toFixed(4));
+          }
+          pSuctionBar = nodePressuresBar['PIPE-SUCTION'];
+          pDischargeBar = nodePressuresBar['pump'];
         }
+        this.dischargePipe.fittingsK = origDischargeK;
       } else {
         solvedFlowLph = 0;
+        pSuctionBar = Number(pSiloAbsBar.toFixed(4));
+        pDischargeBar = pSuctionBar;
+        nodePressuresBar = {
+          inlet: pAtmBar,
+          'SILO-TO-SUCTION': pSuctionBar,
+          'PIPE-SUCTION': pSuctionBar,
+          pump: pDischargeBar,
+          'PIPE-DISCHARGE': pDischargeBar,
+          'PV-1': pDischargeBar,
+          'PUMP-TO-INLET': pAtmBar,
+        };
       }
-
-      pSuctionBar = pSiloAbsBar;
-      pDischargeBar = pSiloAbsBar;
     } else {
       // Stopped and valve closed
       solvedFlowLph = 0;
-      pSuctionBar = pSiloAbsBar;
-      pDischargeBar = pSiloAbsBar;
+      pSuctionBar = Number(pSiloAbsBar.toFixed(4));
+      pDischargeBar = pSuctionBar;
+      nodePressuresBar = {
+        inlet: pAtmBar,
+        'SILO-TO-SUCTION': pSuctionBar,
+        'PIPE-SUCTION': pSuctionBar,
+        pump: pDischargeBar,
+        'PIPE-DISCHARGE': pDischargeBar,
+        'PV-1': pDischargeBar,
+        'PUMP-TO-INLET': pAtmBar,
+      };
     }
 
     // Step centrifugal pump model
@@ -474,8 +554,8 @@ export class RawMilkSupplyCircuit {
     this.lastOutputs = {
       flowLph: Number(solvedFlowLph.toFixed(2)),
       flowLpm: Number((solvedFlowLph / 60).toFixed(2)),
-      suctionPressureBar: Number(pSuctionBar.toFixed(3)),
-      dischargePressureBar: Number(pDischargeBar.toFixed(3)),
+      suctionPressureBar: pSuctionBar,
+      dischargePressureBar: pDischargeBar,
       nodePressuresBar,
       pumpState,
       alarms,
