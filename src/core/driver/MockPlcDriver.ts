@@ -32,6 +32,7 @@ import {
 export type { InterlockStatus, InterlockDefinition };
 
 export class MockPlcDriver implements Driver {
+  public readonly driverName = 'MockPlcDriver';
   public status: DriverStatus = {
     connected: true,
     driverType: 'mock',

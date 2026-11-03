@@ -263,7 +263,7 @@ export const useFatStore = create<FatStore>()(
     );
     const isLoopbackHarness = hasLiveElectronSession && plc.isLoopbackSession?.() === true;
 
-    const driverName = plc.constructor?.name || (hasLiveElectronSession ? 'OpcUaPlcDriver' : 'MockPlcDriver');
+    const driverName = plc.driverName || 'UnknownDriver';
     const harnessEndpoint = plc.endpointUrl || 'opc.tcp://127.0.0.1:4840';
     const driverType: TestDriverInfo['driverType'] = !hasLiveElectronSession
       ? 'mock'

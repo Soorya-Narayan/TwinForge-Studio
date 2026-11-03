@@ -14,6 +14,7 @@ export interface DriverStatus {
 }
 
 export interface Driver {
+  readonly driverName: string;
   status: DriverStatus;
   state?: string;
   endpointUrl?: string;

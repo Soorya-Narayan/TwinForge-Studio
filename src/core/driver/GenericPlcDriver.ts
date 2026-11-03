@@ -10,6 +10,7 @@ import type { InterlockStatus } from './interlockConfig';
 export type { InterlockStatus };
 
 export class GenericPlcDriver implements Driver {
+  public readonly driverName = 'GenericPlcDriver';
   public status: DriverStatus = {
     connected: true,
     driverType: 'mock',

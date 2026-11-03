@@ -25,6 +25,7 @@ import {
 export type { InterlockStatus, InterlockDefinition };
 
 export class PasteurizerPlcDriver implements Driver {
+  public readonly driverName = 'PasteurizerPlcDriver';
   public status: DriverStatus = {
     connected: true,
     driverType: 'mock',

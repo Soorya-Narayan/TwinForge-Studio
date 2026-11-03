@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { useFatStore } from '../../../store/useFatStore';
 import { useSimulationStore, type SkidId } from '../../../store/useSimulationStore';
+import { computeEvidenceFingerprint } from '../../report/fingerprint';
 
 describe('FAT Test Suite Full Regression', () => {
   const skids: SkidId[] = ['PASTEURIZER_10KLPH', 'BATCH_MIXING'];
@@ -50,6 +51,7 @@ describe('FAT Test Suite Full Regression', () => {
 
     // Create a mock driver without resetPrecondition method and with undefined state
     const faultyDriver: any = {
+      driverName: 'FaultyMockDriver',
       status: { connected: true, driverType: 'mock' },
       inputs: {},
       outputs: {},
@@ -64,5 +66,34 @@ describe('FAT Test Suite Full Regression', () => {
     expect(result).toBeDefined();
     expect(result?.passed).toBe(false);
     expect(result?.assertions.some((a) => a.tag === 'RESET_PRECONDITION' && !a.passed)).toBe(true);
+  });
+
+  it('records literal driverName in evidence payload when executing tests with mock driver', async () => {
+    useSimulationStore.getState().setSkid('PASTEURIZER_10KLPH');
+    useFatStore.getState().syncScenarios('PASTEURIZER_10KLPH');
+
+    await useFatStore.getState().runSingleTest('TC-P01');
+
+    const state = useFatStore.getState();
+    const result = state.results.find((r) => r.testId === 'TC-P01');
+    expect(result).toBeDefined();
+    if (!result) throw new Error('Result not found');
+    if (!result.driver) throw new Error('Driver not found');
+    expect(result.driver.driverName).toBe('PasteurizerPlcDriver');
+    expect(state.executionDriverInfo?.driverName).toBe('PasteurizerPlcDriver');
+
+    const payloadObject = {
+      certificateRef: state.projectSettings.certificateRef,
+      customerName: state.projectSettings.customerName,
+      authority: state.projectSettings.clientAuthority,
+      lead: state.projectSettings.commissioningLead,
+      results: state.results,
+      journal: state.journal,
+      driver: state.executionDriverInfo,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { payloadString } = await computeEvidenceFingerprint(payloadObject);
+    expect(payloadString).toContain('"driverName":"PasteurizerPlcDriver"');
   });
 });

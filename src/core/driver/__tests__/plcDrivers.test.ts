@@ -218,4 +218,19 @@ describe('PLC Drivers Unit Tests', () => {
       expect(driver.status.connected).toBe(false);
     });
   });
+
+  describe('Driver Literal Names', () => {
+    it('asserts every driver class driverName equals its expected literal string', () => {
+      const pasteurizer = new PasteurizerPlcDriver();
+      const mock = new MockPlcDriver();
+      const generic = new GenericPlcDriver(SAMPLE_CUSTOM_BOILERPLATE.topology);
+      const opcua = new OpcUaPlcDriver();
+
+      expect(pasteurizer.driverName).toBe('PasteurizerPlcDriver');
+      expect(mock.driverName).toBe('MockPlcDriver');
+      expect(generic.driverName).toBe('GenericPlcDriver');
+      expect(opcua.driverName).toBe('OpcUaPlcDriver');
+    });
+  });
 });
+

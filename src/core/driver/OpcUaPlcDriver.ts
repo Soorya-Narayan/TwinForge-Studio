@@ -150,6 +150,7 @@ class AsyncLock {
 }
 
 export class OpcUaPlcDriver implements Driver {
+  public readonly driverName = 'OpcUaPlcDriver';
   public status: DriverStatus = {
     connected: false,
     driverType: 'opcua',
