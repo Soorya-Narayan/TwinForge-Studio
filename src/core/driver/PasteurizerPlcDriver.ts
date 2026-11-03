@@ -317,6 +317,7 @@ export class PasteurizerPlcDriver implements Driver {
 
   private clearAllOutputs(): void {
     for (const k of Object.keys(this.outputs)) {
+      if (k === 'SEQ_ACK' || k === 'PLC_STATE') continue;
       this.outputs[k] = typeof this.outputs[k] === 'number' ? 0 : false;
     }
   }

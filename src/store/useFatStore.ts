@@ -415,7 +415,7 @@ export const useFatStore = create<FatStore>()(
           // In 'measured' mode, advance simulation engine by the actual measured elapsed time
           // so that plant physical integrators stay in lockstep with the PLC's hardware clock.
           // In 'nominal' mode, advance by nominal dtMs.
-          const stepDt = timeAdvanceMode === 'measured' ? Math.max(1, stepElapsedMs) : dtMs;
+          const stepDt = timeAdvanceMode === 'measured' ? Math.max(dtMs, stepElapsedMs) : dtMs;
 
           // Step 6: Tick the engine
           const executedInputs = { ...currentInputs };
@@ -474,7 +474,7 @@ export const useFatStore = create<FatStore>()(
           const stepDrift = stepElapsedMs - dtMs;
           cumulativeDriftMs += stepDrift;
 
-          const stepDt = timeAdvanceMode === 'measured' ? Math.max(1, stepElapsedMs) : dtMs;
+          const stepDt = timeAdvanceMode === 'measured' ? Math.max(dtMs, stepElapsedMs) : dtMs;
 
           const snap = engine.tick(outputs, stepDt);
           await plc.writeInputs(snap.tags.inputs);

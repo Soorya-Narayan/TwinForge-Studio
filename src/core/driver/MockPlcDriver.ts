@@ -319,6 +319,7 @@ export class MockPlcDriver implements Driver {
 
   private clearAllCommands(): void {
     for (const key of Object.keys(this.outputs)) {
+      if (key === 'SEQ_ACK' || key === 'PLC_STATE') continue;
       this.outputs[key] = typeof this.outputs[key] === 'number' ? 0 : false;
     }
   }
