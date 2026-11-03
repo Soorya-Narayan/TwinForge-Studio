@@ -92,25 +92,33 @@ const initialPlc = new PasteurizerPlcDriver(initialInterlockDefs);
 
 export const useSimulationStore = create<SimulationStore>((set, get) => {
   let timerId: number | null = null;
+  let isTicking = false;
 
-  const tickOnce = () => {
+  const tickOnce = async () => {
     if (get().isFatRunning) return;
-    const { engine, plc, trendHistory, activeSkid } = get();
+    if (isTicking) return;
+    isTicking = true;
 
-    // 1. PLC reads its inputs and evaluates its internal state machine
-    plc.tick(100);
+    try {
+      const { engine, plc, trendHistory, activeSkid } = get();
 
-    // 2. Physics engine takes PLC commands and ticks physics
-    const outputs = plc.readOutputs();
-    const snap = engine.tick(outputs);
+      // 1. PLC reads its inputs and evaluates its internal state machine
+      try {
+        await plc.tick(100);
+      } catch (err: any) {
+        console.warn('Simulation tick PLC error:', err?.message || String(err));
+      }
 
-    // 3. Sim sensors feed back into PLC inputs
-    const writeResult = plc.writeInputs(snap.tags.inputs);
-    if (writeResult instanceof Promise) {
-      writeResult.catch((err) => {
-        console.warn('Simulation tick writeInputs error:', err);
-      });
-    }
+      // 2. Physics engine takes PLC commands and ticks physics
+      const outputs = plc.readOutputs();
+      const snap = engine.tick(outputs);
+
+      // 3. Sim sensors feed back into PLC inputs
+      try {
+        await plc.writeInputs(snap.tags.inputs);
+      } catch (err: any) {
+        console.warn('Simulation tick writeInputs error:', err?.message || String(err));
+      }
 
     // 4. Capture Trend Data Point dynamically mapped for current skid
     let dataPoint: TrendDataPoint;
@@ -155,6 +163,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     const nextTrend = [...trendHistory, dataPoint].slice(-600); // 60s window at 100ms
 
     set({ snapshot: snap, faults: engine.getFaults(), trendHistory: nextTrend });
+    } finally {
+      isTicking = false;
+    }
   };
 
   const startLoop = () => {
@@ -162,7 +173,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     if (timerId !== null) clearInterval(timerId);
     const interval = Math.max(10, Math.floor(100 / get().speed));
     timerId = setInterval(() => {
-      tickOnce();
+      void tickOnce().catch((err) => {
+        console.warn('Simulation tick unhandled error:', err);
+      });
     }, interval) as any;
     set({ running: true });
   };
@@ -172,6 +185,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       clearInterval(timerId);
       timerId = null;
     }
+    isTicking = false;
     set({ running: false });
   };
 
@@ -215,7 +229,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
           console.warn('Initial OPC UA connection attempt:', err);
         }
         const snap = get().engine.tick(opcDriver.readOutputs());
-        opcDriver.writeInputs(snap.tags.inputs);
+        try {
+          await opcDriver.writeInputs(snap.tags.inputs);
+        } catch (err) {
+          console.warn('Initial OPC UA writeInputs error:', err);
+        }
         set({ driverMode: 'OPCUA', opcuaEndpoint: endpoint, opcuaSecurityOptions: opts, plc: opcDriver, snapshot: snap });
       } else {
         const { activeSkid, customTopology } = get();
@@ -281,7 +299,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         authOpts.endpointUrl = endpoint;
         await opcDriver.connect(authOpts);
         const snap = get().engine.tick(opcDriver.readOutputs());
-        opcDriver.writeInputs(snap.tags.inputs);
+        try {
+          await opcDriver.writeInputs(snap.tags.inputs);
+        } catch (err) {
+          console.warn('Initial OPC UA writeInputs error:', err);
+        }
         set({ driverMode: 'OPCUA', plc: opcDriver, opcuaEndpoint: endpoint, opcuaSecurityOptions: authOpts, snapshot: snap });
         return endpoint;
       }
