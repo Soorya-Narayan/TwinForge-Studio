@@ -59,9 +59,9 @@
 - **FAT Inspection & Export Report**:
   - In-app verification modal displaying executed scenario results, interlock verification matrices, execution timestamps, and simulation Run Fingerprint (SHA-256).
   - Native PDF document generation via Electron's `webContents.printToPDF` (with web browser print fallback).
-- **Visual P&ID Process Modeler & Mimics**:
+- **Visual Process Mimics & Topology Canvas**:
   - Interactive SVG-based skid mimics with animated fluid flows, device states, and telemetry inspection drawers.
-  - Drag-and-drop node graph canvas built on `@xyflow/react` for visual process topology inspection and layout design.
+  - Live process topology canvas built on `@xyflow/react` displaying active equipment states, animated flow connections, and interactive canvas navigation.
 - **Tag Watch & Force Table**:
   - Live I/O monitoring across all boolean and analog process tags.
   - Manual tag override / forcing capability for commissioning validation.
@@ -74,6 +74,8 @@
 
 ### Planned (Roadmap)
 
+- **Drag-and-Drop Visual Skid Designer**:
+  - Palette-driven component toolbox for dragging, dropping, and connecting custom vessels, pumps, valves, and piping visually directly on the canvas.
 - **External Hardware & Fieldbus Protocol Drivers**:
   - **Modbus TCP Driver**: Fieldbus communication via standard holding register and coil polling.
   - **Siemens S7 Protocol Driver**: Native S7 communication (DB block reading/writing for S7-1200 / S7-1500 controllers).
