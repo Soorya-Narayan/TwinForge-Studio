@@ -41,50 +41,52 @@ export function App() {
       <header
         className="industrial-card no-print"
         style={{
-          margin: '10px 14px 0 14px',
-          padding: '8px 16px',
+          margin: '8px 14px 0 14px',
+          padding: '6px 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           borderRadius: 6,
+          gap: 8,
+          overflow: 'hidden',
         }}
       >
         {/* Brand & Identity */}
         <div
           onClick={() => setIsInitialLoading(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexShrink: 0 }}
           title="Click to replay Goose startup sequence"
         >
           <img
             src="./gooselogo.png"
             alt="Goose Logo"
             style={{
-              width: 36,
-              height: 36,
+              width: 30,
+              height: 30,
               objectFit: 'contain',
             }}
           />
 
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
               TwinForge Studio
             </div>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <nav className="nav-segmented-tabs" aria-label="Main Navigation">
+        <nav className="nav-segmented-tabs" aria-label="Main Navigation" style={{ flexShrink: 1 }}>
           <button
             onClick={() => setActiveTab('MIMIC')}
             className={`nav-tab-btn ${activeTab === 'MIMIC' ? 'active' : ''}`}
           >
-            PROCESS MIMIC
+            MIMIC
           </button>
           <button
             onClick={() => setActiveTab('TRENDS')}
             className={`nav-tab-btn ${activeTab === 'TRENDS' ? 'active' : ''}`}
           >
-            TREND RECORDER
+            TRENDS
           </button>
           <button
             onClick={() => setActiveTab('FAT')}
@@ -96,7 +98,7 @@ export function App() {
             onClick={() => setActiveTab('FAULTS')}
             className={`nav-tab-btn ${activeTab === 'FAULTS' ? 'active' : ''}`}
           >
-            FAULT DECK {faults.length > 0 && `(${faults.length})`}
+            FAULTS {faults.length > 0 && `(${faults.length})`}
           </button>
           <button
             onClick={() => setActiveTab('TAGS')}
@@ -114,26 +116,26 @@ export function App() {
             onClick={() => setActiveTab('TEMPLATES')}
             className={`nav-tab-btn ${activeTab === 'TEMPLATES' ? 'active' : ''}`}
           >
-            SITE TEMPLATES
+            TEMPLATES
           </button>
         </nav>
 
         {/* Diagnostics & Plant Status Indicators */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {/* Active Plant Chip (Clickable to switch) */}
           <button
             onClick={() => setActiveTab('TEMPLATES')}
             className="header-action-btn"
             title="Click to view and switch plant templates"
           >
-            <Factory size={13} color="var(--color-primary)" />
+            <Factory size={12} color="var(--color-primary)" />
             <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Plant:</span>
-            <span style={{ fontWeight: 700, color: '#0369a1' }}>
+            <span style={{ fontWeight: 700, color: '#0369a1', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {activeSkid === 'PASTEURIZER_10KLPH'
-                ? 'Pasteurizer 10 KLPH'
+                ? 'Pasteurizer 10k'
                 : activeSkid === 'BATCH_MIXING'
-                ? 'Batch Mixing (25 KLPH)'
-                : customMeta?.name || 'Custom Skid (Active)'}
+                ? 'Batch Mixing'
+                : customMeta?.name || 'Custom Skid'}
             </span>
           </button>
 
@@ -147,31 +149,32 @@ export function App() {
             }}
             title="Configure PLC Driver & OPC UA Hardware Connection"
           >
-            <Server size={13} color={driverMode === 'OPCUA' ? 'var(--color-success)' : 'var(--text-secondary)'} />
+            <Server size={12} color={driverMode === 'OPCUA' ? 'var(--color-success)' : 'var(--text-secondary)'} />
             <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>PLC:</span>
             <span style={{ fontWeight: 700, color: driverMode === 'OPCUA' ? '#15803d' : '#334155' }}>
-              {driverMode === 'OPCUA' ? 'OPC UA Driver' : 'Mock Driver'}
+              {driverMode === 'OPCUA' ? 'OPC UA' : 'Mock'}
             </span>
           </button>
 
           {hasTrippedInterlock && (
             <div
               style={{
-                height: 32,
+                height: 28,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '0 10px',
-                borderRadius: 5,
+                gap: 5,
+                padding: '0 8px',
+                borderRadius: 4,
                 background: '#fee2e2',
                 border: '1px solid #fca5a5',
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 700,
                 color: 'var(--color-danger)',
                 whiteSpace: 'nowrap',
               }}
+              title="Safety Interlock Tripped"
             >
-              <span className="led led-alarm" />
+              <span className="led led-alarm" style={{ width: 6, height: 6 }} />
               <span className="mono">INTERLOCK TRIP</span>
             </div>
           )}
@@ -180,7 +183,7 @@ export function App() {
             <button
               onClick={openReportModal}
               className="btn btn-success"
-              style={{ height: 32, padding: '0 12px', fontSize: 11, fontWeight: 700 }}
+              style={{ height: 28, padding: '0 10px', fontSize: 11, fontWeight: 700 }}
             >
               FAT REPORT
             </button>
