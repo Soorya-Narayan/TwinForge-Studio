@@ -489,6 +489,7 @@ export class OpcUaManager {
           { name: 'P_RAW_RUN_FB', type: DataType.Boolean, initial: false },
           { name: 'P_RAW_CURRENT', type: DataType.Float, initial: 0.0 },
           { name: 'P_RAW_FAULT', type: DataType.Boolean, initial: false },
+          { name: 'P_RAW_RUNOUT', type: DataType.Boolean, initial: false },
           { name: 'P_FEED_CMD', type: DataType.Boolean, initial: true },
           { name: 'P_BOOSTER_CMD', type: DataType.Boolean, initial: true },
           { name: 'P_HOT_WATER_CMD', type: DataType.Boolean, initial: true },

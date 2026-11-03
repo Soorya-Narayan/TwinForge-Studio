@@ -61,6 +61,7 @@ export interface PumpState {
   cavitation: boolean; // P_<TAG>_CAVITATION
   dryRun: boolean; // P_<TAG>_DRY_RUN
   deadhead: boolean; // P_<TAG>_DEADHEAD
+  runout: boolean; // P_<TAG>_RUNOUT
   headM: number;
   npshaM: number;
   npshrM: number;

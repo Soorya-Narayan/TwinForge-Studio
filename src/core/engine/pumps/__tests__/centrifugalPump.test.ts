@@ -350,5 +350,33 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
     expect(pSnap.tags.inputs['P_RAW_RUN_FB']).toBeDefined();
     expect(pSnap.tags.inputs['P_RAW_CURRENT']).toBeDefined();
     expect(pSnap.tags.inputs['P_RAW_FAULT']).toBeDefined();
+    expect(pSnap.tags.inputs['P_RAW_RUNOUT']).toBeDefined();
+  });
+
+  // 13. Run-out alarm: operating flow exceeds curve's maxFlow point by > 2% (placeholder circuit ~17,500 L/h vs 16,000 L/h curve max)
+  it('13. verifies run-out alarm P_RAW_RUNOUT when placeholder circuit operates beyond 16,000 L/h maxFlow', () => {
+    const circuit = new RawMilkSupplyCircuit();
+
+    // Ramp up the pump across 2.5 seconds (rampUpTimeS = 2.0 s)
+    let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+    for (let t = 0.1; t < 2.5; t += 0.1) {
+      out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+    }
+
+    // Operating flow is ~17,464 L/h, which exceeds maxFlow (16,000 L/h) * 1.02 = 16,320 L/h
+    expect(out.flowLph).toBeGreaterThan(16000 * 1.02);
+    expect(out.flowLph).toBeCloseTo(17464, -2); // ~17,500 L/h
+    expect(out.pumpState.runout).toBe(true);
+    expect(out.alarms).toContain('P_RAW_RUNOUT');
+
+    // Also verify integration with PhysicsEngine
+    const engine = new PhysicsEngine(milkPasteurizerSkid, 100);
+    let snap = engine.tick({ P_RAW_START: true, PV1_CMD: true, PV1: 100 });
+    for (let i = 0; i < 25; i++) {
+      snap = engine.tick({ P_RAW_START: true, PV1_CMD: true, PV1: 100 });
+    }
+    expect(snap.tags.inputs['P_RAW_RUNOUT']).toBe(true);
+    expect(snap.alarms).toContain('P_RAW_RUNOUT');
   });
 });
+

@@ -168,6 +168,7 @@ When $NPSHa < NPSHr$:
    - The circuit solves gravity-driven flow from net elevation difference $\Delta z = z_{\text{silo}} - z_{\text{tank}}$.
    - If balance tank liquid head exceeds silo head ($z_{\text{tank}} > z_{\text{silo}}$), fluid flows backwards ($Q < 0$), raising alarm `RAW_REVERSE_FLOW`.
 3. **Dry Running:** If the raw milk silo is empty or unavailable (`raw_supply_empty`), pump head drops to zero, flow stops, and alarm `P_RAW_DRY_RUN` is asserted.
+4. **Run-Out Alarm:** When operating flow exceeds the curve's maximum flow point by more than 2% ($Q > 1.02 \times Q_{\text{maxFlow}}$), alarm `<tag>_RUNOUT` (`P_RAW_RUNOUT`) is asserted.
 
 ---
 

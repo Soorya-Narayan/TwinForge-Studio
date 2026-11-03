@@ -35,6 +35,7 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'P_RAW_RUN_FB', name: 'Raw Pump Run Feedback', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_RUN_FB', description: 'Raw milk transfer pump run confirmation feedback' },
   { tag: 'P_RAW_CURRENT', name: 'Raw Pump Motor Current', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Float', defaultNodeId: 'ns=1;s=P_RAW_CURRENT', description: 'Raw milk transfer pump motor active current (A)' },
   { tag: 'P_RAW_FAULT', name: 'Raw Pump Fault / Overload Trip', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_FAULT', description: 'Raw milk transfer pump thermal trip or motor fault' },
+  { tag: 'P_RAW_RUNOUT', name: 'Raw Pump Run-Out Alarm', skid: 'PASTEURIZER_10KLPH', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_RUNOUT', description: 'Raw milk transfer pump run-out flow alarm (>102% max curve flow)' },
 
   // Pasteurizer Skid Outputs (PLC Control Outputs -> Simulator Actuators)
   { tag: 'P_RAW_START', name: 'Raw Milk Pump Start Cmd', skid: 'PASTEURIZER_10KLPH', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=P_RAW_START', description: 'Raw milk transfer pump run command from PLC' },
@@ -108,6 +109,7 @@ export const PASTEURIZER_INPUT_TAGS: string[] = [
   'P_RAW_RUN_FB',
   'P_RAW_CURRENT',
   'P_RAW_FAULT',
+  'P_RAW_RUNOUT',
 ];
 
 export const BATCH_MIXING_INPUT_TAGS: string[] = [

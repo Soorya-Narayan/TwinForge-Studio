@@ -571,6 +571,7 @@ export class PhysicsEngine {
         inputs[`${pump.tag}_SPD_ACT`] = out.pumpState.speedPct;
         inputs[`${pump.tag}_CURRENT`] = out.pumpState.currentA;
         inputs[`${pump.tag}_FAULT`] = out.pumpState.fault;
+        inputs[`${pump.tag}_RUNOUT`] = out.pumpState.runout;
         continue;
       }
       const state = this.states.get(pump.id);

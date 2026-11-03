@@ -14,6 +14,8 @@ import { GRAVITY_M_S2 } from '../hydraulics/types';
 
 export class CentrifugalPumpModel {
   public readonly config: CentrifugalPumpConfig;
+  public readonly id: string;
+  public readonly tag: string;
 
   // Head curve coefficients: H(Q) = a + b*Q + c*Q²
   public readonly a: number;
@@ -21,6 +23,7 @@ export class CentrifugalPumpModel {
   public readonly c: number;
 
   public readonly ratedFlowLph: number;
+  public readonly maxFlowLph: number;
   public readonly ratedHeadM: number;
   public readonly ratedPowerKw: number;
   public readonly ratedCurrentA: number;
@@ -46,6 +49,8 @@ export class CentrifugalPumpModel {
 
   constructor(config: CentrifugalPumpConfig) {
     this.config = config;
+    this.id = config.id;
+    this.tag = config.tag;
 
     const H0 = config.curvePoints.shutOff.headM.value;
     const Q1 = config.curvePoints.rated.flowLph.value;
@@ -54,6 +59,7 @@ export class CentrifugalPumpModel {
     const H2 = config.curvePoints.maxFlow.headM.value;
 
     this.ratedFlowLph = Q1;
+    this.maxFlowLph = Q2;
     this.ratedHeadM = H1;
     this.ratedPowerKw = config.motor.ratedPowerKw.value;
     this.ratedCurrentA = config.motor.ratedCurrentA.value;
@@ -83,6 +89,7 @@ export class CentrifugalPumpModel {
       cavitation: false,
       dryRun: false,
       deadhead: false,
+      runout: false,
       headM: 0,
       npshaM: 0,
       npshrM: 0,
@@ -281,6 +288,9 @@ export class CentrifugalPumpModel {
       this.deadheadTimerS = 0;
     }
 
+    // Run-out detection (operating flow exceeds curve's maxFlow point by > 2%)
+    const runout = Boolean((canRun || this.speedRatio > 0.05) && Q > this.maxFlowLph * 1.02);
+
     this.state = {
       speedRatio: Number(this.speedRatio.toFixed(4)),
       speedPct: Number((this.speedRatio * 100).toFixed(1)),
@@ -293,6 +303,7 @@ export class CentrifugalPumpModel {
       cavitation,
       dryRun,
       deadhead,
+      runout,
       headM: Number(head.toFixed(2)),
       npshaM: Number(npshaM.toFixed(2)),
       npshrM: Number(npshrM.toFixed(2)),

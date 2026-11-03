@@ -467,6 +467,9 @@ export class RawMilkSupplyCircuit {
     if (pumpState.dryRun) {
       alarms.push('P_RAW_DRY_RUN');
     }
+    if (pumpState.runout) {
+      alarms.push(`${this.pump.tag}_RUNOUT`);
+    }
 
     this.lastOutputs = {
       flowLph: Number(solvedFlowLph.toFixed(2)),
