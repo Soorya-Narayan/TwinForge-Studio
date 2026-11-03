@@ -43,10 +43,10 @@ export interface TestCase {
   durationScans?: number; // Number of simulation scans to step (e.g. 25 = 2.5s)
   dtMs?: number;          // Time delta per scan in ms (default 100ms)
   faults?: DeviceFault[];
-  setup?: (sim: any, plc: any) => void;
-  stimulus: (sim: any, plc: any, step: number, history: ScanHistoryRecord[]) => void;
+  setup?: (sim: any, plc: any) => Promise<void> | void;
+  stimulus: (sim: any, plc: any, step: number, history: ScanHistoryRecord[]) => Promise<void> | void;
   assertions: (sim: any, plc: any, history: ScanHistoryRecord[]) => TestAssertion[];
-  teardown?: (sim: any, plc: any) => void;
+  teardown?: (sim: any, plc: any) => Promise<void> | void;
 }
 
 export interface TestDriverInfo {

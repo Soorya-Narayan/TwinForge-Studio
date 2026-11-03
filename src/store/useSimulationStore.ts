@@ -399,7 +399,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.startProduction();
+        plc.startProduction().catch((err) => console.warn('startProduction failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         const pastPlc = plc as PasteurizerPlcDriver;
         if (pastPlc.state === 'STOPPED') {
@@ -437,7 +437,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const { engine, plc, activeSkid } = get();
       engine.reset();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.resetBatch();
+        plc.resetBatch().catch((err) => console.warn('resetBatch failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).resetSystem();
       } else if (activeSkid === 'BATCH_MIXING') {
@@ -446,7 +446,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         (plc as GenericPlcDriver).resetSystem();
       }
       const snap = engine.tick(plc.readOutputs());
-      plc.writeInputs(snap.tags.inputs);
+      const writeRes = plc.writeInputs(snap.tags.inputs);
+      if (writeRes && typeof (writeRes as any).catch === 'function') {
+        (writeRes as any).catch((err: any) => console.warn('writeInputs failed:', err));
+      }
       set({ snapshot: snap, faults: [], trendHistory: [] });
     },
 
@@ -482,7 +485,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.startProduction();
+        plc.startProduction().catch((err) => console.warn('startProduction failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).startProduction();
       } else {
@@ -494,7 +497,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     holdPlcBatch: () => {
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.divertManually();
+        plc.divertManually().catch((err) => console.warn('divertManually failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).divertManually();
       } else {
@@ -510,7 +513,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       }
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.startProduction();
+        plc.startProduction().catch((err) => console.warn('startProduction failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).startProduction();
       } else {
@@ -522,7 +525,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     abortPlcBatch: () => {
       const { plc, activeSkid } = get();
       if (plc instanceof OpcUaPlcDriver) {
-        plc.emergencyStop();
+        plc.emergencyStop().catch((err) => console.warn('emergencyStop failed:', err));
       } else if (activeSkid === 'PASTEURIZER_10KLPH') {
         (plc as PasteurizerPlcDriver).emergencyStop();
       } else {

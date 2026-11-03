@@ -18,8 +18,8 @@ export const fatScenarios: TestCase[] = [
     description: 'Step engine for 10 scans in IDLE state. Verify all motive equipment and valves remain de-energized continuously.',
     durationScans: 10,
     dtMs: 100,
-    setup: (_sim, plc) => {
-      plc.resetBatch();
+    setup: async (_sim, plc) => {
+      await plc.resetBatch?.();
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Passive baseline
@@ -68,9 +68,9 @@ export const fatScenarios: TestCase[] = [
     description: 'Step engine for 15 scans. Verify source tank inventory is stably maintained above the 50% start permissive.',
     durationScans: 15,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       const snap = sim.tick(plc.readOutputs());
-      plc.writeInputs(snap.tags.inputs);
+      await plc.writeInputs?.(snap.tags.inputs);
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Normal permissive monitoring
@@ -78,7 +78,15 @@ export const fatScenarios: TestCase[] = [
     assertions: (sim, plc, history) => {
       // Write latest simulation telemetry to plc.inputs before asserting
       const snap = history.length > 0 ? history[history.length - 1].snapshot : sim.tick(plc.readOutputs());
-      plc.writeInputs(snap.tags.inputs);
+      if (plc.inputs) {
+        Object.assign(plc.inputs, snap.tags.inputs);
+      }
+      if (typeof plc.writeInputs === 'function') {
+        const writeRes = plc.writeInputs(snap.tags.inputs);
+        if (writeRes && typeof (writeRes as any).catch === 'function') {
+          (writeRes as any).catch(() => {});
+        }
+      }
 
       const sourceLevel = Number(plc.inputs['TK100_LT'] ?? 0);
       const minLevel = Math.min(
@@ -131,9 +139,9 @@ export const fatScenarios: TestCase[] = [
     durationScans: 25,
     dtMs: 100,
     faults: [{ deviceId: 'V-101', mode: 'stuck_closed' }],
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
-      plc.resetBatch();
+      await plc.resetBatch?.();
     },
     stimulus: (sim, plc, step, _history) => {
       if (step === 3) {
@@ -190,9 +198,9 @@ export const fatScenarios: TestCase[] = [
         },
       ];
     },
-    teardown: (sim, plc) => {
+    teardown: async (sim, plc) => {
       sim.clearAllFaults();
-      plc.resetBatch();
+      await plc.resetBatch?.();
     },
   },
   {
@@ -203,13 +211,13 @@ export const fatScenarios: TestCase[] = [
     description: 'Start AUTO batch at scan 0. Step for 35 scans. Measure V-101 pneumatic travel stroke time until fully proved open (target: 1400ms ± 300ms).',
     durationScans: 35,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
-      plc.resetBatch();
+      await plc.resetBatch?.();
     },
-    stimulus: (_sim, plc, step, _history) => {
+    stimulus: async (_sim, plc, step, _history) => {
       if (step === 0) {
-        plc.startBatch();
+        await plc.startBatch?.();
       }
     },
     assertions: (_sim, _plc, history) => {
@@ -331,9 +339,13 @@ export const fatScenarios: TestCase[] = [
     setup: (_sim, plc) => {
       plc.mode = 'MANUAL';
     },
-    stimulus: (_sim, plc, step, _history) => {
+    stimulus: async (_sim, plc, step, _history) => {
       if (step === 0) {
-        plc.outputs['V400_PROD_CMD'] = true;
+        if (typeof plc.dischargeBatch === 'function') {
+          await plc.dischargeBatch();
+        } else {
+          plc.outputs['V400_PROD_CMD'] = true;
+        }
       }
     },
     assertions: (_sim, _plc, history) => {
@@ -369,9 +381,9 @@ export const fatScenarios: TestCase[] = [
       plc.outputs['V101_CMD'] = true;
       plc.outputs['V400_PROD_CMD'] = true;
     },
-    stimulus: (_sim, plc, step, _history) => {
+    stimulus: async (_sim, plc, step, _history) => {
       if (step === 4) {
-        plc.abortBatch();
+        await plc.abortBatch?.();
       }
     },
     assertions: (_sim, _plc, history) => {
@@ -418,9 +430,9 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'Step pasteurizer for 10 scans in STOPPED state. Verify pumps, booster, and forward diversion valves remain locked.',
     durationScans: 10,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
-      plc.resetSystem();
+      await plc.resetSystem?.();
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Stopped baseline
@@ -479,16 +491,24 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'Step for 15 scans. Assert Balance Tank level LT1 > 15% satisfies cavitation prevention permissive IL-BAL-LOW.',
     durationScans: 15,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       const snap = sim.tick(plc.readOutputs());
-      plc.writeInputs(snap.tags.inputs);
+      await plc.writeInputs?.(snap.tags.inputs);
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Permissive monitoring
     },
     assertions: (sim, plc, history) => {
       const snap = history.length > 0 ? history[history.length - 1].snapshot : sim.tick(plc.readOutputs());
-      plc.writeInputs(snap.tags.inputs);
+      if (plc.inputs) {
+        Object.assign(plc.inputs, snap.tags.inputs);
+      }
+      if (typeof plc.writeInputs === 'function') {
+        const writeRes = plc.writeInputs(snap.tags.inputs);
+        if (writeRes && typeof (writeRes as any).catch === 'function') {
+          (writeRes as any).catch(() => {});
+        }
+      }
 
       const balanceLevel = Number(plc.inputs['LT1'] ?? plc.inputs['LT_BALANCE'] ?? 75);
       const minLevel = Math.min(
@@ -540,8 +560,8 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'At scan 0, command start while cold (< 88°C). Step for 20 scans. Assert PV11 remains strictly locked closed and PV12 diverts.',
     durationScans: 20,
     dtMs: 100,
-    setup: (_sim, plc) => {
-      plc.startProduction();
+    setup: async (_sim, plc) => {
+      await plc.startProduction?.();
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Warm up phase with cold product
@@ -590,14 +610,14 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'Heat holding tube past 88.0°C over 45 scans. Measure forward flow switchover delay from legal temperature attainment to PV11 opening.',
     durationScans: 45,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
       if (sim.pheAssembly) {
         sim.pheAssembly.holdingTube.primeWithProfile([
           90.0, 89.5, 89.0, 88.5, 88.2, 88.0, 87.8
         ]);
       }
-      plc.startProduction();
+      await plc.startProduction?.();
     },
     stimulus: (_sim, _plc, _step, _history) => {
       // Production warming cycle
@@ -660,12 +680,12 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'Step for 20 scans. Measure time for booster pump to establish required positive gradient (PT4 - PT2 >= +0.50 bar).',
     durationScans: 20,
     dtMs: 100,
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
       if (sim.pheAssembly) {
         sim.pheAssembly.holdingTube.primeWithProfile([90, 90, 90, 90, 90]);
       }
-      plc.writeInputs({ TT5: 90.0, PT2: 2.5, PT4: 4.1, LT1: 75 });
+      await plc.writeInputs?.({ TT5: 90.0, PT2: 2.5, PT4: 4.1, LT1: 75 });
       plc.state = 'PASTEURIZING_FORWARD';
     },
     stimulus: (_sim, _plc, _step, _history) => {
@@ -718,12 +738,12 @@ export const pasteurizerFatScenarios: TestCase[] = [
     durationScans: 25,
     dtMs: 100,
     faults: [{ deviceId: 'PHE-HEATING', mode: 'sensor_offset', value: -15 }],
-    setup: (sim, plc) => {
+    setup: async (sim, plc) => {
       sim.clearAllFaults();
       if (sim.pheAssembly) {
         sim.pheAssembly.holdingTube.primeWithProfile([90, 90, 90, 90, 90]);
       }
-      plc.writeInputs({ TT5: 90.0, PT2: 2.5, PT4: 4.1, LT1: 75 });
+      await plc.writeInputs?.({ TT5: 90.0, PT2: 2.5, PT4: 4.1, LT1: 75 });
       plc.state = 'PASTEURIZING_FORWARD';
     },
     stimulus: (sim, _plc, step, _history) => {
@@ -802,12 +822,12 @@ export const pasteurizerFatScenarios: TestCase[] = [
     description: 'At scan 4, trigger Emergency Stop. Assert raw feed, booster pump, and steam valve drop to 0 on the immediate following scan (latency <= 100ms).',
     durationScans: 20,
     dtMs: 100,
-    setup: (_sim, plc) => {
-      plc.startProduction();
+    setup: async (_sim, plc) => {
+      await plc.startProduction?.();
     },
-    stimulus: (_sim, plc, step, _history) => {
+    stimulus: async (_sim, plc, step, _history) => {
       if (step === 4) {
-        plc.emergencyStop();
+        await plc.emergencyStop?.();
       }
     },
     assertions: (_sim, _plc, history) => {

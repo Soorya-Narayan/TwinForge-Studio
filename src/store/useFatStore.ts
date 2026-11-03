@@ -287,7 +287,7 @@ export const useFatStore = create<FatStore>()(
 
       // Optional setup hook before stepped execution
       if (test.setup) {
-        test.setup(engine, plc);
+        await test.setup(engine, plc);
       }
 
       if (scanMode === 'lockstep') {
@@ -302,7 +302,7 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          test.stimulus(engine, plc, step, history);
+          await test.stimulus(engine, plc, step, history);
 
           // Step 1: Write inputs to PLC
           await plc.writeInputs(currentInputs);
@@ -354,7 +354,7 @@ export const useFatStore = create<FatStore>()(
             throw new Error(`PLC connection lost during test execution at scan ${step + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`);
           }
 
-          test.stimulus(engine, plc, step, history);
+          await test.stimulus(engine, plc, step, history);
 
           if (typeof plc.tick === 'function') {
             await plc.tick(dtMs);
@@ -485,7 +485,7 @@ export const useFatStore = create<FatStore>()(
       // so test outcomes never depend on execution order
       if (test.teardown) {
         try {
-          test.teardown(engine, plc);
+          await test.teardown(engine, plc);
         } catch (teardownErr) {
           console.warn(`Teardown error in [${test.id}]:`, teardownErr);
         }

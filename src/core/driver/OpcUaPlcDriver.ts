@@ -618,68 +618,72 @@ export class OpcUaPlcDriver implements Driver {
   /**
    * Reset helper for FAT test suite runs
    */
-  public resetBatch(): void {
-    this.writeInputs({
+  public async writeCommandTags(
+    commandName: string,
+    tags: Record<string, boolean | number>
+  ): Promise<void> {
+    if (!this.status.connected) {
+      throw new Error(
+        `Command ${commandName} failed: OPC UA driver is disconnected (${this.endpointUrl}). Stale outputs discarded.`
+      );
+    }
+
+    try {
+      await this.writeInputs(tags);
+    } catch (err: any) {
+      throw new Error(
+        `Command ${commandName} failed writing tags to ${this.endpointUrl}: ${err.message || String(err)}`
+      );
+    }
+  }
+
+  public async resetBatch(): Promise<void> {
+    await this.writeCommandTags('resetBatch', {
       E_STOP_PB: true,
       TK100_LT: 75.0,
       V101_ZSO: false,
     });
   }
 
-  public resetSystem(): void {
-    this.resetBatch();
+  public async resetSystem(): Promise<void> {
+    await this.resetBatch();
   }
 
-  public startProduction(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('START_CMD')]: { value: true, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('P100_START')]: { value: true, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('P_FEED_CMD')]: { value: true, dataType: 'Boolean' },
-      });
-    }
+  public async startProduction(): Promise<void> {
+    await this.writeCommandTags('startProduction', {
+      START_CMD: true,
+      P100_START: true,
+      P_FEED_CMD: true,
+    });
   }
 
-  public divertManually(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('PV11_CMD')]: { value: false, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('PV12_CMD')]: { value: true, dataType: 'Boolean' },
-      });
-    }
+  public async divertManually(): Promise<void> {
+    await this.writeCommandTags('divertManually', {
+      PV11_CMD: false,
+      PV12_CMD: true,
+    });
   }
 
-  public startBatch(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('START_PB')]: { value: true, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('P100_START')]: { value: true, dataType: 'Boolean' },
-      });
-    }
+  public async startBatch(): Promise<void> {
+    await this.writeCommandTags('startBatch', {
+      START_PB: true,
+      P100_START: true,
+    });
   }
 
-  public dischargeBatch(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('V400_PROD_CMD')]: { value: true, dataType: 'Boolean' },
-      });
-    }
+  public async dischargeBatch(): Promise<void> {
+    await this.writeCommandTags('dischargeBatch', {
+      V400_PROD_CMD: true,
+    });
   }
 
-  public abortBatch(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('ABORT_PB')]: { value: true, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('P100_START')]: { value: false, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('V101_CMD')]: { value: false, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('V400_PROD_CMD')]: { value: false, dataType: 'Boolean' },
-      });
-    }
+  public async abortBatch(): Promise<void> {
+    await this.writeCommandTags('abortBatch', {
+      ABORT_PB: true,
+      P100_START: false,
+      V101_CMD: false,
+      V400_PROD_CMD: false,
+    });
   }
 
   public clearAllOutputs(): void {
@@ -692,13 +696,10 @@ export class OpcUaPlcDriver implements Driver {
     }
   }
 
-  public emergencyStop(): void {
-    const api = this.customApi || getElectronOpcUa();
-    if (this.status.connected && api) {
-      api.writeTags({
-        [this.resolvePlcNodeId('E_STOP_PB')]: { value: false, dataType: 'Boolean' },
-        [this.resolvePlcNodeId('E_STOP')]: { value: false, dataType: 'Boolean' },
-      });
-    }
+  public async emergencyStop(): Promise<void> {
+    await this.writeCommandTags('emergencyStop', {
+      E_STOP_PB: false,
+      E_STOP: false,
+    });
   }
 }

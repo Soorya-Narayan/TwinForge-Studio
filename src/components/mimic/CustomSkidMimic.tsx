@@ -108,7 +108,10 @@ export const CustomSkidMimic: React.FC = () => {
           <button
             onClick={() => {
               if ('emergencyStop' in plc) {
-                (plc as any).emergencyStop();
+                const res = (plc as any).emergencyStop();
+                if (res && typeof res.catch === 'function') {
+                  res.catch(() => {});
+                }
               }
             }}
             className="btn btn-danger"
