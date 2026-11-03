@@ -735,7 +735,7 @@ export const PasteurizerMimic: React.FC = () => {
               HOLDING COIL (20s)
             </text>
             <text x="45" y="18" textAnchor="middle" fill="#0f766e" fontSize="8" className="mono">
-              τ = {holdingTimeS.toFixed(1)}s
+              τ = {isFinite(holdingTimeS) ? `${holdingTimeS.toFixed(1)}s` : 'STAGNANT (∞)'}
             </text>
           </g>
 

@@ -105,7 +105,7 @@ describe('Plate Heat Exchanger Physical Model Acceptance Tests', () => {
         isNaN(s.overall.holdingTubeExitTempC) ||
         isNaN(s.heating.uValue_W_per_m2_K) ||
         isNaN(s.heating.dutyAverageKW) ||
-        !isFinite(s.overall.holdingTubeResidenceTimeS)
+        isNaN(s.overall.holdingTubeResidenceTimeS)
       ) {
         hasNaN = true;
         break;
@@ -113,7 +113,9 @@ describe('Plate Heat Exchanger Physical Model Acceptance Tests', () => {
     }
 
     expect(hasNaN).toBe(false);
-    expect(phe.getOverallMetrics().holdingTubeResidenceTimeS).toBe(0);
+    expect(phe.getOverallMetrics().holdingTubeResidenceTimeS).toBe(Infinity);
+    expect(phe.getOverallMetrics().isStagnant).toBe(true);
+    expect(phe.getOverallMetrics().isLegalHoldingTime).toBe(false);
   });
 
   it('Test 4: Doubled Flow Lowers Residence Time, Fouling Lowers U', () => {

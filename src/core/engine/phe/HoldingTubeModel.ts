@@ -51,7 +51,7 @@ export class HoldingTubeModel {
         seg.tempC += (ambientTemp - seg.tempC) * coolingRate;
       }
       this.currentExitTempC = this.fluidSegments[this.fluidSegments.length - 1]?.tempC ?? inletTempC;
-      this.currentResidenceTimeS = 0; // Invalid / stagnant (not infinite or NaN)
+      this.currentResidenceTimeS = Infinity; // Zero-flow represents infinite residence time / stagnant
       return this.currentExitTempC;
     }
 
@@ -111,7 +111,11 @@ export class HoldingTubeModel {
     return this.currentResidenceTimeS;
   }
 
+  public isStagnant(): boolean {
+    return !isFinite(this.currentResidenceTimeS);
+  }
+
   public isResidenceTimeLegal(): boolean {
-    return this.currentResidenceTimeS >= this.minLegalResidenceTimeS;
+    return isFinite(this.currentResidenceTimeS) && this.currentResidenceTimeS >= this.minLegalResidenceTimeS;
   }
 }

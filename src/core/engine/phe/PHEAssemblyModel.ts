@@ -241,8 +241,11 @@ export class PHEAssemblyModel {
     this.lastOverallMetrics = {
       heaterOutletTempC: Number(mHeat.tempColdOutC.toFixed(2)),
       holdingTubeExitTempC: Number(holdingExitTemp.toFixed(2)),
-      holdingTubeResidenceTimeS: Number(this.holdingTube.getResidenceTimeSeconds().toFixed(1)),
+      holdingTubeResidenceTimeS: isFinite(this.holdingTube.getResidenceTimeSeconds())
+        ? Number(this.holdingTube.getResidenceTimeSeconds().toFixed(1))
+        : Infinity,
       isLegalHoldingTime: this.holdingTube.isResidenceTimeLegal(),
+      isStagnant: this.holdingTube.isStagnant(),
 
       rawMilkInletTempC: Number(rawIn.toFixed(1)),
       regenOutletTempC: Number(regOut.toFixed(1)),
@@ -283,6 +286,7 @@ export class PHEAssemblyModel {
       holdingTubeExitTempC: 70.0,
       holdingTubeResidenceTimeS: 20.0,
       isLegalHoldingTime: true,
+      isStagnant: false,
       rawMilkInletTempC: 4.0,
       regenOutletTempC: 70.0,
       pasteurizedTempC: 70.0,

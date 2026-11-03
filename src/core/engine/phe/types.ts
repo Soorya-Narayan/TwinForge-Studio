@@ -58,6 +58,7 @@ export interface PheAssemblyOverallMetrics {
   holdingTubeExitTempC: number; // Sensor TT5
   holdingTubeResidenceTimeS: number;
   isLegalHoldingTime: boolean;
+  isStagnant?: boolean;
 
   // Regeneration Efficiency
   rawMilkInletTempC: number;   // TT1 (~4°C)

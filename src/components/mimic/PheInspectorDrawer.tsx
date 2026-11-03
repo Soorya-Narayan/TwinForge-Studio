@@ -216,10 +216,10 @@ export const PheInspectorDrawer: React.FC<PheInspectorDrawerProps> = ({
                     marginTop: 2,
                   }}
                 >
-                  {overall.holdingTubeResidenceTimeS.toFixed(1)}s
+                  {isFinite(overall.holdingTubeResidenceTimeS) ? `${overall.holdingTubeResidenceTimeS.toFixed(1)}s` : 'STAGNANT (∞)'}
                 </div>
                 <div style={{ fontSize: 9, color: overall.isLegalHoldingTime ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-                  {overall.isLegalHoldingTime ? 'Legal (>=16s)' : 'Under-Time Alert'}
+                  {overall.isStagnant ? 'Zero Flow / Stagnant' : overall.isLegalHoldingTime ? 'Legal (>=16s)' : 'Under-Time Alert'}
                 </div>
               </div>
 

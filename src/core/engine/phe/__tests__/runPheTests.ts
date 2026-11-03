@@ -148,7 +148,7 @@ console.log('====================================================\n');
       isNaN(s.overall.holdingTubeExitTempC) ||
       isNaN(s.heating.uValue_W_per_m2_K) ||
       isNaN(s.heating.dutyAverageKW) ||
-      !isFinite(s.overall.holdingTubeResidenceTimeS)
+      isNaN(s.overall.holdingTubeResidenceTimeS)
     ) {
       hasNaN = true;
       break;
@@ -156,8 +156,8 @@ console.log('====================================================\n');
   }
 
   assert(
-    !hasNaN && phe.getOverallMetrics().holdingTubeResidenceTimeS === 0,
-    'Test 3: Zero Flow Robustness (No NaN, Finite Valid Stagnant Time)',
+    !hasNaN && (phe.getOverallMetrics().holdingTubeResidenceTimeS === Infinity || phe.getOverallMetrics().isStagnant === true),
+    'Test 3: Zero Flow Robustness (No NaN, Infinite / Stagnant Residence Time)',
     `Residence time = ${phe.getOverallMetrics().holdingTubeResidenceTimeS}s, NaN detected: ${hasNaN}`
   );
 }

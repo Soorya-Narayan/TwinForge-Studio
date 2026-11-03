@@ -666,7 +666,7 @@ export class PhysicsEngine {
       if (metrics.contaminationAlarm) {
         alarms.push('ALARM_CRITICAL_PASTEURIZER_CROSS_CONTAMINATION');
       }
-      if (!metrics.isLegalHoldingTime && metrics.holdingTubeResidenceTimeS > 0) {
+      if (!metrics.isLegalHoldingTime && isFinite(metrics.holdingTubeResidenceTimeS) && metrics.holdingTubeResidenceTimeS > 0) {
         alarms.push('ALARM_LEGAL_UNDER_HOLDING_TIME');
       }
     }
