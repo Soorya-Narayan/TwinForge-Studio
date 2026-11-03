@@ -544,6 +544,21 @@ export class OpcUaManager {
             }
           });
         }
+
+        // Lockstep sequence echo: when SEQ is written, echo the value to SEQ_ACK
+        const seqVar = createdVariables.get('SEQ');
+        const seqAckVar = createdVariables.get('SEQ_ACK');
+        if (seqVar && seqAckVar) {
+          seqVar.on('value_changed', (newVal: any) => {
+            const seqVal = newVal?.value?.value;
+            if (seqVal !== undefined && seqVal !== null) {
+              seqAckVar.setValueFromSource({
+                dataType: DataType.Int32,
+                value: Number(seqVal),
+              });
+            }
+          });
+        }
       }
 
       await this.testServer.start();
