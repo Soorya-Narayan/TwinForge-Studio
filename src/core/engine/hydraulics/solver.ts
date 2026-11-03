@@ -70,6 +70,7 @@ export function solveSeriesOperatingPoint(
     return {
       flowLph: 0,
       noForwardFlow: true,
+      flowAboveBracket: false,
       headM: pumpHeadM(0),
       pressuresBar: computeNodePressures(0),
     };
@@ -77,13 +78,14 @@ export function solveSeriesOperatingPoint(
 
   const fb = calcResidual(b);
 
-  // If no sign change in [0, 1.5 * maxFlowLph]
-  if (f0 * fb > 0) {
+  // When residual is still positive at the top of the bracket (pump head exceeds losses across the whole range)
+  if (fb > 0) {
     return {
-      flowLph: 0,
-      noForwardFlow: true,
-      headM: pumpHeadM(0),
-      pressuresBar: computeNodePressures(0),
+      flowLph: b,
+      noForwardFlow: false,
+      flowAboveBracket: true,
+      headM: Number(pumpHeadM(b).toFixed(2)),
+      pressuresBar: computeNodePressures(b),
     };
   }
 
@@ -115,6 +117,7 @@ export function solveSeriesOperatingPoint(
   return {
     flowLph: Number(flow.toFixed(2)),
     noForwardFlow: false,
+    flowAboveBracket: false,
     headM: Number(pumpHeadM(flow).toFixed(2)),
     pressuresBar: computeNodePressures(flow),
   };

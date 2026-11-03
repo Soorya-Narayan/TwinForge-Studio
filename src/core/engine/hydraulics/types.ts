@@ -36,6 +36,7 @@ export interface HydraulicElement {
 export interface OperatingPointResult {
   flowLph: number;
   noForwardFlow: boolean;
+  flowAboveBracket: boolean;
   headM: number;
   pressuresBar: Record<string, number>;
 }
