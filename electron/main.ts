@@ -8,7 +8,10 @@ import { OpcUaManager } from './opcuaManager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || !app.isPackaged;
+const isDev =
+  process.env.NODE_ENV === 'development' ||
+  process.argv.includes('--dev') ||
+  (!app.isPackaged && process.env.NODE_ENV !== 'production' && !fsSync.existsSync(path.join(__dirname, '../dist/index.html')));
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
