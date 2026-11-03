@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build:ui": "tsc -b && vite build",
-    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:electron": "tsc -p electron/tsconfig.json && tsc -p electron/tsconfig.preload.json && node -e \"require('fs').copyFileSync('dist-electron/preload.js', 'dist-electron/preload.cjs')\"",
     "build": "npm run build:ui && npm run build:electron",
     "lint": "oxlint",
     "test": "vitest run",
