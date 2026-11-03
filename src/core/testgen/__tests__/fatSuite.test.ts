@@ -43,4 +43,26 @@ describe('FAT Test Suite Full Regression', () => {
       );
     }
   }
+
+  it('fails reset precondition when PLC state is undefined or empty', async () => {
+    useSimulationStore.getState().setSkid('PASTEURIZER_10KLPH');
+    useFatStore.getState().syncScenarios('PASTEURIZER_10KLPH');
+
+    // Create a mock driver without resetPrecondition method and with undefined state
+    const faultyDriver: any = {
+      status: { connected: true, driverType: 'mock' },
+      inputs: {},
+      outputs: {},
+      readOutputs: async () => ({}),
+      writeInputs: async () => {},
+      resetSystem: async () => {},
+      state: undefined,
+    };
+
+    await useFatStore.getState().runSingleTest('TC-P01', faultyDriver);
+    const result = useFatStore.getState().results.find((r) => r.testId === 'TC-P01');
+    expect(result).toBeDefined();
+    expect(result?.passed).toBe(false);
+    expect(result?.assertions.some((a) => a.tag === 'RESET_PRECONDITION' && !a.passed)).toBe(true);
+  });
 });

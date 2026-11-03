@@ -321,9 +321,9 @@ export const useFatStore = create<FatStore>()(
           await (plc as any).syncOutputsFromPlc();
         }
         const currentState = (plc as any).state ?? (plc as any).outputs?.['PLC_STATE'];
-        if (currentState && !expectedResetStates.includes(currentState)) {
+        if (!currentState || !expectedResetStates.includes(currentState)) {
           throw new Error(
-            `Reset precondition failed: Real PLC state is '${currentState}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
+            `Reset precondition failed: Real PLC state is '${currentState || 'UNDEFINED'}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
           );
         }
       }
