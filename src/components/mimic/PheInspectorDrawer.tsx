@@ -4,7 +4,7 @@
  * counter-flow cell maps, thermodynamic formulas, and destructive FAT controls.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import {
@@ -43,21 +43,24 @@ export const PheInspectorDrawer: React.FC<PheInspectorDrawerProps> = ({
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [showFormulas, setShowFormulas] = useState<boolean>(true);
 
-  useEffect(() => {
+  const [prevProps, setPrevProps] = useState({ initialSectionId, isOpen });
+  if (prevProps.initialSectionId !== initialSectionId || prevProps.isOpen !== isOpen) {
+    setPrevProps({ initialSectionId, isOpen });
     if (initialSectionId) {
       setSelectedSection(initialSectionId);
     }
-  }, [initialSectionId, isOpen]);
+  }
 
   // Read PHE assembly directly from engine
   const phe = engine.pheAssembly;
 
   const overall = useMemo(() => {
+    if (!snapshot) return null;
     return phe?.getOverallMetrics();
   }, [phe, snapshot]);
 
   const sectionsMetrics = useMemo(() => {
-    if (!phe) return null;
+    if (!snapshot || !phe) return null;
     return {
       'CHILLING': phe.chilling.getMetrics(),
       'REG-01': phe.reg01.getMetrics(),
