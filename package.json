@@ -12,7 +12,7 @@
     "build:electron": "tsc -p electron/tsconfig.json",
     "build": "npm run build:ui && npm run build:electron",
     "lint": "oxlint",
-    "test": "tsx src/core/engine/phe/__tests__/runPheTests.ts",
+    "test": "vitest run",
     "preview": "vite preview",
     "electron:dev": "cross-env NODE_ENV=development concurrently -k \"vite\" \"wait-on tcp:5173 && npm run build:electron && electron . --dev\"",
     "electron:start": "electron .",
@@ -77,6 +77,7 @@
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
+    "vitest": "^4.1.12",
     "wait-on": "^9.5.1"
   }
 }
