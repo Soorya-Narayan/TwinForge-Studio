@@ -334,7 +334,12 @@ export class CentrifugalPumpModel {
     return blockage?.value ?? 0;
   }
 
+  public getOverloadPct(): number {
+    return Math.min(100, Math.max(0, (this.overloadIntegral / 13.2) * 100));
+  }
+
   public getState(): PumpState {
     return { ...this.state };
   }
 }
+

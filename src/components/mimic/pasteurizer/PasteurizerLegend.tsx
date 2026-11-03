@@ -55,6 +55,7 @@ export const PasteurizerLegend: React.FC = () => {
             Major Processing Units
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+            <div><strong>P-RAW</strong>: Raw milk centrifugal transfer pump (12,000 LPH rated, click to inspect)</div>
             <div><strong>Balance Tank</strong>: 600L raw infeed float buffer vessel</div>
             <div><strong>PHE (Plate Heat Exchanger)</strong>: 4-stage thermal recovery & heating block</div>
             <div><strong>Cream Separator</strong>: Centrifugal whole-milk fractionator (10,000 LPH)</div>

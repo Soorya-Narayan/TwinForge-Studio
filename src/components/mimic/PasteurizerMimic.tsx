@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { PheInspectorDrawer } from './PheInspectorDrawer';
+import { PumpInspectorDrawer } from './PumpInspectorDrawer';
 import { PasteurizerToolbar } from './pasteurizer/PasteurizerToolbar';
 import { PasteurizerPidSvg } from './pasteurizer/PasteurizerPidSvg';
 import { PasteurizerLegend } from './pasteurizer/PasteurizerLegend';
@@ -25,13 +26,15 @@ export const PasteurizerMimic: React.FC = () => {
   const clearFaults = useSimulationStore((s) => s.clearFaults);
   const faults = useSimulationStore((s) => s.faults);
 
-  // Inspector drawer state
+  // Inspector drawer states
   const [isPheDrawerOpen, setIsPheDrawerOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string>('ALL');
+  const [isPumpDrawerOpen, setIsPumpDrawerOpen] = useState(false);
 
   // Extract simulated devices
   const balTank = snapshot?.devices['TK-BALANCE'];
   const prodTank = snapshot?.devices['TK-PRODUCT'];
+  const pRaw = snapshot?.devices['P-RAW'];
   const pFeed = snapshot?.devices['P-FEED'];
   const pBoost = snapshot?.devices['P-BOOSTER'];
   const pHw = snapshot?.devices['P-HOTWATER'];
@@ -121,6 +124,7 @@ export const PasteurizerMimic: React.FC = () => {
       <PasteurizerPidSvg
         balTank={balTank}
         prodTank={prodTank}
+        pRaw={pRaw}
         pFeed={pFeed}
         pBoost={pBoost}
         pHw={pHw}
@@ -171,16 +175,23 @@ export const PasteurizerMimic: React.FC = () => {
           setSelectedSectionId(sectionId);
           setIsPheDrawerOpen(true);
         }}
+        onInspectPump={() => setIsPumpDrawerOpen(true)}
       />
 
       {/* 3. Dedicated Process Legend & Component Guide */}
       <PasteurizerLegend />
 
-      {/* Dynamic Model Physical Inspection Drawer */}
+      {/* Dynamic Model Physical Inspection Drawer for PHE */}
       <PheInspectorDrawer
         isOpen={isPheDrawerOpen}
         onClose={() => setIsPheDrawerOpen(false)}
         initialSectionId={selectedSectionId}
+      />
+
+      {/* Dynamic Model Physical Inspection Drawer for P-RAW Pump */}
+      <PumpInspectorDrawer
+        isOpen={isPumpDrawerOpen}
+        onClose={() => setIsPumpDrawerOpen(false)}
       />
     </div>
   );

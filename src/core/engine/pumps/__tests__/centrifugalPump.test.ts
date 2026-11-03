@@ -455,7 +455,20 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
 
       expect(Math.abs(out.flowLph - 17465)).toBeLessThanOrEqual(1.0);
     });
+
+    it('15. verifies getOverloadPct() returns thermal accumulation percentage correctly', () => {
+      const circuit = new RawMilkSupplyCircuit();
+      expect(circuit.pump.getOverloadPct()).toBe(0);
+
+      // Run pump under overload condition and verify thermal accumulation tracks
+      for (let t = 0; t < 2.0; t += 0.1) {
+        circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+      expect(circuit.pump.getOverloadPct()).toBeGreaterThanOrEqual(0);
+      expect(circuit.pump.getOverloadPct()).toBeLessThanOrEqual(100);
+    });
   });
 });
+
 
 

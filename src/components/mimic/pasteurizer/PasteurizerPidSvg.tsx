@@ -5,6 +5,7 @@ import type { DevicePhysicalState } from '../../../core/engine/types';
 export interface PasteurizerPidSvgProps {
   balTank?: DevicePhysicalState;
   prodTank?: DevicePhysicalState;
+  pRaw?: DevicePhysicalState;
   pFeed?: DevicePhysicalState;
   pBoost?: DevicePhysicalState;
   pHw?: DevicePhysicalState;
@@ -52,11 +53,13 @@ export interface PasteurizerPidSvgProps {
   holdingTimeS: number;
   pheStatus: string;
   onInspectPhe: (sectionId: string) => void;
+  onInspectPump?: () => void;
 }
 
 export const PasteurizerPidSvg: React.FC<PasteurizerPidSvgProps> = ({
   balTank: _balTank,
   prodTank,
+  pRaw,
   pFeed,
   pBoost,
   pHw,
@@ -104,6 +107,7 @@ export const PasteurizerPidSvg: React.FC<PasteurizerPidSvgProps> = ({
   holdingTimeS,
   pheStatus,
   onInspectPhe,
+  onInspectPump,
 }) => {
   return (
     <div
@@ -138,18 +142,53 @@ export const PasteurizerPidSvg: React.FC<PasteurizerPidSvgProps> = ({
         {/* ============================================================== */}
         {/* ZONE 1: RAW INFEED & BALANCE TANK (Left: X = 40..220)          */}
         {/* ============================================================== */}
-        {/* Raw Milk Infeed Line (passes through PV1, turns down directly into Balance Tank) */}
-        <path d="M 40 160 L 130 160 L 130 240" fill="none" stroke="#0284c7" strokeWidth="4" />
-        <text x="40" y="136" fill="#0284c7" fontSize="10" fontWeight="bold">
-          RAW MILK INLET (Ø 51mm)
+        {/* Raw Milk Infeed Line (passes from silo through P-RAW and PV1, turns down directly into Balance Tank) */}
+        <path d="M 20 160 L 130 160 L 130 240" fill="none" stroke="#0284c7" strokeWidth="4" />
+        <text x="20" y="132" fill="#0284c7" fontSize="9" fontWeight="bold">
+          RAW SILO INFEED (Ø 51mm)
         </text>
-        {/* Valve PV1 (horizontal opposing triangles centered on pipe at x=85, y=160) */}
-        <g transform="translate(85, 160)">
-          <polygon points="-12,-8 0,0 -12,8" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.5" />
-          <polygon points="12,-8 0,0 12,8" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.5" />
-          <line x1="0" y1="0" x2="0" y2="-9" stroke="#334155" strokeWidth="1.5" />
-          <rect x="-6" y="-14" width="12" height="5" rx="1" fill="#64748b" stroke="#334155" strokeWidth="1" />
-          <text x="0" y="20" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">
+
+        {/* Raw Milk Transfer Pump (P-RAW) (Suction enters at x=41, discharge leaves at x=69) */}
+        <g
+          transform="translate(55, 160)"
+          onClick={onInspectPump}
+          style={{ cursor: onInspectPump ? 'pointer' : 'default' }}
+        >
+          <title>Raw Milk Transfer Pump (P-RAW) - Click to Open Physical Diagnostic Suite</title>
+          {/* Subtle pulse / glow ring when running */}
+          {(pRaw?.isRunning || (pRaw?.speedPct ?? 0) > 10) && (
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#0284c7" strokeWidth="2" opacity="0.4">
+              <animate attributeName="r" values="14;20;14" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite" />
+            </circle>
+          )}
+          <circle cx="0" cy="0" r="14" fill="#f8fafc" stroke="#334155" strokeWidth="2" />
+          <polygon
+            points="-3,-8 9,0 -3,8"
+            fill={(pRaw?.speedPct ?? 0) > 10 ? '#0284c7' : '#94a3b8'}
+          />
+          {/* Motor top casing */}
+          <rect x="-7" y="-18" width="14" height="4" rx="1" fill="#475569" stroke="#334155" strokeWidth="1" />
+          <text x="0" y="24" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
+            P-RAW
+          </text>
+          <text x="0" y="34" textAnchor="middle" fill="#0284c7" fontSize="7" fontWeight="bold" className="mono">
+            {(pRaw?.speedPct ?? 0) > 10 ? 'RUNNING' : 'STOPPED'}
+          </text>
+          {/* Click to inspect badge */}
+          <rect x="-18" y="-28" width="36" height="9" rx="2" fill="#e0f2fe" stroke="#38bdf8" strokeWidth="0.8" />
+          <text x="0" y="-21" textAnchor="middle" fill="#0369a1" fontSize="6" fontWeight="bold">
+            INSPECT
+          </text>
+        </g>
+
+        {/* Valve PV1 (horizontal opposing triangles centered on pipe at x=95, y=160) */}
+        <g transform="translate(95, 160)">
+          <polygon points="-10,-7 0,0 -10,7" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.5" />
+          <polygon points="10,-7 0,0 10,7" fill={pv1?.isOpen ? '#dcfce7' : '#fee2e2'} stroke="#334155" strokeWidth="1.5" />
+          <line x1="0" y1="0" x2="0" y2="-8" stroke="#334155" strokeWidth="1.5" />
+          <rect x="-5" y="-13" width="10" height="5" rx="1" fill="#64748b" stroke="#334155" strokeWidth="1" />
+          <text x="0" y="19" textAnchor="middle" fill="#0f172a" fontSize="8" fontWeight="bold">
             PV1
           </text>
         </g>
