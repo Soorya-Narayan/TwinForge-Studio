@@ -43,6 +43,7 @@ export interface TestCase {
   durationScans?: number; // Number of simulation scans to step (e.g. 25 = 2.5s)
   dtMs?: number;          // Time delta per scan in ms (default 100ms)
   faults?: DeviceFault[];
+  expectedInitialState?: string | string[]; // Expected PLC state after reset precondition (e.g. 'STOPPED' or 'IDLE')
   setup?: (sim: any, plc: any) => Promise<void> | void;
   stimulus: (sim: any, plc: any, step: number, history: ScanHistoryRecord[]) => Promise<void> | void;
   assertions: (sim: any, plc: any, history: ScanHistoryRecord[]) => TestAssertion[];

@@ -121,6 +121,27 @@ export class MockPlcDriver implements Driver {
     if (this.mode === 'AUTO') {
       this.evaluateBatchStateMachine(dtSeconds);
     }
+
+    // Mirror PLC state machine token to outputs
+    (this.outputs as any)['PLC_STATE'] = this.state;
+  }
+
+  public async resetPrecondition(
+    expectedStates: string | string[] = ['IDLE', 'STOPPED'],
+    timeoutMs: number = 3000
+  ): Promise<void> {
+    void timeoutMs;
+    this.resetBatch();
+    const validStates = Array.isArray(expectedStates) ? expectedStates : [expectedStates];
+    if (!validStates.includes(this.state)) {
+      throw new Error(
+        `Reset precondition failed: PLC state is '${this.state}', expected ${validStates.map((s) => `'${s}'`).join(' or ')}.`
+      );
+    }
+  }
+
+  public resetSystem(): void {
+    this.resetBatch();
   }
 
   public waitForSeqAck(expectedSeq: number, timeoutMs: number = 3000): void {
@@ -289,6 +310,7 @@ export class MockPlcDriver implements Driver {
     this.state = 'IDLE';
     this.recipe.mixTimerS = 0;
     this.clearAllCommands();
+    (this.outputs as any)['PLC_STATE'] = 'IDLE';
     // Reset tripped interlocks
     for (const il of this.interlocks.values()) {
       il.tripped = false;

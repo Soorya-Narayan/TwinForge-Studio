@@ -422,10 +422,13 @@ export class OpcUaManager {
           { name: 'MOD_VALVE', type: DataType.Double, initial: 45.0 },
           { name: 'IL-FDV', type: DataType.Boolean, initial: true },
           { name: 'IL-DIFF', type: DataType.Boolean, initial: true },
-          // Lockstep Handshake Tags
+          // Lockstep Handshake & Reset Tags
+          { name: 'RESET_CMD', type: DataType.Boolean, initial: false },
           { name: 'SEQ', type: DataType.Int32, initial: 0 },
           { name: 'SEQ_ACK', type: DataType.Int32, initial: 0 },
         ];
+
+        const createdVariables: Map<string, any> = new Map();
 
         for (const tag of defaultTags) {
           const variable = namespace.addVariable({
@@ -443,6 +446,8 @@ export class OpcUaManager {
             value: { dataType: tag.type, value: tag.initial },
           });
 
+          createdVariables.set(tag.name, variable);
+
           // Restrict anonymous writes: reads are permitted, but writes require an authenticated user
           const originalIsWritable = variable.isWritable ? variable.isWritable.bind(variable) : () => true;
           (variable as any).isUserWritable = (context: any) => {
@@ -456,6 +461,20 @@ export class OpcUaManager {
             const username = context.getUserName ? context.getUserName() : '';
             return Boolean(username && username.toLowerCase() !== 'anonymous');
           };
+        }
+
+        // When RESET_CMD is written to true, transition PLC_STATE to STOPPED
+        const resetVar = createdVariables.get('RESET_CMD');
+        const stateVar = createdVariables.get('PLC_STATE');
+        if (resetVar && stateVar) {
+          resetVar.on('value_changed', (newVal: any) => {
+            if (newVal?.value?.value === true) {
+              stateVar.setValueFromSource({
+                dataType: DataType.String,
+                value: 'STOPPED',
+              });
+            }
+          });
         }
       }
 

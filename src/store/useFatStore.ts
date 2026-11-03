@@ -285,6 +285,42 @@ export const useFatStore = create<FatStore>()(
         throw new Error(`PLC connection is offline (${driverDetails}). Cannot validate process control without live connection. Stale outputs discarded.`);
       }
 
+      // 1. Reset Precondition: Command PLC reset and verify known baseline state before starting test
+      // Real PLCs retain operational state across tests. Command a reset and verify a known state before starting.
+      const expectedResetStates = test.expectedInitialState
+        ? (Array.isArray(test.expectedInitialState) ? test.expectedInitialState : [test.expectedInitialState])
+        : currentSkid === 'BATCH_MIXING'
+        ? ['IDLE', 'STOPPED']
+        : ['STOPPED'];
+
+      if (typeof (plc as any).resetPrecondition === 'function') {
+        await (plc as any).resetPrecondition(expectedResetStates);
+      } else {
+        if (typeof (plc as any).resetSystem === 'function') {
+          await (plc as any).resetSystem();
+        } else if (typeof (plc as any).resetBatch === 'function') {
+          await (plc as any).resetBatch();
+        }
+        if (typeof (plc as any).syncOutputsFromPlc === 'function') {
+          await (plc as any).syncOutputsFromPlc();
+        }
+        const currentState = (plc as any).state ?? (plc as any).outputs?.['PLC_STATE'];
+        if (currentState && !expectedResetStates.includes(currentState)) {
+          throw new Error(
+            `Reset precondition failed: Real PLC state is '${currentState}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
+          );
+        }
+      }
+
+      get().addJournalEntry({
+        scan: 0,
+        timeFormatted: new Date().toLocaleTimeString(),
+        source: 'DRIVER',
+        eventType: 'COMMAND',
+        description: `Reset precondition verified for [${test.id}]: PLC state confirmed as '${(plc as any).state ?? 'STOPPED'}' before test execution.`,
+        status: 'INFO',
+      });
+
       // Optional setup hook before stepped execution
       if (test.setup) {
         await test.setup(engine, plc);
@@ -467,8 +503,10 @@ export const useFatStore = create<FatStore>()(
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`Error executing scenario [${test.id}]:`, err);
 
-      const isHandshakeTimeout = errorMsg.toLowerCase().includes('handshake timeout');
+      const isResetPrecondition = errorMsg.toLowerCase().includes('reset precondition');
+      const isHandshakeTimeout = !isResetPrecondition && errorMsg.toLowerCase().includes('handshake timeout');
       const isConnectionLost =
+        !isResetPrecondition &&
         !isHandshakeTimeout && (
           !plc.status.connected ||
           errorMsg.toLowerCase().includes('connection lost') ||
@@ -478,11 +516,31 @@ export const useFatStore = create<FatStore>()(
         );
 
       const failedAssertion: TestAssertion = {
-        tag: isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'SCENARIO_EXECUTION',
-        expected: isHandshakeTimeout ? 'SEQ_ACK == SEQ' : isConnectionLost ? 'CONNECTED' : 'COMPLETED_WITHOUT_ERROR',
-        actual: isHandshakeTimeout ? 'TIMEOUT / NO_ACK' : isConnectionLost ? 'DISCONNECTED' : `ERROR: ${errorMsg}`,
+        tag: isResetPrecondition
+          ? 'RESET_PRECONDITION'
+          : isHandshakeTimeout
+          ? 'LOCKSTEP_HANDSHAKE'
+          : isConnectionLost
+          ? 'PLC_CONNECTION'
+          : 'SCENARIO_EXECUTION',
+        expected: isResetPrecondition
+          ? (test.expectedInitialState ? String(test.expectedInitialState) : currentSkid === 'BATCH_MIXING' ? 'IDLE / STOPPED' : 'STOPPED')
+          : isHandshakeTimeout
+          ? 'SEQ_ACK == SEQ'
+          : isConnectionLost
+          ? 'CONNECTED'
+          : 'COMPLETED_WITHOUT_ERROR',
+        actual: isResetPrecondition
+          ? (plc as any).state ?? 'INVALID_STATE'
+          : isHandshakeTimeout
+          ? 'TIMEOUT / NO_ACK'
+          : isConnectionLost
+          ? 'DISCONNECTED'
+          : `ERROR: ${errorMsg}`,
         passed: false,
-        message: isHandshakeTimeout
+        message: isResetPrecondition
+          ? `Reset precondition failure: ${errorMsg}`
+          : isHandshakeTimeout
           ? `Lockstep handshake failure: ${errorMsg}`
           : isConnectionLost
           ? `FAT Test aborted: PLC communication failure at scan ${history.length + 1}/${totalScans} (${driverDetails}). Stale outputs discarded.`
@@ -492,15 +550,17 @@ export const useFatStore = create<FatStore>()(
       get().addJournalEntry({
         scan: history[history.length - 1]?.scan ?? history.length,
         timeFormatted: new Date().toLocaleTimeString(),
-        source: isHandshakeTimeout || isConnectionLost ? 'DRIVER' : 'TEST_GEN',
-        eventType: isHandshakeTimeout || isConnectionLost ? 'ALARM' : 'ASSERTION',
-        description: isHandshakeTimeout
+        source: isResetPrecondition || isHandshakeTimeout || isConnectionLost ? 'DRIVER' : 'TEST_GEN',
+        eventType: isResetPrecondition || isHandshakeTimeout || isConnectionLost ? 'ALARM' : 'ASSERTION',
+        description: isResetPrecondition
+          ? `RESET PRECONDITION FAILURE on [${test.id}]: ${errorMsg}`
+          : isHandshakeTimeout
           ? `LOCKSTEP HANDSHAKE TIMEOUT on [${test.id}]: ${errorMsg}`
           : isConnectionLost
           ? `COMMUNICATION FAILURE on [${test.id}]: ${errorMsg}`
           : `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
-        tag: isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
-        value: isHandshakeTimeout ? 'TIMEOUT' : isConnectionLost ? 'DISCONNECTED' : errorMsg,
+        tag: isResetPrecondition ? 'RESET_PRECONDITION' : isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
+        value: isResetPrecondition ? String((plc as any).state ?? 'INVALID_STATE') : isHandshakeTimeout ? 'TIMEOUT' : isConnectionLost ? 'DISCONNECTED' : errorMsg,
         status: 'FAIL',
       });
 

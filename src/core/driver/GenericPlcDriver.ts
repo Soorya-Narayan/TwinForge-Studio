@@ -108,6 +108,23 @@ export class GenericPlcDriver implements Driver {
         }
       }
     }
+
+    // Mirror PLC state machine token to outputs
+    (this.outputs as any)['PLC_STATE'] = this.state;
+  }
+
+  public async resetPrecondition(
+    expectedStates: string | string[] = ['STOPPED', 'IDLE'],
+    timeoutMs: number = 3000
+  ): Promise<void> {
+    void timeoutMs;
+    this.resetSystem();
+    const validStates = Array.isArray(expectedStates) ? expectedStates : [expectedStates];
+    if (!validStates.includes(this.state)) {
+      throw new Error(
+        `Reset precondition failed: PLC state is '${this.state}', expected ${validStates.map((s) => `'${s}'`).join(' or ')}.`
+      );
+    }
   }
 
   public waitForSeqAck(expectedSeq: number, timeoutMs: number = 3000): void {
@@ -140,6 +157,7 @@ export class GenericPlcDriver implements Driver {
   public resetSystem(): void {
     this.state = 'STOPPED';
     this.initializeRegisters();
+    (this.outputs as any)['PLC_STATE'] = 'STOPPED';
     for (const il of this.interlocks.values()) {
       il.tripped = false;
       il.isOk = true;

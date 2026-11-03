@@ -56,12 +56,9 @@ export const DEFAULT_OPCUA_TAGS: TagDefinition[] = [
   { tag: 'V103_CMD', name: 'Recirculation Valve Cmd', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=V103_CMD', description: 'Tank 100 top recirculation spray ring valve' },
   { tag: 'HEATER_CMD', name: 'Steam Injection Heater', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=HEATER_CMD', description: 'In-line thermal heat exchanger heating element' },
   { tag: 'AGITATOR_CMD', name: 'Agitator Drive Cmd', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=AGITATOR_CMD', description: 'Tank 100 mixing agitator impeller drive' },
-  { tag: 'PLC_STATE', name: 'PLC Sequence State', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'String', defaultNodeId: 'ns=1;s=PLC_STATE', description: 'Internal PLC operational state machine token' },
-  { tag: 'IL-01', name: 'Suction Interlock Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-01', description: 'Suction valve open interlock status' },
-  { tag: 'IL-02', name: 'Low Level Permissive Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-02', description: 'Minimum tank inventory permissive status' },
-  { tag: 'IL-03', name: 'High Temp Safety Status', skid: 'BATCH_MIXING', direction: 'OUTPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=IL-03', description: 'Thermal high-temperature trip status' },
-
-  // Lockstep Handshake Tags (Common)
+  // Lockstep Handshake & State Precondition Tags (Common)
+  { tag: 'PLC_STATE', name: 'PLC Sequence State', skid: 'COMMON', direction: 'OUTPUT', dataType: 'String', defaultNodeId: 'ns=1;s=PLC_STATE', description: 'Internal PLC operational state machine token' },
+  { tag: 'RESET_CMD', name: 'PLC Reset Command', skid: 'COMMON', direction: 'INPUT', dataType: 'Boolean', defaultNodeId: 'ns=1;s=RESET_CMD', description: 'Reset command to restore PLC state machine to baseline' },
   { tag: 'SEQ', name: 'Lockstep Scan Sequence', skid: 'COMMON', direction: 'INPUT', dataType: 'Int32', defaultNodeId: 'ns=1;s=SEQ', description: 'Lockstep scan sequence number written by test harness' },
   { tag: 'SEQ_ACK', name: 'Lockstep Sequence Acknowledgment', skid: 'COMMON', direction: 'OUTPUT', dataType: 'Int32', defaultNodeId: 'ns=1;s=SEQ_ACK', description: 'Lockstep scan sequence number echoed by PLC' },
 ];
@@ -84,7 +81,6 @@ export const BATCH_MIXING_OUTPUT_TAGS: string[] = [
   'V103_CMD',
   'HEATER_CMD',
   'AGITATOR_CMD',
-  'PLC_STATE',
   'IL-01',
   'IL-02',
   'IL-03',
@@ -113,8 +109,8 @@ export const BATCH_MIXING_INPUT_TAGS: string[] = [
   'E_STOP_PB',
 ];
 
-export const COMMON_OUTPUT_TAGS: string[] = ['SEQ_ACK'];
-export const COMMON_INPUT_TAGS: string[] = ['SEQ'];
+export const COMMON_OUTPUT_TAGS: string[] = ['SEQ_ACK', 'PLC_STATE'];
+export const COMMON_INPUT_TAGS: string[] = ['SEQ', 'RESET_CMD'];
 
 /**
  * Returns the output tags to poll cyclically for a specific skid, avoiding

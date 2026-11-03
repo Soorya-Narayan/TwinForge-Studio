@@ -630,6 +630,7 @@ export class OpcUaPlcDriver implements Driver {
             this.outputs[internalTag] = val;
           } else if (typeof val === 'string' && internalTag === 'PLC_STATE') {
             this.state = val;
+            (this.outputs as any)['PLC_STATE'] = val;
           }
 
           // Parse live interlock tags from PLC
@@ -681,7 +682,13 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public async resetBatch(): Promise<void> {
+    if (this.state === 'EMULATED_CONNECTED') {
+      this.state = 'IDLE';
+      (this.outputs as any)['PLC_STATE'] = 'IDLE';
+      return;
+    }
     await this.writeCommandTags('resetBatch', {
+      RESET_CMD: true,
       E_STOP_PB: true,
       TK100_LT: 75.0,
       V101_ZSO: false,
@@ -689,7 +696,69 @@ export class OpcUaPlcDriver implements Driver {
   }
 
   public async resetSystem(): Promise<void> {
-    await this.resetBatch();
+    if (this.state === 'EMULATED_CONNECTED') {
+      this.state = this.activeSkid === 'BATCH_MIXING' ? 'IDLE' : 'STOPPED';
+      (this.outputs as any)['PLC_STATE'] = this.state;
+      return;
+    }
+    if (this.activeSkid === 'BATCH_MIXING') {
+      await this.resetBatch();
+    } else {
+      await this.writeCommandTags('resetSystem', {
+        RESET_CMD: true,
+        E_STOP_PB: true,
+        LT_BALANCE: 60.0,
+        TT5: 20.0,
+      });
+    }
+  }
+
+  /**
+   * Reset Precondition for HIL testing:
+   * Commands a reset to the PLC, then waits for and verifies that the PLC has
+   * transitioned to a known clean state (e.g. PLC_STATE == 'STOPPED' or 'IDLE').
+   * Fails with an error if the PLC does not confirm the known state within timeoutMs.
+   */
+  public async resetPrecondition(
+    expectedStates?: string | string[],
+    timeoutMs: number = 3000
+  ): Promise<void> {
+    if (!this.status.connected) {
+      throw new Error(
+        `Reset precondition failed: PLC connection is offline (${this.endpointUrl}). Stale outputs discarded.`
+      );
+    }
+
+    const validStates = expectedStates
+      ? (Array.isArray(expectedStates) ? expectedStates : [expectedStates])
+      : (this.activeSkid === 'BATCH_MIXING' ? ['IDLE', 'STOPPED'] : ['STOPPED']);
+
+    // 1. Command reset to the PLC
+    await this.resetSystem();
+
+    if (this.state === 'EMULATED_CONNECTED') {
+      this.state = validStates[0];
+      (this.outputs as any)['PLC_STATE'] = this.state;
+      return;
+    }
+
+    // 2. Poll and verify that the PLC reached the expected known state
+    const startTime = Date.now();
+    let lastKnownState = this.state;
+
+    while (Date.now() - startTime < timeoutMs) {
+      await this.syncOutputsFromPlc();
+      lastKnownState = this.state ?? String(this.outputs['PLC_STATE'] ?? '');
+
+      if (validStates.includes(lastKnownState)) {
+        return; // Verified known state!
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    throw new Error(
+      `Reset precondition failed: Real PLC state is '${lastKnownState}', expected ${validStates.map((s) => `'${s}'`).join(' or ')} within ${timeoutMs}ms (${this.endpointUrl}).`
+    );
   }
 
   public async startProduction(): Promise<void> {
