@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
+import type { Driver } from '../core/driver/Driver';
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
 import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
@@ -49,7 +50,7 @@ interface SimulationStore {
   customMeta: CustomSkidMeta | null;
   customTopology: PlantTopology | null;
   engine: PhysicsEngine;
-  plc: MockPlcDriver | PasteurizerPlcDriver | GenericPlcDriver | OpcUaPlcDriver;
+  plc: Driver;
   driverMode: DriverMode;
   opcuaEndpoint: string;
   opcuaSecurityOptions?: OpcUaConnectionOptions;
@@ -117,7 +118,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
       // 1. PLC reads its inputs and evaluates its internal state machine
       try {
-        await plc.tick(100);
+        await plc.tick?.(100);
       } catch (err: any) {
         console.warn('Simulation tick PLC error:', err?.message || String(err));
       }
@@ -377,8 +378,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     setInterlockDefinitions: (defs: InterlockDefinition[]) => {
       saveStoredInterlockDefinitions(defs);
       const { plc } = get();
-      if ('setInterlockDefinitions' in plc && typeof (plc as any).setInterlockDefinitions === 'function') {
-        (plc as any).setInterlockDefinitions(defs);
+      if (typeof plc.setInterlockDefinitions === 'function') {
+        plc.setInterlockDefinitions(defs);
       }
       set({ interlockDefinitions: defs });
     },
@@ -386,8 +387,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     resetInterlockDefinitions: () => {
       saveStoredInterlockDefinitions(DEFAULT_INTERLOCK_DEFINITIONS);
       const { plc } = get();
-      if ('setInterlockDefinitions' in plc && typeof (plc as any).setInterlockDefinitions === 'function') {
-        (plc as any).setInterlockDefinitions(DEFAULT_INTERLOCK_DEFINITIONS);
+      if (typeof plc.setInterlockDefinitions === 'function') {
+        plc.setInterlockDefinitions(DEFAULT_INTERLOCK_DEFINITIONS);
       }
       set({ interlockDefinitions: DEFAULT_INTERLOCK_DEFINITIONS });
     },
@@ -605,7 +606,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     setPlcMode: (mode) => {
       const { plc } = get();
       if ('mode' in plc) {
-        (plc as any).mode = mode;
+        plc.mode = mode;
       }
       tickOnce();
     },

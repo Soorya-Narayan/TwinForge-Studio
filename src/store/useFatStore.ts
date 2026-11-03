@@ -9,14 +9,14 @@ import { getFatScenarios } from '../core/testgen/scenarios';
 import type { TestCase, TestResult, TestAssertion, ScanHistoryRecord, TestDriverInfo } from '../core/testgen/types';
 import { useSimulationStore, type SkidId } from './useSimulationStore';
 import { PhysicsEngine, type PlantTopology } from '../core/engine/PhysicsEngine';
+import type { Driver } from '../core/driver/Driver';
 import { PasteurizerPlcDriver } from '../core/driver/PasteurizerPlcDriver';
 import { MockPlcDriver } from '../core/driver/MockPlcDriver';
 import { GenericPlcDriver } from '../core/driver/GenericPlcDriver';
-import { OpcUaPlcDriver } from '../core/driver/OpcUaPlcDriver';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
 
-export type HarnessPlcDriver = PasteurizerPlcDriver | MockPlcDriver | GenericPlcDriver | OpcUaPlcDriver;
+export type HarnessPlcDriver = Driver;
 
 export interface ScanJournalEntry {
   id: string;
@@ -103,19 +103,15 @@ export const createIsolatedTestHarness = (
     liveCandidate &&
     liveCandidate.status?.driverType === 'opcua' &&
     liveCandidate.status?.connected &&
-    ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean((liveCandidate as any).customApi))
+    ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean(liveCandidate.customApi))
   );
 
   if (driverOverride) {
     plc = driverOverride;
-    if (typeof (plc as any).setSkid === 'function') {
-      (plc as any).setSkid(skid);
-    }
+    plc.setSkid?.(skid);
   } else if (hasLiveOpcUaSession && liveCandidate) {
     plc = liveCandidate;
-    if (typeof (plc as any).setSkid === 'function') {
-      (plc as any).setSkid(skid);
-    }
+    plc.setSkid?.(skid);
   } else if (skid === 'PASTEURIZER_10KLPH') {
     plc = new PasteurizerPlcDriver();
   } else if (skid === 'BATCH_MIXING') {
@@ -263,13 +259,13 @@ export const useFatStore = create<FatStore>()(
     const hasLiveElectronSession = Boolean(
       plc.status.driverType === 'opcua' &&
       plc.status.connected &&
-      ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean((plc as any).customApi))
+      ((typeof window !== 'undefined' && Boolean(window.electronAPI?.opcua)) || Boolean(plc.customApi))
     );
 
     const driverName = plc.constructor?.name || (hasLiveElectronSession ? 'OpcUaPlcDriver' : 'MockPlcDriver');
     const driverType = hasLiveElectronSession ? 'opcua' : 'mock';
     const driverDetails = hasLiveElectronSession
-      ? `Real PLC via node-opcua (${(plc as any).endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
+      ? `Real PLC via node-opcua (${plc.endpointUrl || 'opc.tcp://127.0.0.1:4840'})`
       : `In-Process Mock Driver (${driverName})`;
 
     const scanMode = get().scanMode;
@@ -278,7 +274,7 @@ export const useFatStore = create<FatStore>()(
       driverName,
       driverType,
       details: `${driverDetails} [${scanMode.toUpperCase()} SCAN · ${timeAdvanceMode.toUpperCase()} TIME]`,
-      endpoint: (plc as any).endpointUrl || null,
+      endpoint: plc.endpointUrl || null,
       scanMode,
       timeAdvanceMode,
     };
@@ -311,18 +307,18 @@ export const useFatStore = create<FatStore>()(
         ? ['IDLE', 'STOPPED']
         : ['STOPPED'];
 
-      if (typeof (plc as any).resetPrecondition === 'function') {
-        await (plc as any).resetPrecondition(expectedResetStates);
+      if (typeof plc.resetPrecondition === 'function') {
+        await plc.resetPrecondition(expectedResetStates);
       } else {
-        if (typeof (plc as any).resetSystem === 'function') {
-          await (plc as any).resetSystem();
-        } else if (typeof (plc as any).resetBatch === 'function') {
-          await (plc as any).resetBatch();
+        if (typeof plc.resetSystem === 'function') {
+          await plc.resetSystem();
+        } else if (typeof plc.resetBatch === 'function') {
+          await plc.resetBatch();
         }
-        if (typeof (plc as any).syncOutputsFromPlc === 'function') {
-          await (plc as any).syncOutputsFromPlc();
+        if (typeof plc.syncOutputsFromPlc === 'function') {
+          await plc.syncOutputsFromPlc();
         }
-        const currentState = (plc as any).state ?? (plc as any).outputs?.['PLC_STATE'];
+        const currentState = plc.state ?? (plc.outputs?.['PLC_STATE'] !== undefined ? String(plc.outputs['PLC_STATE']) : undefined);
         if (!currentState || !expectedResetStates.includes(currentState)) {
           throw new Error(
             `Reset precondition failed: Real PLC state is '${currentState || 'UNDEFINED'}', expected ${expectedResetStates.map((s) => `'${s}'`).join(' or ')} before starting test [${test.id}].`
@@ -335,7 +331,7 @@ export const useFatStore = create<FatStore>()(
         timeFormatted: new Date().toLocaleTimeString(),
         source: 'DRIVER',
         eventType: 'COMMAND',
-        description: `Reset precondition verified for [${test.id}]: PLC state confirmed as '${(plc as any).state ?? 'STOPPED'}' before test execution.`,
+        description: `Reset precondition verified for [${test.id}]: PLC state confirmed as '${plc.state ?? 'STOPPED'}' before test execution.`,
         status: 'INFO',
       });
 
@@ -380,8 +376,8 @@ export const useFatStore = create<FatStore>()(
 
           // Step 3: Wait for PLC to echo SEQ as SEQ_ACK before reading outputs
           const handshakeTimeoutMs = Math.max(3000, dtMs * 15);
-          if (typeof (plc as any).waitForSeqAck === 'function') {
-            await (plc as any).waitForSeqAck(seq, handshakeTimeoutMs);
+          if (typeof plc.waitForSeqAck === 'function') {
+            await plc.waitForSeqAck(seq, handshakeTimeoutMs);
           } else {
             const startWait = performance.now();
             let checkOutputs = await plc.readOutputs();
@@ -396,8 +392,8 @@ export const useFatStore = create<FatStore>()(
                 );
               }
               await new Promise((r) => setTimeout(r, Math.min(20, dtMs)));
-              if (typeof (plc as any).syncOutputsFromPlc === 'function') {
-                await (plc as any).syncOutputsFromPlc();
+              if (typeof plc.syncOutputsFromPlc === 'function') {
+                await plc.syncOutputsFromPlc();
               }
               checkOutputs = await plc.readOutputs();
             }
@@ -424,7 +420,7 @@ export const useFatStore = create<FatStore>()(
           // Time drift compensation:
           // Use measured time only for OPC UA runs (clamped between dtMs and 2 * dtMs to prevent slow handshakes from causing unstable physics steps).
           // Mock drivers always advance by nominal dtMs since their in-process execution is ~1 ms.
-          const isOpcUa = driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+          const isOpcUa = driverType === 'opcua' || plc.status?.driverType === 'opcua';
           const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
             ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
             : dtMs;
@@ -450,7 +446,7 @@ export const useFatStore = create<FatStore>()(
             driftMs: cumulativeDriftMs,
             inputs: executedInputs,
             outputs: { ...outputs },
-            plcState: (plc as any).state,
+            plcState: plc.state,
             interlocks,
             snapshot: snap,
           });
@@ -486,7 +482,7 @@ export const useFatStore = create<FatStore>()(
           const stepDrift = stepElapsedMs - dtMs;
           cumulativeDriftMs += stepDrift;
 
-          const isOpcUa = driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+          const isOpcUa = driverType === 'opcua' || plc.status?.driverType === 'opcua';
           const stepDt = (isOpcUa && timeAdvanceMode === 'measured')
             ? Math.min(2 * dtMs, Math.max(dtMs, stepElapsedMs))
             : dtMs;
@@ -510,7 +506,7 @@ export const useFatStore = create<FatStore>()(
             driftMs: cumulativeDriftMs,
             inputs: { ...snap.tags.inputs },
             outputs: { ...outputs },
-            plcState: (plc as any).state,
+            plcState: plc.state,
             interlocks,
             snapshot: snap,
           });
@@ -519,7 +515,7 @@ export const useFatStore = create<FatStore>()(
 
       // Evaluate assertions on the full resulting history
       const rawAssertions = test.assertions(engine, plc, history);
-      const isHil = driverInfo.driverType === 'opcua' || (plc as any).status?.driverType === 'opcua';
+      const isHil = driverInfo.driverType === 'opcua' || plc.status?.driverType === 'opcua';
 
       // Account for documented HIL timing tolerance when running against live hardware
       const assertions = rawAssertions.map((a) => {
@@ -605,7 +601,7 @@ export const useFatStore = create<FatStore>()(
           ? 'CONNECTED'
           : 'COMPLETED_WITHOUT_ERROR',
         actual: isResetPrecondition
-          ? (plc as any).state ?? 'INVALID_STATE'
+          ? plc.state ?? 'INVALID_STATE'
           : isHandshakeTimeout
           ? 'TIMEOUT / NO_ACK'
           : isConnectionLost
@@ -634,7 +630,7 @@ export const useFatStore = create<FatStore>()(
           ? `COMMUNICATION FAILURE on [${test.id}]: ${errorMsg}`
           : `Scenario [${test.id}] thrown runtime error: ${errorMsg}`,
         tag: isResetPrecondition ? 'RESET_PRECONDITION' : isHandshakeTimeout ? 'LOCKSTEP_HANDSHAKE' : isConnectionLost ? 'PLC_CONNECTION' : 'EXCEPTION',
-        value: isResetPrecondition ? String((plc as any).state ?? 'INVALID_STATE') : isHandshakeTimeout ? 'TIMEOUT' : isConnectionLost ? 'DISCONNECTED' : errorMsg,
+        value: isResetPrecondition ? String(plc.state ?? 'INVALID_STATE') : isHandshakeTimeout ? 'TIMEOUT' : isConnectionLost ? 'DISCONNECTED' : errorMsg,
         status: 'FAIL',
       });
 
