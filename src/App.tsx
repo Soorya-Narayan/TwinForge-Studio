@@ -11,14 +11,16 @@ import { FatReportModal } from './components/report/FatReportModal';
 import { OpcUaModal } from './components/plc/OpcUaModal';
 import { SiteTemplatesView } from './components/templates/SiteTemplatesView';
 import { SplashScreen } from './components/loading/SplashScreen';
+import { ClientProjectModal } from './components/project/ClientProjectModal';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useFatStore } from './store/useFatStore';
-import { Factory, Server } from 'lucide-react';
+import { Factory, Server, FolderKanban } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'MIMIC' | 'TRENDS' | 'FAT' | 'FAULTS' | 'TAGS' | 'MODELER' | 'TEMPLATES'>('MIMIC');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showOpcUaModal, setShowOpcUaModal] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
   const customMeta = useSimulationStore((s) => s.customMeta);
@@ -156,6 +158,23 @@ export function App() {
             </span>
           </button>
 
+          {/* Client Project Folder (Drawings, Datasheets, Plant Data) */}
+          <button
+            onClick={() => setShowProjectModal(true)}
+            className="header-action-btn"
+            style={{
+              background: '#ffffff',
+              borderColor: 'var(--border-strong)',
+            }}
+            title="Open Client Project Folder (Drawings, Datasheets & Plant Data)"
+          >
+            <FolderKanban size={12} color="#0284c7" />
+            <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Project:</span>
+            <span style={{ fontWeight: 700, color: '#0369a1' }}>
+              Client Data
+            </span>
+          </button>
+
           {hasTrippedInterlock && (
             <div
               style={{
@@ -215,6 +234,13 @@ export function App() {
 
       {/* PLC Driver & OPC UA Hardware Connection Modal */}
       <OpcUaModal isOpen={showOpcUaModal} onClose={() => setShowOpcUaModal(false)} />
+
+      {/* Client Project Folder (Drawings, Datasheets, Plant Data) Modal */}
+      <ClientProjectModal
+        isOpen={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+        onDeployed={() => setActiveTab('MIMIC')}
+      />
     </div>
   );
 }

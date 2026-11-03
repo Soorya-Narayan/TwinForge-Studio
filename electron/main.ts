@@ -232,8 +232,100 @@ ipcMain.handle('dialog:openFile', async (_event, options?: {
   return { canceled: true };
 });
 
+ipcMain.handle('dialog:openDirectory', async () => {
+  if (!mainWindow) return { canceled: true };
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Client Project Folder (Drawings, Datasheets, Plant Data)',
+  });
+  if (!canceled && filePaths.length > 0) {
+    return { canceled: false, folderPath: filePaths[0] };
+  }
+  return { canceled: true };
+});
+
+ipcMain.handle('project:scanDirectory', async (_event, folderPath: string) => {
+  try {
+    const stat = await fs.stat(folderPath);
+    if (!stat.isDirectory()) {
+      return { success: false, error: 'Path is not a directory' };
+    }
+
+    const folderName = path.basename(folderPath);
+    const files: Array<{ name: string; relativePath: string; absolutePath: string; size: number; ext: string }> = [];
+
+    async function scan(currentDir: string, currentRel: string, depth: number) {
+      if (depth > 2) return;
+      const entries = await fs.readdir(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        const full = path.join(currentDir, entry.name);
+        const rel = currentRel ? `${currentRel}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          await scan(full, rel, depth + 1);
+        } else if (entry.isFile()) {
+          const s = await fs.stat(full);
+          files.push({
+            name: entry.name,
+            relativePath: rel,
+            absolutePath: full,
+            size: s.size,
+            ext: path.extname(entry.name).toLowerCase(),
+          });
+        }
+      }
+    }
+
+    await scan(folderPath, '', 0);
+
+    const drawingExts = new Set(['.pdf', '.svg', '.png', '.jpg', '.jpeg', '.dwg', '.dxf']);
+    const datasheetExts = new Set(['.pdf', '.xlsx', '.xls', '.csv', '.txt', '.doc', '.docx']);
+    const plantDataExts = new Set(['.json', '.yaml', '.yml', '.csv']);
+
+    const drawings = files.filter((f) => drawingExts.has(f.ext));
+    const datasheets = files.filter((f) => datasheetExts.has(f.ext));
+    const plantData = files.filter((f) => plantDataExts.has(f.ext));
+
+    return {
+      success: true,
+      folderPath,
+      folderName,
+      drawings,
+      datasheets,
+      plantData,
+      totalFiles: files.length,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to scan directory' };
+  }
+});
+
+ipcMain.handle('project:readFile', async (_event, filePath: string, asBinary: boolean = false) => {
+  try {
+    if (asBinary) {
+      const buffer = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      let mime = 'application/octet-stream';
+      if (ext === '.pdf') mime = 'application/pdf';
+      else if (ext === '.png') mime = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+      else if (ext === '.svg') mime = 'image/svg+xml';
+      return { success: true, dataUri: `data:${mime};base64,${buffer.toString('base64')}` };
+    } else {
+      const content = await fs.readFile(filePath, 'utf-8');
+      return { success: true, content };
+    }
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to read file' };
+  }
+});
+
 ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {
   shell.showItemInFolder(filePath);
+});
+
+ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
+  return shell.openPath(filePath);
 });
 
 ipcMain.handle('app:getVersion', () => {

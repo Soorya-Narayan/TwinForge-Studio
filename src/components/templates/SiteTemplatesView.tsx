@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useSimulationStore, type SkidId } from '../../store/useSimulationStore';
 import { useFatStore } from '../../store/useFatStore';
-import { Factory, Plus, AlertTriangle, X, Trash2 } from 'lucide-react';
+import { Factory, Plus, AlertTriangle, X, Trash2, FolderOpen } from 'lucide-react';
 import { CustomSkidModal } from './CustomSkidModal';
+import { ClientProjectModal } from '../project/ClientProjectModal';
 import { TemplateCard, type TemplateMeta } from './TemplateCard';
 import { CustomSkidCard } from './CustomSkidCard';
 import { RoadmapTemplatesCard } from './RoadmapTemplatesCard';
@@ -61,6 +62,7 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
   const deleteCustomSkid = useSimulationStore((s) => s.deleteCustomSkid);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedJson, setDroppedJson] = useState<string | undefined>(undefined);
@@ -145,6 +147,28 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setIsProjectModalOpen(true)}
+            className="btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              fontSize: 12,
+              fontWeight: 700,
+              background: '#047857',
+              color: '#ffffff',
+              boxShadow: '0 2px 8px rgba(4, 120, 87, 0.25)',
+              cursor: 'pointer',
+              border: 'none',
+              borderRadius: 4,
+            }}
+          >
+            <FolderOpen size={15} />
+            <span>OPEN CLIENT PROJECT FOLDER</span>
+          </button>
+
           <button
             onClick={() => setIsModalOpen(true)}
             className="btn btn-primary"
@@ -360,6 +384,15 @@ export const SiteTemplatesView: React.FC<SiteTemplatesViewProps> = ({ onSelectAn
           </div>
         </div>
       )}
+
+      {/* Client Project Folder Modal */}
+      <ClientProjectModal
+        isOpen={isProjectModalOpen}
+        onClose={() => setIsProjectModalOpen(false)}
+        onDeployed={() => {
+          if (onSelectAndNavigate) onSelectAndNavigate();
+        }}
+      />
     </div>
   );
 };

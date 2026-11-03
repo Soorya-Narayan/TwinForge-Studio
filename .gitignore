@@ -24,3 +24,20 @@ release
 *.njsproj
 *.sln
 *.sw?
+
+# Client drawings, datasheets, and proprietary plant data (loaded at runtime from client machine)
+*.pdf
+*.dwg
+*.dxf
+*.step
+*.stp
+*.xlsx
+*.xls
+*.client.*
+projects/
+client-data/
+plant-data/
+datasheets/
+drawings/
+client-projects/
+local-projects/
