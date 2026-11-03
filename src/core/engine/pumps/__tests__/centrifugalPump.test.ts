@@ -208,20 +208,64 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
     expect(nominalOut.pumpState.fault).toBe(false);
   });
 
-  // 9. Reverse flow: pump stopped, PV-1 open, balance tank static head above silo head ->
-  // negative flow and RAW_REVERSE_FLOW = true.
-  it('9. verifies gravity reverse flow when balance tank static head exceeds silo head', () => {
-    const circuit = new RawMilkSupplyCircuit();
+  // 9. Reverse flow: top inlet gives NO reverse flow when inlet is above silo;
+  // bottom inlet with tank liquid above silo gives reverse flow and RAW_REVERSE_FLOW.
+  it('9. verifies reverse flow: top inlet above silo gives NO reverse flow; bottom inlet with liquid above silo gives reverse flow and RAW_REVERSE_FLOW', () => {
+    // A) Top inlet: inlet above silo gives NO reverse flow (flow = 0, no RAW_REVERSE_FLOW)
+    const topCircuit = new RawMilkSupplyCircuit({
+      balanceTankInletType: 'top',
+      balanceTankInletElevationM: 4.0,
+      siloLevelM: 1.0,
+    });
+    const topOut = topCircuit.step(0.1, { startCmd: false, pv1PositionPct: 100, balanceTankLevelPct: 80 });
+    expect(topOut.flowLph).toBe(0);
+    expect(topOut.alarms).not.toContain('RAW_REVERSE_FLOW');
 
-    // Pump stopped, PV-1 open
-    // Silo level lower than balance tank inlet:
-    circuit.siloLevelM = 1.0;
-    circuit.balanceTankInletElevationM = 4.0; // 3 m higher than silo
+    // B) Bottom inlet: tank liquid surface above silo gives reverse flow and RAW_REVERSE_FLOW
+    // bottom elevation = 1.2 m, 100% level height = 0.8 m => liquid surface = 2.0 m
+    // Silo level = 1.0 m (below liquid surface)
+    const bottomCircuit = new RawMilkSupplyCircuit({
+      balanceTankInletType: 'bottom',
+      balanceTankBottomElevationM: 1.2,
+      balanceTankInletElevationM: 1.2,
+      balanceTankMaxLiquidHeightM: 0.8,
+      siloLevelM: 1.0,
+    });
+    const bottomOut = bottomCircuit.step(0.1, { startCmd: false, pv1PositionPct: 100, balanceTankLevelPct: 100 });
+    expect(bottomOut.flowLph).toBeLessThan(0);
+    expect(bottomOut.alarms).toContain('RAW_REVERSE_FLOW');
 
-    const out = circuit.step(0.1, { startCmd: false, pv1PositionPct: 100 });
+    // Also test fault 'raw_silo_level' lowering the silo level
+    const faultCircuit = new RawMilkSupplyCircuit({
+      balanceTankInletType: 'bottom',
+      balanceTankBottomElevationM: 1.2,
+      balanceTankInletElevationM: 1.2,
+      balanceTankMaxLiquidHeightM: 0.8,
+      siloLevelM: 3.0,
+    });
+    faultCircuit.applyFault('raw_silo_level', 1.0);
+    const faultOut = faultCircuit.step(0.1, { startCmd: false, pv1PositionPct: 100, balanceTankLevelPct: 100 });
+    expect(faultOut.flowLph).toBeLessThan(0);
+    expect(faultOut.alarms).toContain('RAW_REVERSE_FLOW');
+  });
 
-    expect(out.flowLph).toBeLessThan(0);
-    expect(out.alarms).toContain('RAW_REVERSE_FLOW');
+  it('verifies gravity flow through top inlet: forward flow when silo is above top inlet, zero flow when silo is below', () => {
+    const circuit = new RawMilkSupplyCircuit({
+      balanceTankInletType: 'top',
+      balanceTankInletElevationM: 2.0,
+    });
+
+    // Case 1: Silo surface at 3.0 m (above top inlet 2.0 m) => forward gravity flow > 0
+    circuit.siloLevelM = 3.0;
+    const fwdOut = circuit.step(0.1, { startCmd: false, pv1PositionPct: 100 });
+    expect(fwdOut.flowLph).toBeGreaterThan(0);
+    expect(fwdOut.alarms).not.toContain('RAW_REVERSE_FLOW');
+
+    // Case 2: Silo surface at 1.5 m (below top inlet 2.0 m) => flow = 0
+    circuit.siloLevelM = 1.5;
+    const zeroOut = circuit.step(0.1, { startCmd: false, pv1PositionPct: 100 });
+    expect(zeroOut.flowLph).toBe(0);
+    expect(zeroOut.alarms).not.toContain('RAW_REVERSE_FLOW');
   });
 
   // 10. Mass conservation over 60 s of running: volume leaving the silo = volume entering

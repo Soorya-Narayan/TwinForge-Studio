@@ -85,6 +85,7 @@ export type FaultMode =
   | 'motor_overload'
   | 'run_feedback_fail'
   | 'raw_supply_empty'
+  | 'raw_silo_level'
   | 'sensor_offset'
   | 'wire_break'
   | 'plate_leak'

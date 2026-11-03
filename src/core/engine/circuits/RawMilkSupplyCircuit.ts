@@ -71,6 +71,16 @@ export const DEFAULT_P_RAW_CONFIG: CentrifugalPumpConfig = {
   deadheadTimeoutS: { value: 10.0, source: 'placeholder' },
 };
 
+export interface RawMilkCircuitConfig {
+  pumpConfig?: CentrifugalPumpConfig;
+  balanceTankInletType?: 'top' | 'bottom';
+  balanceTankInletElevationM?: number;
+  balanceTankBottomElevationM?: number;
+  balanceTankMaxLiquidHeightM?: number;
+  balanceTankCapacityL?: number;
+  siloLevelM?: number;
+}
+
 export class RawMilkSupplyCircuit {
   public readonly pump: CentrifugalPumpModel;
 
@@ -84,13 +94,35 @@ export class RawMilkSupplyCircuit {
   public siloLevelM: number = 3.0; // Level above pump suction (placeholder)
   public siloTemperatureC: number = 4.0;
   public siloAvailable: boolean = true;
+  private siloLevelFault?: number;
+
+  // Balance tank geometry & inlet configuration
+  public balanceTankInletType: 'top' | 'bottom' = 'top';
   public balanceTankInletElevationM: number = 2.0; // Above pump centerline (placeholder)
-  public balanceTankBackpressureHeadM: number = 0.0; // Top entry = 0 extra head
+  public balanceTankBottomElevationM: number = 1.2; // Above pump centerline (placeholder)
+  public balanceTankMaxLiquidHeightM: number = 0.8; // 0.8 m liquid height at 100%
+  public balanceTankCapacityL: number = 600.0;
+  public balanceTankBackpressureHeadM: number = 0.0; // Backpressure head
 
   private circuitFaults: Set<string> = new Set();
   private lastOutputs: CircuitOutputs;
 
-  constructor(pumpConfig: CentrifugalPumpConfig = DEFAULT_P_RAW_CONFIG) {
+  constructor(config?: CentrifugalPumpConfig | RawMilkCircuitConfig) {
+    let pumpConfig: CentrifugalPumpConfig = DEFAULT_P_RAW_CONFIG;
+    if (config) {
+      if ('curvePoints' in config) {
+        pumpConfig = config;
+      } else {
+        if (config.pumpConfig) pumpConfig = config.pumpConfig;
+        if (config.balanceTankInletType) this.balanceTankInletType = config.balanceTankInletType;
+        if (typeof config.balanceTankInletElevationM === 'number') this.balanceTankInletElevationM = config.balanceTankInletElevationM;
+        if (typeof config.balanceTankBottomElevationM === 'number') this.balanceTankBottomElevationM = config.balanceTankBottomElevationM;
+        if (typeof config.balanceTankMaxLiquidHeightM === 'number') this.balanceTankMaxLiquidHeightM = config.balanceTankMaxLiquidHeightM;
+        if (typeof config.balanceTankCapacityL === 'number') this.balanceTankCapacityL = config.balanceTankCapacityL;
+        if (typeof config.siloLevelM === 'number') this.siloLevelM = config.siloLevelM;
+      }
+    }
+
     this.pump = new CentrifugalPumpModel(pumpConfig);
 
     // Suction Pipe: Ø 51 mm (48 mm bore), 5 m, K = 3
@@ -139,6 +171,9 @@ export class RawMilkSupplyCircuit {
     if (faultMode === 'raw_supply_empty') {
       this.circuitFaults.add(faultMode);
       this.siloAvailable = false;
+    } else if (faultMode === 'raw_silo_level' && typeof value === 'number') {
+      this.circuitFaults.add(faultMode);
+      this.siloLevelFault = value;
     } else {
       this.pump.applyFault(faultMode as PumpFaultMode, value);
     }
@@ -148,6 +183,9 @@ export class RawMilkSupplyCircuit {
     if (faultMode === 'raw_supply_empty') {
       this.circuitFaults.delete(faultMode);
       this.siloAvailable = true;
+    } else if (faultMode === 'raw_silo_level') {
+      this.circuitFaults.delete(faultMode);
+      this.siloLevelFault = undefined;
     } else {
       this.pump.clearFault(faultMode as PumpFaultMode);
     }
@@ -156,6 +194,7 @@ export class RawMilkSupplyCircuit {
   public clearAllFaults(): void {
     this.circuitFaults.clear();
     this.siloAvailable = true;
+    this.siloLevelFault = undefined;
     this.pump.clearAllFaults();
   }
 
@@ -191,14 +230,28 @@ export class RawMilkSupplyCircuit {
     // Apply suction blockage fault extra K
     this.suctionPipe.fittingsK = 3.0 + this.pump.getSuctionBlockageExtraK();
 
-    // Net static head update: (inlet elevation + backpressure) - silo surface elevation
-    const effectiveInletElevM = this.balanceTankInletElevationM + this.balanceTankBackpressureHeadM;
-    const netDeltaZM = effectiveInletElevM - this.siloLevelM;
+    const effectiveSiloLevelM = this.siloLevelFault !== undefined ? this.siloLevelFault : this.siloLevelM;
+
+    // Convert balance tank level percentage (0-100%) to liquid height (0 to 0.8 m)
+    const levelPct = Math.max(0, Math.min(100, inputs.balanceTankLevelPct ?? 0));
+    const liquidHeightM = (levelPct / 100.0) * this.balanceTankMaxLiquidHeightM;
+    const liquidSurfaceElevationM = this.balanceTankBottomElevationM + liquidHeightM;
+
+    // Downstream head:
+    // Top inlet: downstream head is the inlet elevation.
+    // Bottom inlet: downstream head is the liquid surface elevation when the liquid is above the inlet.
+    let downstreamHeadM = this.balanceTankInletElevationM;
+    if (this.balanceTankInletType === 'bottom') {
+      downstreamHeadM = Math.max(this.balanceTankInletElevationM, liquidSurfaceElevationM);
+    }
+
+    // Net static head update: downstream head minus silo liquid surface elevation
+    const netDeltaZM = downstreamHeadM - effectiveSiloLevelM;
     this.staticHead.deltaZM = netDeltaZM;
 
     // Silo suction pressure at pump inlet (absolute)
     const pAtmBar = 1.01325;
-    const pSiloStaticBar = (fluid.densityKgM3 * GRAVITY_M_S2 * Math.max(0, this.siloLevelM)) / 100000;
+    const pSiloStaticBar = (fluid.densityKgM3 * GRAVITY_M_S2 * Math.max(0, effectiveSiloLevelM)) / 100000;
     const pSiloAbsBar = pAtmBar + pSiloStaticBar;
 
     const alarms: string[] = [];
@@ -313,44 +366,74 @@ export class RawMilkSupplyCircuit {
       pDischargeBar = pSuctionBar + shutOffDeltaPBar;
     } else if (!isPumpRunning && isPv1Passable) {
       // 3. Pump is stopped and PV-1 is open: compute gravity flow from static head
-      // Positive head (silo > balance tank) drives flow forward; reverse head drives flow backward
-      // Stopped pump adds extra resistance K = 20
-      const drivingHeadM = -netDeltaZM; // z_silo - z_tank
-      const isReverse = drivingHeadM < 0;
-      const absDrivingHeadM = Math.abs(drivingHeadM);
-      const drivingDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * absDrivingHeadM) / 100000;
+      // Reverse flow is possible ONLY for a bottom (submerged) inlet, when the liquid surface is above the silo level.
+      // A top inlet can never produce reverse flow from the tank.
+      let drivingHeadM = 0;
+      let isReverse = false;
 
-      // Solve gravity flow using bisection
-      const pumpStoppedK = 20.0;
-      const origDischargeK = this.dischargePipe.fittingsK;
-      this.dischargePipe.fittingsK = 6.0 + pumpStoppedK;
-
-      let low = 0;
-      let high = 20000;
-      let gravQ = 0;
-
-      for (let i = 0; i < 50; i++) {
-        gravQ = 0.5 * (low + high);
-        if (high - low < 1.0) break;
-
-        const lossBar =
-          this.suctionPipe.pressureDropBar(gravQ, fluid) +
-          this.dischargePipe.pressureDropBar(gravQ, fluid) +
-          this.pv1Valve.pressureDropBar(gravQ, fluid);
-
-        if (lossBar < drivingDeltaPBar) {
-          low = gravQ;
+      if (this.balanceTankInletType === 'top') {
+        if (effectiveSiloLevelM > this.balanceTankInletElevationM) {
+          // Forward gravity flow from silo into balance tank
+          drivingHeadM = effectiveSiloLevelM - this.balanceTankInletElevationM;
+          isReverse = false;
         } else {
-          high = gravQ;
+          // Silo surface at or below top inlet: cannot flow uphill and cannot reverse flow from top inlet
+          drivingHeadM = 0;
+          isReverse = false;
+        }
+      } else {
+        // Bottom inlet:
+        if (effectiveSiloLevelM > downstreamHeadM) {
+          // Forward gravity flow into tank
+          drivingHeadM = effectiveSiloLevelM - downstreamHeadM;
+          isReverse = false;
+        } else if (liquidSurfaceElevationM > effectiveSiloLevelM) {
+          // Tank liquid surface is above silo level -> reverse gravity flow!
+          drivingHeadM = liquidSurfaceElevationM - effectiveSiloLevelM;
+          isReverse = true;
+        } else {
+          drivingHeadM = 0;
+          isReverse = false;
         }
       }
-      this.dischargePipe.fittingsK = origDischargeK;
 
-      if (isReverse) {
-        solvedFlowLph = -gravQ;
-        alarms.push('RAW_REVERSE_FLOW');
+      if (drivingHeadM > 1e-4) {
+        // Solve gravity flow using bisection
+        const pumpStoppedK = 20.0;
+        const origDischargeK = this.dischargePipe.fittingsK;
+        this.dischargePipe.fittingsK = 6.0 + pumpStoppedK;
+
+        const drivingDeltaPBar = (fluid.densityKgM3 * GRAVITY_M_S2 * drivingHeadM) / 100000;
+
+        let low = 0;
+        let high = 20000;
+        let gravQ = 0;
+
+        for (let i = 0; i < 50; i++) {
+          gravQ = 0.5 * (low + high);
+          if (high - low < 1.0) break;
+
+          const lossBar =
+            this.suctionPipe.pressureDropBar(gravQ, fluid) +
+            this.dischargePipe.pressureDropBar(gravQ, fluid) +
+            this.pv1Valve.pressureDropBar(gravQ, fluid);
+
+          if (lossBar < drivingDeltaPBar) {
+            low = gravQ;
+          } else {
+            high = gravQ;
+          }
+        }
+        this.dischargePipe.fittingsK = origDischargeK;
+
+        if (isReverse) {
+          solvedFlowLph = -gravQ;
+          alarms.push('RAW_REVERSE_FLOW');
+        } else {
+          solvedFlowLph = gravQ;
+        }
       } else {
-        solvedFlowLph = gravQ;
+        solvedFlowLph = 0;
       }
 
       pSuctionBar = pSiloAbsBar;

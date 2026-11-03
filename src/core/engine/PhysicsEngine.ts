@@ -128,6 +128,7 @@ export class PhysicsEngine {
           this.rawMilkCircuit.clearAllFaults();
         } else if (fault.deviceId === 'RAW_SUPPLY' || fault.deviceId === 'SILO') {
           this.rawMilkCircuit.clearFault('raw_supply_empty');
+          this.rawMilkCircuit.clearFault('raw_silo_level');
         }
       }
     } else {
@@ -137,6 +138,8 @@ export class PhysicsEngine {
           this.rawMilkCircuit.applyFault(fault.mode, fault.value);
         } else if (fault.mode === 'raw_supply_empty') {
           this.rawMilkCircuit.applyFault('raw_supply_empty', fault.value);
+        } else if (fault.mode === 'raw_silo_level') {
+          this.rawMilkCircuit.applyFault('raw_silo_level', fault.value);
         }
       }
     }
