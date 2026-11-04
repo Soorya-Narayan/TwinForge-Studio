@@ -13,7 +13,7 @@ import { OpcUaPlcDriver, type OpcUaConnectionOptions } from '../core/driver/OpcU
 import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
-import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
+import type { SimulationSnapshot, DeviceFault, FaultMode } from '../core/engine/types';
 import { useFatStore } from './useFatStore';
 import {
   loadStoredTagMap,
@@ -88,6 +88,7 @@ interface SimulationStore {
   clearTrendHistory: () => void;
   setSpeed: (speed: number) => void;
   injectFault: (fault: DeviceFault) => void;
+  clearFault: (deviceId: string, mode: FaultMode | string) => void;
   clearFaults: () => void;
   
   // Operator Actions
@@ -539,6 +540,44 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const { engine } = get();
       engine.setFault(fault);
       set({ faults: engine.getFaults() });
+      try {
+        useFatStore.getState().addJournalEntry({
+          scan: get().snapshot?.scan ?? 0,
+          timeFormatted: new Date().toLocaleTimeString(),
+          source: 'SIM',
+          eventType: 'FAULT',
+          description:
+            fault.mode === 'none'
+              ? `Cleared all faults on device ${fault.deviceId}`
+              : `Injected fault ${fault.mode} on ${fault.deviceId}${fault.value !== undefined ? ` (value: ${fault.value})` : ''}`,
+          tag: fault.deviceId,
+          value: fault.mode,
+          status: fault.mode === 'none' ? 'PASS' : 'FAIL',
+        });
+      } catch (err) {
+        console.warn('Failed to record fault journal entry:', err);
+      }
+      tickOnce();
+    },
+
+    clearFault: (deviceId: string, mode: FaultMode | string) => {
+      const { engine } = get();
+      engine.clearFault(deviceId, mode);
+      set({ faults: engine.getFaults() });
+      try {
+        useFatStore.getState().addJournalEntry({
+          scan: get().snapshot?.scan ?? 0,
+          timeFormatted: new Date().toLocaleTimeString(),
+          source: 'SIM',
+          eventType: 'FAULT',
+          description: `Cleared fault ${mode} on ${deviceId}`,
+          tag: deviceId,
+          value: 'none',
+          status: 'PASS',
+        });
+      } catch (err) {
+        console.warn('Failed to record fault clear journal entry:', err);
+      }
       tickOnce();
     },
 
@@ -546,6 +585,20 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const { engine } = get();
       engine.clearAllFaults();
       set({ faults: [] });
+      try {
+        useFatStore.getState().addJournalEntry({
+          scan: get().snapshot?.scan ?? 0,
+          timeFormatted: new Date().toLocaleTimeString(),
+          source: 'SIM',
+          eventType: 'FAULT',
+          description: 'Cleared all injected faults across plant',
+          tag: 'SYSTEM',
+          value: 'none',
+          status: 'PASS',
+        });
+      } catch (err) {
+        console.warn('Failed to record clearFaults journal entry:', err);
+      }
       tickOnce();
     },
 

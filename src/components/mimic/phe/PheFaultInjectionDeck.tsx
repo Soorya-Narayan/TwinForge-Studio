@@ -8,6 +8,7 @@ interface PheFaultInjectionDeckProps {
   sectionsMetrics: Record<string, PheSectionMetrics>;
   faults: DeviceFault[];
   injectFault: (f: DeviceFault) => void;
+  clearFault: (deviceId: string, mode: string) => void;
   onResetFouling: () => void;
 }
 
@@ -16,6 +17,7 @@ export const PheFaultInjectionDeck: React.FC<PheFaultInjectionDeckProps> = ({
   sectionsMetrics,
   faults,
   injectFault,
+  clearFault,
   onResetFouling,
 }) => {
   return (
@@ -71,7 +73,11 @@ export const PheFaultInjectionDeck: React.FC<PheFaultInjectionDeckProps> = ({
           <button
             onClick={() => {
               const active = faults.some((f) => f.mode === 'plate_leak');
-              injectFault({ deviceId: 'PHE-HEATING', mode: active ? 'none' : 'plate_leak', value: 65 });
+              if (active) {
+                clearFault('PHE-HEATING', 'plate_leak');
+              } else {
+                injectFault({ deviceId: 'PHE-HEATING', mode: 'plate_leak', value: 65 });
+              }
             }}
             className={`btn ${faults.some((f) => f.mode === 'plate_leak') ? 'btn-danger' : 'btn-ghost'}`}
             style={{ padding: '6px 8px', fontSize: 10 }}
@@ -83,7 +89,11 @@ export const PheFaultInjectionDeck: React.FC<PheFaultInjectionDeckProps> = ({
           <button
             onClick={() => {
               const active = faults.some((f) => f.mode === 'loss_of_hot_water');
-              injectFault({ deviceId: 'PHE-HEATING', mode: active ? 'none' : 'loss_of_hot_water' });
+              if (active) {
+                clearFault('PHE-HEATING', 'loss_of_hot_water');
+              } else {
+                injectFault({ deviceId: 'PHE-HEATING', mode: 'loss_of_hot_water' });
+              }
             }}
             className={`btn ${faults.some((f) => f.mode === 'loss_of_hot_water') ? 'btn-danger' : 'btn-ghost'}`}
             style={{ padding: '6px 8px', fontSize: 10 }}
@@ -95,7 +105,11 @@ export const PheFaultInjectionDeck: React.FC<PheFaultInjectionDeckProps> = ({
           <button
             onClick={() => {
               const active = faults.some((f) => f.mode === 'loss_of_chilled_water');
-              injectFault({ deviceId: 'PHE-HEATING', mode: active ? 'none' : 'loss_of_chilled_water' });
+              if (active) {
+                clearFault('PHE-HEATING', 'loss_of_chilled_water');
+              } else {
+                injectFault({ deviceId: 'PHE-HEATING', mode: 'loss_of_chilled_water' });
+              }
             }}
             className={`btn ${faults.some((f) => f.mode === 'loss_of_chilled_water') ? 'btn-danger' : 'btn-ghost'}`}
             style={{ padding: '6px 8px', fontSize: 10 }}

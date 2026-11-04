@@ -12,6 +12,7 @@ export const FaultDeck: React.FC = () => {
   const faults = useSimulationStore((s) => s.faults);
   const injectFault = useSimulationStore((s) => s.injectFault);
   const clearFaults = useSimulationStore((s) => s.clearFaults);
+  const clearFault = useSimulationStore((s) => s.clearFault);
 
   const activeSkid = useSimulationStore((s) => s.activeSkid);
 
@@ -21,7 +22,7 @@ export const FaultDeck: React.FC = () => {
 
   const toggleFault = (fault: DeviceFault) => {
     if (isFaultActive(fault.deviceId, fault.mode)) {
-      injectFault({ deviceId: fault.deviceId, mode: 'none' });
+      clearFault(fault.deviceId, fault.mode);
     } else {
       injectFault(fault);
     }

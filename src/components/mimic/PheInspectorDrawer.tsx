@@ -34,6 +34,7 @@ export const PheInspectorDrawer: React.FC<PheInspectorDrawerProps> = ({
   const engine = useSimulationStore((s) => s.engine);
   const snapshot = useSimulationStore((s) => s.snapshot);
   const injectFault = useSimulationStore((s) => s.injectFault);
+  const clearFault = useSimulationStore((s) => s.clearFault);
   const faults = useSimulationStore((s) => s.faults);
 
   const [selectedSection, setSelectedSection] = useState<string>(initialSectionId);
@@ -192,9 +193,10 @@ export const PheInspectorDrawer: React.FC<PheInspectorDrawerProps> = ({
           sectionsMetrics={sectionsMetrics}
           faults={faults}
           injectFault={injectFault}
+          clearFault={clearFault}
           onResetFouling={() => {
             phe.resetAllFouling();
-            injectFault({ deviceId: 'PHE-HEATING', mode: 'none' });
+            clearFault('PHE-HEATING', 'fouling');
           }}
         />
 

@@ -15,6 +15,7 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
   const manualOverrideOutput = useSimulationStore((s) => s.manualOverrideOutput);
   const setRawSiloLevel = useSimulationStore((s) => s.setRawSiloLevel);
   const injectFault = useSimulationStore((s) => s.injectFault);
+  const clearFault = useSimulationStore((s) => s.clearFault);
   const faults = useSimulationStore((s) => s.faults);
   const snapshot = useSimulationStore((s) => s.snapshot);
 
@@ -41,7 +42,7 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
 
   const handleToggleFault = (deviceId: string, mode: FaultMode, value?: number) => {
     if (isFaultActive(deviceId, mode)) {
-      injectFault({ deviceId, mode: 'none' });
+      clearFault(deviceId, mode);
     } else {
       injectFault({ deviceId, mode, value });
     }

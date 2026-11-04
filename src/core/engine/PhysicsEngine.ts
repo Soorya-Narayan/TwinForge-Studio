@@ -10,6 +10,7 @@
 import type {
   DevicePhysicalState,
   DeviceFault,
+  FaultMode,
   PipeConnection,
   SimulationSnapshot,
   TankConfig,
@@ -167,9 +168,25 @@ export class PhysicsEngine {
     }
   }
 
+  private faultKey(deviceId: string, mode: string): string {
+    return `${deviceId}:${mode}`;
+  }
+
+  public getFault(deviceId: string, mode: FaultMode | string): DeviceFault | undefined {
+    return this.faults.get(this.faultKey(deviceId, mode));
+  }
+
+  public hasFault(deviceId: string, mode: FaultMode | string): boolean {
+    return this.faults.has(this.faultKey(deviceId, mode));
+  }
+
   public setFault(fault: DeviceFault): void {
     if (fault.mode === 'none') {
-      this.faults.delete(fault.deviceId);
+      for (const [key, f] of Array.from(this.faults.entries())) {
+        if (f.deviceId === fault.deviceId) {
+          this.faults.delete(key);
+        }
+      }
       const valveModel = this.onOffValves.get(fault.deviceId);
       if (valveModel) {
         valveModel.clearAllFaults();
@@ -188,7 +205,7 @@ export class PhysicsEngine {
         }
       }
     } else {
-      this.faults.set(fault.deviceId, fault);
+      this.faults.set(this.faultKey(fault.deviceId, fault.mode), fault);
       const valveModel = this.onOffValves.get(fault.deviceId);
       if (valveModel) {
         valveModel.applyFault(fault.mode as ValveFaultMode, fault.value);
@@ -209,15 +226,42 @@ export class PhysicsEngine {
       }
     }
 
-    // Update utility supply states
-    this.utilities.instrumentAirOk = !Array.from(this.faults.values()).some((f) => f.mode === 'instrument_air_loss');
-    this.utilities.solenoidPowerOk = !Array.from(this.faults.values()).some((f) => f.mode === 'solenoid_power_loss');
+    this.updateUtilityStates();
+  }
+
+  public clearFault(deviceId: string, mode: FaultMode | string): void {
+    const key = this.faultKey(deviceId, mode);
+    this.faults.delete(key);
+    const valveModel = this.onOffValves.get(deviceId);
+    if (valveModel) {
+      valveModel.clearFault(mode as ValveFaultMode);
+    }
+    if (this.rawMilkCircuit) {
+      if (deviceId === 'P-RAW' || deviceId === 'P_RAW') {
+        this.rawMilkCircuit.clearFault(mode);
+      } else if (deviceId === 'RAW_SUPPLY' || deviceId === 'SILO') {
+        if (mode === 'raw_supply_empty' || mode === 'raw_silo_level') {
+          this.rawMilkCircuit.clearFault(mode);
+        }
+      } else if (mode === 'raw_supply_empty' || mode === 'raw_silo_level') {
+        this.rawMilkCircuit.clearFault(mode);
+      }
+    }
+    if (this.waterInletCircuit) {
+      if (deviceId === 'PV-2' || deviceId === 'WATER_SUPPLY') {
+        if (mode === 'water_supply_loss') {
+          this.waterInletCircuit.clearFault('water_supply_loss');
+        }
+      } else if (mode === 'water_supply_loss') {
+        this.waterInletCircuit.clearFault('water_supply_loss');
+      }
+    }
+    this.updateUtilityStates();
   }
 
   public clearAllFaults(): void {
     this.faults.clear();
-    this.utilities.instrumentAirOk = true;
-    this.utilities.solenoidPowerOk = true;
+    this.updateUtilityStates();
     for (const valve of this.onOffValves.values()) {
       valve.clearAllFaults();
     }
@@ -227,6 +271,11 @@ export class PhysicsEngine {
 
   public getFaults(): DeviceFault[] {
     return Array.from(this.faults.values());
+  }
+
+  private updateUtilityStates(): void {
+    this.utilities.instrumentAirOk = !Array.from(this.faults.values()).some((f) => f.mode === 'instrument_air_loss');
+    this.utilities.solenoidPowerOk = !Array.from(this.faults.values()).some((f) => f.mode === 'solenoid_power_loss');
   }
 
   /**
@@ -285,8 +334,7 @@ export class PhysicsEngine {
   }
 
   private advanceValves(commands: Record<string, boolean | number>, dt: number): void {
-    this.utilities.instrumentAirOk = !Array.from(this.faults.values()).some((f) => f.mode === 'instrument_air_loss');
-    this.utilities.solenoidPowerOk = !Array.from(this.faults.values()).some((f) => f.mode === 'solenoid_power_loss');
+    this.updateUtilityStates();
 
     for (const valve of this.topology.valves) {
       const state = this.states.get(valve.id);
@@ -309,13 +357,12 @@ export class PhysicsEngine {
         state.zsc = out.zsc;
       } else {
         // Modulating valve
-        const fault = this.faults.get(valve.id);
-        if (fault?.mode === 'stuck_closed') {
+        if (this.hasFault(valve.id, 'stuck_closed')) {
           state.positionPct = 0;
           state.isOpen = false;
           continue;
         }
-        if (fault?.mode === 'stuck_open') {
+        if (this.hasFault(valve.id, 'stuck_open')) {
           state.positionPct = 100;
           state.isOpen = true;
           continue;
@@ -349,8 +396,7 @@ export class PhysicsEngine {
       const state = this.states.get(pump.id);
       if (!state) continue;
 
-      const fault = this.faults.get(pump.id);
-      if (fault?.mode === 'pump_trip') {
+      if (this.hasFault(pump.id, 'pump_trip')) {
         state.speedPct = 0;
         continue;
       }
@@ -539,11 +585,12 @@ export class PhysicsEngine {
       const isForward = Boolean(pv11Valve?.isOpen) && !pv12Valve?.isOpen && feedFlowLph > 500;
 
       // Extract fault states
-      const heatFault = this.faults.get('PHE-HEATING') || this.faults.get('PHE');
-      const foulingMult = heatFault?.mode === 'fouling' ? (heatFault.value ?? 3.0) : 1.0;
-      const leakPct = heatFault?.mode === 'plate_leak' ? (heatFault.value ?? 50) : 0;
-      const lossHw = heatFault?.mode === 'loss_of_hot_water' || hwPumpSpeed < 0.05;
-      const lossCw = heatFault?.mode === 'loss_of_chilled_water' || !cwValveOpen;
+      const foulingFault = this.getFault('PHE-HEATING', 'fouling') ?? this.getFault('PHE', 'fouling');
+      const foulingMult = foulingFault ? (foulingFault.value ?? 3.0) : 1.0;
+      const leakFault = this.getFault('PHE-HEATING', 'plate_leak') ?? this.getFault('PHE', 'plate_leak');
+      const leakPct = leakFault ? (leakFault.value ?? 50) : 0;
+      const lossHw = this.hasFault('PHE-HEATING', 'loss_of_hot_water') || this.hasFault('PHE', 'loss_of_hot_water') || hwPumpSpeed < 0.05;
+      const lossCw = this.hasFault('PHE-HEATING', 'loss_of_chilled_water') || this.hasFault('PHE', 'loss_of_chilled_water') || !cwValveOpen;
 
       const metrics = this.pheAssembly.step(dt, {
         feedFlowRateLph: feedFlowLph,
@@ -699,8 +746,8 @@ export class PhysicsEngine {
       const state = this.states.get(tank.id);
       const level = state?.levelPct ?? 0;
 
-      const fault = this.faults.get(tank.id);
-      const offset = fault?.mode === 'sensor_offset' ? (fault.value ?? 0) : 0;
+      const offsetFault = this.getFault(tank.id, 'sensor_offset');
+      const offset = offsetFault ? (offsetFault.value ?? 0) : 0;
       const sensedLevel = Math.max(0, Math.min(100, level + offset));
 
       inputs[`${tank.tag}_LT`] = Number(sensedLevel.toFixed(1));
@@ -725,8 +772,8 @@ export class PhysicsEngine {
       const feedSpd = feedState?.speedPct ?? 0;
       const hwSpd = hwState?.speedPct ?? 0;
 
-      const heatFault = this.faults.get('PHE-HEATING') || this.faults.get('PHE');
-      const tempOffset = heatFault?.mode === 'sensor_offset' ? (heatFault.value ?? 0) : 0;
+      const heatOffsetFault = this.getFault('PHE-HEATING', 'sensor_offset') ?? this.getFault('PHE', 'sensor_offset');
+      const tempOffset = heatOffsetFault ? (heatOffsetFault.value ?? 0) : 0;
 
       if (this.pheAssembly) {
         const overall = this.pheAssembly.getOverallMetrics();

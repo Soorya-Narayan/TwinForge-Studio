@@ -674,6 +674,7 @@ export const useFatStore = create<FatStore>()(
         }
       }
       engine.clearAllFaults();
+      useSimulationStore.setState({ faults: engine.getFaults() });
       if (!isPartOfSuite) {
         set({ isRunningSuite: false });
         useSimulationStore.getState().setFatRunning(false);
