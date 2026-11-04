@@ -467,6 +467,28 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
       expect(circuit.pump.getOverloadPct()).toBeGreaterThanOrEqual(0);
       expect(circuit.pump.getOverloadPct()).toBeLessThanOrEqual(100);
     });
+
+    it('16. verifies system head from getSystemHeadM equals pump head at solved flow within 0.1 m', () => {
+      const circuit = new RawMilkSupplyCircuit();
+      let out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+
+      expect(out.flowLph).toBeGreaterThan(10000);
+      const systemHead = circuit.getSystemHeadM(out.flowLph);
+      const pumpHead = circuit.pump.getHeadM(out.flowLph, out.pumpState.speedRatio);
+      expect(Math.abs(systemHead - pumpHead)).toBeLessThan(0.1);
+
+      // Also verify when static head is negative (silo level 4m, inlet 2m => static head -2m)
+      circuit.applyFault('raw_silo_level', 4.0);
+      for (let t = 0.1; t < 2.5; t += 0.1) {
+        out = circuit.step(0.1, { startCmd: true, pv1PositionPct: 100 });
+      }
+      const systemHeadNegStatic = circuit.getSystemHeadM(out.flowLph);
+      const pumpHeadNegStatic = circuit.pump.getHeadM(out.flowLph, out.pumpState.speedRatio);
+      expect(Math.abs(systemHeadNegStatic - pumpHeadNegStatic)).toBeLessThan(0.1);
+    });
   });
 });
 

@@ -24,10 +24,15 @@ export const PumpOperatingCurveCard: React.FC<PumpOperatingCurveCardProps> = ({ 
   const graphHeight = svgHeight - margin.top - margin.bottom;
 
   const maxPlotFlow = 22000;
-  const maxPlotHead = 38;
+  const sysHead0 = circuit.getSystemHeadM(0);
+  const minPlotHead = Math.min(0, Math.floor(sysHead0 / 10) * 10);
+  const maxPlotHead = minPlotHead < 0 ? 40 : 38;
 
   const mapX = (q: number) => margin.left + (Math.max(0, Math.min(maxPlotFlow, q)) / maxPlotFlow) * graphWidth;
-  const mapY = (h: number) => margin.top + graphHeight - (Math.max(0, Math.min(maxPlotHead, h)) / maxPlotHead) * graphHeight;
+  const mapY = (h: number) => {
+    const clampedH = Math.max(minPlotHead, Math.min(maxPlotHead, h));
+    return margin.top + graphHeight - ((clampedH - minPlotHead) / (maxPlotHead - minPlotHead)) * graphHeight;
+  };
 
   // Generate pump head curve points
   const pumpPoints: string[] = [];
@@ -40,15 +45,9 @@ export const PumpOperatingCurveCard: React.FC<PumpOperatingCurveCardProps> = ({ 
     pumpPoints.push(`${mapX(q)},${mapY(h)}`);
   }
 
-  // System resistance curve: H_sys = H_static + K * Q^2
-  // Static head: balanceTankInletElevationM - siloLevelM (or downstreamHeadM - siloLevelM)
-  const staticHeadM = Math.max(0, circuit.balanceTankInletElevationM - circuit.siloLevelM);
+  // System resistance curve: evaluated at each flow point via getSystemHeadM
   for (let q = 0; q <= 20000; q += 500) {
-    // Approx system loss in m based on operating point resistance
-    const lossHeadM = (flowLph > 500 && headM > staticHeadM)
-      ? (headM - staticHeadM) * Math.pow(q / Math.max(1, flowLph), 2)
-      : (12.0) * Math.pow(q / 16000, 2);
-    const totalSysHead = staticHeadM + lossHeadM;
+    const totalSysHead = circuit.getSystemHeadM(q);
     systemPoints.push(`${mapX(q)},${mapY(totalSysHead)}`);
   }
 
@@ -88,14 +87,32 @@ export const PumpOperatingCurveCard: React.FC<PumpOperatingCurveCardProps> = ({ 
       <div style={{ width: '100%', background: '#f8fafc', borderRadius: 6, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
         <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
           {/* Grid lines */}
-          {[0, 10, 20, 30].map((h) => (
-            <g key={h}>
-              <line x1={margin.left} y1={mapY(h)} x2={svgWidth - margin.right} y2={mapY(h)} stroke="#e2e8f0" strokeDasharray="3 3" />
-              <text x={margin.left - 6} y={mapY(h) + 4} textAnchor="end" fill="#64748b" fontSize="9" className="mono">
-                {h}m
-              </text>
-            </g>
-          ))}
+          {(() => {
+            const headGridValues: number[] = [];
+            for (let h = minPlotHead; h <= 30; h += 10) {
+              headGridValues.push(h);
+            }
+            if (!headGridValues.includes(0)) {
+              headGridValues.push(0);
+              headGridValues.sort((a, b) => a - b);
+            }
+            return headGridValues.map((h) => (
+              <g key={h}>
+                <line
+                  x1={margin.left}
+                  y1={mapY(h)}
+                  x2={svgWidth - margin.right}
+                  y2={mapY(h)}
+                  stroke={h === 0 && minPlotHead < 0 ? '#94a3b8' : '#e2e8f0'}
+                  strokeDasharray={h === 0 && minPlotHead < 0 ? undefined : '3 3'}
+                  strokeWidth={h === 0 && minPlotHead < 0 ? 1.5 : 1}
+                />
+                <text x={margin.left - 6} y={mapY(h) + 4} textAnchor="end" fill="#64748b" fontSize="9" className="mono">
+                  {h}m
+                </text>
+              </g>
+            ));
+          })()}
 
           {[0, 5000, 10000, 15000, 20000].map((q) => (
             <g key={q}>
@@ -183,7 +200,7 @@ export const PumpOperatingCurveCard: React.FC<PumpOperatingCurveCardProps> = ({ 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#64748b', background: '#eff6ff', padding: '6px 10px', borderRadius: 4 }}>
         <Info size={14} color="#0284c7" />
         <span>
-          Intersection of the blue pump curve and amber system curve determines the solved operating point.
+          The operating point is where the pump curve meets the system curve. Both curves are calculated from the hydraulic model.
         </span>
       </div>
     </div>

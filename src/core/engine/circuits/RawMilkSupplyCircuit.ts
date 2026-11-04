@@ -104,6 +104,7 @@ export class RawMilkSupplyCircuit {
   public balanceTankMaxLiquidHeightM: number = 0.8; // 0.8 m liquid height at 100%
   public balanceTankCapacityL: number = 600.0;
   public balanceTankBackpressureHeadM: number = 0.0; // Backpressure head
+  public lastBalanceTankLevelPct: number = 0;
 
   private circuitFaults: Set<string> = new Set();
   private lastOutputs: CircuitOutputs;
@@ -253,6 +254,7 @@ export class RawMilkSupplyCircuit {
 
     // Convert balance tank level percentage (0-100%) to liquid height (0 to 0.8 m)
     const levelPct = Math.max(0, Math.min(100, inputs.balanceTankLevelPct ?? 0));
+    this.lastBalanceTankLevelPct = levelPct;
     const liquidHeightM = (levelPct / 100.0) * this.balanceTankMaxLiquidHeightM;
     const liquidSurfaceElevationM = this.balanceTankBottomElevationM + liquidHeightM;
 
@@ -566,5 +568,40 @@ export class RawMilkSupplyCircuit {
 
   public getOutputs(): CircuitOutputs {
     return { ...this.lastOutputs };
+  }
+
+  /**
+   * Evaluates the circuit's actual hydraulic elements at flowLph:
+   * Pipe and fitting losses, PV-1 at its current effective Kv, and the signed static head
+   * (tank inlet elevation, or liquid surface for a bottom inlet, minus silo level).
+   * Static head is signed and not clamped to zero.
+   */
+  public getSystemHeadM(flowLph: number): number {
+    const effectiveSiloLevelM = this.siloLevelFault !== undefined ? this.siloLevelFault : this.siloLevelM;
+    const levelPct = Math.max(0, Math.min(100, this.lastBalanceTankLevelPct));
+    const liquidHeightM = (levelPct / 100.0) * this.balanceTankMaxLiquidHeightM;
+    const liquidSurfaceElevationM = this.balanceTankBottomElevationM + liquidHeightM;
+
+    let downstreamHeadM = this.balanceTankInletElevationM;
+    if (this.balanceTankInletType === 'bottom') {
+      downstreamHeadM = Math.max(this.balanceTankInletElevationM, liquidSurfaceElevationM);
+    }
+
+    const staticHeadM = downstreamHeadM - effectiveSiloLevelM;
+
+    const fluid: FluidState = {
+      ...RAW_MILK_FLUID,
+      temperatureC: this.siloTemperatureC,
+    };
+
+    const q = Math.max(0, flowLph);
+    const pDropSuct = this.suctionPipe.pressureDropBar(q, fluid);
+    const pDropDisc = this.dischargePipe.pressureDropBar(q, fluid);
+    const pDropPv1 = this.pv1Valve.pressureDropBar(q, fluid);
+
+    const rhoG = fluid.densityKgM3 * GRAVITY_M_S2;
+    const frictionHeadM = ((pDropSuct + pDropDisc + pDropPv1) * 100000) / rhoG;
+
+    return staticHeadM + frictionHeadM;
   }
 }
