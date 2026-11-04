@@ -28,9 +28,8 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
     manualOverrideOutput('P_RAW_START', !isRunning);
   };
 
-  const handlePv1Change = (val: number) => {
-    manualOverrideOutput('PV1', val);
-    manualOverrideOutput('PV1_CMD', val > 2);
+  const handleTogglePv1 = () => {
+    manualOverrideOutput('PV1_CMD', pv1Pos < 50);
   };
 
   const handleSiloLevelChange = (val: number) => {
@@ -78,23 +77,41 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
 
       {/* Sliders: PV-1 Valve & Silo Level */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>PV-1 Throttle Position</span>
-            <span className="mono" style={{ fontWeight: 800, color: pv1Pos <= 2 ? '#dc2626' : '#0284c7' }}>
-              {pv1Pos.toFixed(0)}% {pv1Pos <= 2 ? '(DEADHEAD)' : ''}
+        <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>PV-1 Infeed Valve</span>
+            <span className="mono" style={{ fontWeight: 800, color: pv1Pos <= 2 ? '#dc2626' : '#059669' }}>
+              {pv1Pos.toFixed(0)}% {pv1Pos <= 2 ? '(DEADHEAD)' : pv1Pos >= 98 ? '(OPEN)' : '(TRAVELING)'}
             </span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={pv1Pos}
-            onChange={(e) => handlePv1Change(Number(e.target.value))}
-            style={{ width: '100%', accentColor: pv1Pos <= 2 ? '#dc2626' : '#0284c7' }}
-          />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: pv1Pos >= 98 ? '#059669' : pv1Pos <= 2 ? '#dc2626' : '#d97706',
+                }}
+              />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
+                Position: {pv1Pos.toFixed(0)}%
+              </span>
+            </div>
+
+            <button
+              onClick={handleTogglePv1}
+              className={`btn ${pv1Pos >= 50 ? 'btn-danger' : 'btn-success'}`}
+              style={{ fontSize: 11, padding: '4px 12px', height: 26, fontWeight: 700 }}
+            >
+              {pv1Pos >= 50 ? 'CLOSE PV-1' : 'OPEN PV-1'}
+            </button>
+          </div>
+
           <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-            Closing PV-1 while pump runs recirculates fluid and triggers <code>P_RAW_DEADHEAD</code> at 10s.
+            Closing PV-1 while pump runs deadheads the pump and triggers <code>P_RAW_DEADHEAD</code> at 10s.
           </span>
         </div>
 
