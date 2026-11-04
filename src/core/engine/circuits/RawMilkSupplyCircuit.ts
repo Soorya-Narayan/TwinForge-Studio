@@ -219,6 +219,17 @@ export class RawMilkSupplyCircuit {
   }
 
   /**
+   * Normal operating input for raw milk silo level (m above pump suction centerline)
+   */
+  public setSiloLevelM(levelM: number): void {
+    this.siloLevelM = Math.max(0, levelM);
+  }
+
+  public getSiloLevelM(): number {
+    return this.siloLevelM;
+  }
+
+  /**
    * Execute physical scan step of the supply circuit
    */
   public step(

@@ -14,6 +14,7 @@ import { defaultMixingSkid } from '../core/templates/defaultPlant';
 import { milkPasteurizerSkid } from '../core/templates/pasteurizerPlant';
 import type { CustomSkidMeta } from '../core/templates/customTemplateValidator';
 import type { SimulationSnapshot, DeviceFault } from '../core/engine/types';
+import { useFatStore } from './useFatStore';
 import {
   loadStoredTagMap,
   saveStoredTagMap,
@@ -96,6 +97,7 @@ interface SimulationStore {
   abortPlcBatch: () => void;
   setPlcMode: (mode: 'AUTO' | 'MANUAL' | 'MAINTENANCE') => void;
   manualOverrideOutput: (tag: string, value: boolean | number) => void;
+  setRawSiloLevel: (levelM: number) => void;
 }
 
 const initialEngine = new PhysicsEngine(milkPasteurizerSkid);
@@ -618,6 +620,28 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       }
       const { plc } = get();
       plc.outputs[tag] = value;
+      tickOnce();
+    },
+
+    setRawSiloLevel: (levelM: number) => {
+      const { engine } = get();
+      if (engine.rawMilkCircuit) {
+        engine.rawMilkCircuit.setSiloLevelM(levelM);
+      }
+      try {
+        useFatStore.getState().addJournalEntry({
+          scan: get().snapshot?.scan ?? 0,
+          timeFormatted: new Date().toLocaleTimeString(),
+          source: 'SIM',
+          eventType: 'COMMAND',
+          description: `Operator set raw milk silo level to ${levelM.toFixed(1)} m`,
+          tag: 'RAW_SILO_LEVEL',
+          value: levelM,
+          status: 'INFO',
+        });
+      } catch (err) {
+        console.warn('Failed to record silo level journal entry:', err);
+      }
       tickOnce();
     },
   };

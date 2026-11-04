@@ -11,6 +11,7 @@ interface PumpControlsCardProps {
 
 export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, outputs }) => {
   const manualOverrideOutput = useSimulationStore((s) => s.manualOverrideOutput);
+  const setRawSiloLevel = useSimulationStore((s) => s.setRawSiloLevel);
   const injectFault = useSimulationStore((s) => s.injectFault);
   const faults = useSimulationStore((s) => s.faults);
   const snapshot = useSimulationStore((s) => s.snapshot);
@@ -33,7 +34,7 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
   };
 
   const handleSiloLevelChange = (val: number) => {
-    circuit.applyFault('raw_silo_level', val);
+    setRawSiloLevel(val);
   };
 
   const handleToggleFault = (deviceId: string, mode: string, value?: number) => {
