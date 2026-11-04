@@ -104,13 +104,48 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
               </span>
             </div>
 
-            <button
-              onClick={handleTogglePv1}
-              className={`btn ${pv1Pos >= 50 ? 'btn-danger' : 'btn-success'}`}
-              style={{ fontSize: 11, padding: '4px 12px', height: 26, fontWeight: 700 }}
-            >
-              {pv1Pos >= 50 ? 'CLOSE PV-1' : 'OPEN PV-1'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    padding: '2px 5px',
+                    borderRadius: 4,
+                    background: pv1?.zso ? '#dcfce7' : '#f1f5f9',
+                    color: pv1?.zso ? '#15803d' : '#94a3b8',
+                    border: `1px solid ${pv1?.zso ? '#86efac' : '#e2e8f0'}`,
+                  }}
+                  title="ZSO: Limit Switch Open Feedback"
+                >
+                  ZSO {pv1?.zso ? 1 : 0}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    padding: '2px 5px',
+                    borderRadius: 4,
+                    background: pv1?.zsc ? '#fef3c7' : '#f1f5f9',
+                    color: pv1?.zsc ? '#b45309' : '#94a3b8',
+                    border: `1px solid ${pv1?.zsc ? '#fde68a' : '#e2e8f0'}`,
+                  }}
+                  title="ZSC: Limit Switch Closed Feedback"
+                >
+                  ZSC {pv1?.zsc ? 1 : 0}
+                </span>
+              </div>
+
+              <button
+                onClick={handleTogglePv1}
+                className={`btn ${pv1Pos >= 50 ? 'btn-danger' : 'btn-success'}`}
+                style={{ fontSize: 11, padding: '4px 12px', height: 26, fontWeight: 700 }}
+              >
+                {pv1Pos >= 50 ? 'CLOSE PV-1' : 'OPEN PV-1'}
+              </button>
+            </div>
           </div>
 
           <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>

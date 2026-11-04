@@ -35,6 +35,7 @@ export interface ValveConfig extends BaseDeviceConfig {
   travelTimeS: number;       // Time to transit 0% <-> 100%
   passableThresholdPct: number; // Position % above which fluid passes (default 90%)
   failSafe: 'normally_closed' | 'normally_open';
+  kv?: import('./hydraulics/types').NumericParameter<number> | number;
 }
 
 export interface PumpConfig extends BaseDeviceConfig {
@@ -91,7 +92,14 @@ export type FaultMode =
   | 'plate_leak'
   | 'fouling'
   | 'loss_of_hot_water'
-  | 'loss_of_chilled_water';
+  | 'loss_of_chilled_water'
+  | 'seat_leak'
+  | 'zso_fail'
+  | 'zsc_fail'
+  | 'actuator_air_loss'
+  | 'instrument_air_loss'
+  | 'solenoid_power_loss'
+  | 'water_supply_loss';
 
 export interface DeviceFault {
   deviceId: string;
@@ -104,6 +112,8 @@ export interface DevicePhysicalState {
   type: DeviceType;
   positionPct?: number;      // Valves (0 - 100%)
   isOpen?: boolean;          // Valves proof
+  zso?: boolean;             // Open limit switch feedback
+  zsc?: boolean;             // Closed limit switch feedback
   speedPct?: number;         // Pumps (0 - 100%)
   isRunning?: boolean;       // Pumps running status
   volumeL?: number;          // Tanks

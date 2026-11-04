@@ -19,6 +19,7 @@ import type {
 } from './types';
 import { PHEAssemblyModel } from './phe/index';
 import { RawMilkSupplyCircuit } from './circuits/index';
+import { OnOffValveModel, type ValveFaultMode } from './valves/index';
 
 export interface PlantTopology {
   tanks: TankConfig[];
@@ -46,6 +47,15 @@ export class PhysicsEngine {
   // Dedicated Raw Milk Supply Circuit (Silo -> P-RAW -> PV-1 -> Balance Tank)
   public rawMilkCircuit?: RawMilkSupplyCircuit;
 
+  // Reusable On/Off Valve Models (valveId -> OnOffValveModel)
+  private onOffValves: Map<string, OnOffValveModel> = new Map();
+
+  // Engine-level utility supply state
+  public utilities = {
+    instrumentAirOk: true,
+    solenoidPowerOk: true,
+  };
+
   constructor(topology: PlantTopology, stepMs: number = 100) {
     this.topology = topology;
     this.stepMs = stepMs;
@@ -69,6 +79,11 @@ export class PhysicsEngine {
     this.timeMs = 0;
     this.states.clear();
     this.connectionFlows.clear();
+    this.onOffValves.clear();
+    this.utilities = {
+      instrumentAirOk: true,
+      solenoidPowerOk: true,
+    };
 
     if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
       this.pheAssembly = new PHEAssemblyModel();
@@ -91,14 +106,37 @@ export class PhysicsEngine {
       });
     }
 
-    // Initialize valves (start fully closed)
+    // Initialize valves
     for (const valve of this.topology.valves) {
-      this.states.set(valve.id, {
-        id: valve.id,
-        type: valve.type,
-        positionPct: 0.0,
-        isOpen: false,
-      });
+      if (valve.type === 'on_off_valve') {
+        const failPosition = valve.failSafe === 'normally_open' ? 'open' : 'closed';
+        const model = new OnOffValveModel({
+          id: valve.id,
+          tag: valve.tag,
+          travelTimeS: valve.travelTimeS,
+          failPosition,
+          kv: valve.kv ?? 60.0,
+          passableThresholdPct: valve.passableThresholdPct,
+          initialPositionPct: 0.0,
+        });
+        this.onOffValves.set(valve.id, model);
+        const out = model.getState();
+        this.states.set(valve.id, {
+          id: valve.id,
+          type: valve.type,
+          positionPct: out.positionPct,
+          isOpen: out.isOpen,
+          zso: out.zso,
+          zsc: out.zsc,
+        });
+      } else {
+        this.states.set(valve.id, {
+          id: valve.id,
+          type: valve.type,
+          positionPct: 0.0,
+          isOpen: false,
+        });
+      }
     }
 
     // Initialize pumps (stopped)
@@ -123,6 +161,10 @@ export class PhysicsEngine {
   public setFault(fault: DeviceFault): void {
     if (fault.mode === 'none') {
       this.faults.delete(fault.deviceId);
+      const valveModel = this.onOffValves.get(fault.deviceId);
+      if (valveModel) {
+        valveModel.clearAllFaults();
+      }
       if (this.rawMilkCircuit) {
         if (fault.deviceId === 'P-RAW' || fault.deviceId === 'P_RAW') {
           this.rawMilkCircuit.clearAllFaults();
@@ -133,6 +175,10 @@ export class PhysicsEngine {
       }
     } else {
       this.faults.set(fault.deviceId, fault);
+      const valveModel = this.onOffValves.get(fault.deviceId);
+      if (valveModel) {
+        valveModel.applyFault(fault.mode as ValveFaultMode, fault.value);
+      }
       if (this.rawMilkCircuit) {
         if (fault.deviceId === 'P-RAW' || fault.deviceId === 'P_RAW') {
           this.rawMilkCircuit.applyFault(fault.mode, fault.value);
@@ -143,10 +189,19 @@ export class PhysicsEngine {
         }
       }
     }
+
+    // Update utility supply states
+    this.utilities.instrumentAirOk = !Array.from(this.faults.values()).some((f) => f.mode === 'instrument_air_loss');
+    this.utilities.solenoidPowerOk = !Array.from(this.faults.values()).some((f) => f.mode === 'solenoid_power_loss');
   }
 
   public clearAllFaults(): void {
     this.faults.clear();
+    this.utilities.instrumentAirOk = true;
+    this.utilities.solenoidPowerOk = true;
+    for (const valve of this.onOffValves.values()) {
+      valve.clearAllFaults();
+    }
     this.rawMilkCircuit?.clearAllFaults();
   }
 
@@ -208,43 +263,59 @@ export class PhysicsEngine {
   }
 
   private advanceValves(commands: Record<string, boolean | number>, dt: number): void {
+    this.utilities.instrumentAirOk = !Array.from(this.faults.values()).some((f) => f.mode === 'instrument_air_loss');
+    this.utilities.solenoidPowerOk = !Array.from(this.faults.values()).some((f) => f.mode === 'solenoid_power_loss');
+
     for (const valve of this.topology.valves) {
       const state = this.states.get(valve.id);
       if (!state) continue;
 
-      const fault = this.faults.get(valve.id);
-      if (fault?.mode === 'stuck_closed') {
-        state.positionPct = 0;
-        state.isOpen = false;
-        continue;
+      if (valve.type === 'on_off_valve') {
+        const model = this.onOffValves.get(valve.id);
+        if (!model) continue;
+
+        const cmdRaw = commands[`${valve.tag}_CMD`] ?? commands[valve.tag] ?? commands[valve.id];
+        const out = model.step(dt, {
+          command: Boolean(cmdRaw),
+          instrumentAirOk: this.utilities.instrumentAirOk,
+          solenoidPowerOk: this.utilities.solenoidPowerOk,
+        });
+
+        state.positionPct = out.positionPct;
+        state.isOpen = out.isOpen;
+        state.zso = out.zso;
+        state.zsc = out.zsc;
+      } else {
+        // Modulating valve
+        const fault = this.faults.get(valve.id);
+        if (fault?.mode === 'stuck_closed') {
+          state.positionPct = 0;
+          state.isOpen = false;
+          continue;
+        }
+        if (fault?.mode === 'stuck_open') {
+          state.positionPct = 100;
+          state.isOpen = true;
+          continue;
+        }
+
+        const cmdRaw = commands[`${valve.tag}_CMD`] ?? commands[valve.tag] ?? commands[valve.id];
+        const targetPct = typeof cmdRaw === 'number' ? cmdRaw : cmdRaw ? 100 : 0;
+
+        const ratePctPerSec = 100.0 / Math.max(0.1, valve.travelTimeS);
+        const maxDelta = ratePctPerSec * dt;
+
+        const current = state.positionPct ?? 0;
+        let next = current;
+        if (current < targetPct) {
+          next = Math.min(targetPct, current + maxDelta);
+        } else if (current > targetPct) {
+          next = Math.max(targetPct, current - maxDelta);
+        }
+
+        state.positionPct = Number(next.toFixed(2));
+        state.isOpen = state.positionPct >= (valve.passableThresholdPct ?? 90);
       }
-      if (fault?.mode === 'stuck_open') {
-        state.positionPct = 100;
-        state.isOpen = true;
-        continue;
-      }
-
-      // Check command tag (e.g., V101_CMD or tag name directly)
-      const cmdRaw = commands[`${valve.tag}_CMD`] ?? commands[valve.tag] ?? commands[valve.id];
-      const isOnOff = valve.type === 'on_off_valve';
-      const targetPct = isOnOff
-        ? (cmdRaw ? 100 : 0)
-        : (typeof cmdRaw === 'number' ? cmdRaw : cmdRaw ? 100 : 0);
-
-      const ratePctPerSec = 100.0 / Math.max(0.1, valve.travelTimeS);
-      const maxDelta = ratePctPerSec * dt;
-
-      const current = state.positionPct ?? 0;
-      let next = current;
-      if (current < targetPct) {
-        next = Math.min(targetPct, current + maxDelta);
-      } else if (current > targetPct) {
-        next = Math.max(targetPct, current - maxDelta);
-      }
-
-      state.positionPct = Number(next.toFixed(2));
-      // Limit switch / ZSO proofs open at 95% or higher
-      state.isOpen = state.positionPct >= (valve.passableThresholdPct ?? 90);
     }
   }
 
@@ -555,11 +626,11 @@ export class PhysicsEngine {
     // Valves -> Open & Closed feedback (ZSO & ZSC)
     for (const valve of this.topology.valves) {
       const state = this.states.get(valve.id);
-      const isOpen = Boolean(state?.isOpen);
-      const isClosed = (state?.positionPct ?? 0) <= 2;
+      const zso = state?.zso !== undefined ? state.zso : Boolean(state?.isOpen);
+      const zsc = state?.zsc !== undefined ? state.zsc : (state?.positionPct ?? 0) <= 2;
 
-      inputs[`${valve.tag}_ZSO`] = isOpen;
-      inputs[`${valve.tag}_ZSC`] = isClosed;
+      inputs[`${valve.tag}_ZSO`] = zso;
+      inputs[`${valve.tag}_ZSC`] = zsc;
       inputs[`${valve.tag}_POS`] = state?.positionPct ?? 0;
     }
 
@@ -747,5 +818,9 @@ export class PhysicsEngine {
     }
 
     return alarms;
+  }
+
+  public getValveModel(id: string): OnOffValveModel | undefined {
+    return this.onOffValves.get(id);
   }
 }

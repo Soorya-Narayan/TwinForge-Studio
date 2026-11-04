@@ -37,6 +37,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-2',
@@ -46,6 +47,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-3',
@@ -55,6 +57,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 15.0, source: 'placeholder' },
     },
     {
       id: 'PV-4',
@@ -64,6 +67,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-5',
@@ -73,6 +77,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-6',
@@ -91,6 +96,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_open',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-8',
@@ -100,6 +106,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-9',
@@ -109,6 +116,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 1.0,
       passableThresholdPct: 90,
       failSafe: 'normally_open',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-10',
@@ -127,6 +135,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 0.5, // Rapid sanitary trip action
       passableThresholdPct: 90,
       failSafe: 'normally_closed',
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'PV-12',
@@ -136,6 +145,7 @@ export const milkPasteurizerSkid: PlantTopology = {
       travelTimeS: 0.5,
       passableThresholdPct: 90,
       failSafe: 'normally_open', // Fails to divert position
+      kv: { value: 60.0, source: 'placeholder' },
     },
     {
       id: 'SCV-1',
