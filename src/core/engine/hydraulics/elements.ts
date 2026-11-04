@@ -69,22 +69,43 @@ export class PipeElement implements HydraulicElement {
 
 export interface ValveElementConfig {
   id: string;
-  Kv: NumericParameter<number>; // m³/h at 1 bar ΔP with water
+  Kv: NumericParameter<number> | number; // m³/h at 1 bar ΔP with water
   positionPct?: number; // 0 to 100
+  leakKv?: NumericParameter<number> | number; // m³/h leakage Kv when closed
   characteristic?: 'linear';
 }
 
 export class ValveElement implements HydraulicElement {
   public readonly id: string;
-  public readonly Kv: number;
+  public Kv: number;
   public positionPct: number;
+  public leakKv: number;
+  private effectiveKvOverride?: number;
   public readonly characteristic: 'linear';
 
   constructor(config: ValveElementConfig) {
     this.id = config.id;
-    this.Kv = config.Kv.value;
+    this.Kv = typeof config.Kv === 'number' ? config.Kv : config.Kv.value;
     this.positionPct = config.positionPct ?? 100;
+    this.leakKv = config.leakKv ? (typeof config.leakKv === 'number' ? config.leakKv : config.leakKv.value) : 0;
     this.characteristic = config.characteristic ?? 'linear';
+  }
+
+  public setEffectiveKv(effectiveKv: number): void {
+    this.effectiveKvOverride = effectiveKv;
+  }
+
+  public clearEffectiveKv(): void {
+    this.effectiveKvOverride = undefined;
+  }
+
+  public getEffectiveKv(): number {
+    if (this.effectiveKvOverride !== undefined) {
+      return this.effectiveKvOverride;
+    }
+    const x = Math.max(0, Math.min(1, this.positionPct / 100));
+    const fx = x; // Linear characteristic: f(x) = x
+    return Math.max(this.Kv * fx, this.leakKv);
   }
 
   public pressureDropBar(flowLph: number, fluid: FluidState): number {
@@ -92,14 +113,7 @@ export class ValveElement implements HydraulicElement {
       return 0;
     }
 
-    const x = Math.max(0, Math.min(1, this.positionPct / 100));
-    if (x <= 0) {
-      // 0% position blocks flow completely
-      return 1e9;
-    }
-
-    const fx = x; // Linear characteristic: f(x) = x
-    const effectiveKv = this.Kv * fx;
+    const effectiveKv = this.getEffectiveKv();
     if (effectiveKv <= 1e-6) {
       return 1e9;
     }

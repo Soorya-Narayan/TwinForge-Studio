@@ -583,10 +583,13 @@ export class PhysicsEngine {
         const cmdRaw = commands['P_RAW_START'] ?? commands['P_RAW'] ?? commands['P-RAW'];
         const spRaw = commands['P_RAW_SPEED_SP'] ?? commands['P_RAW_SPD_SP'];
         const pv1Pos = pv1?.positionPct ?? (pv1?.isOpen ? 100 : 0);
+        const pv1Model = this.onOffValves.get('PV-1');
+        const pv1EffectiveKv = pv1Model?.getEffectiveKv();
         const circuitOut = this.rawMilkCircuit.step(dt, {
           startCmd: Boolean(cmdRaw),
           speedSpPct: typeof spRaw === 'number' ? spRaw : undefined,
           pv1PositionPct: pv1Pos,
+          pv1EffectiveKv,
           balanceTankLevelPct: balTank?.levelPct,
         });
         rawFlow = circuitOut.flowLpm;

@@ -242,6 +242,7 @@ export class RawMilkSupplyCircuit {
       pv1PositionPct: number;
       balanceTankLevelPct?: number;
       fluidTempC?: number;
+      pv1EffectiveKv?: number;
     }
   ): CircuitOutputs {
     const {
@@ -249,6 +250,7 @@ export class RawMilkSupplyCircuit {
       speedSpPct,
       pv1PositionPct,
       fluidTempC = this.siloTemperatureC,
+      pv1EffectiveKv,
     } = inputs;
 
     const fluid: FluidState = {
@@ -256,9 +258,15 @@ export class RawMilkSupplyCircuit {
       temperatureC: fluidTempC,
     };
 
-    // Update PV-1 position
+    // Update PV-1 position and effective Kv
     this.pv1Valve.positionPct = pv1PositionPct;
+    if (pv1EffectiveKv !== undefined) {
+      this.pv1Valve.setEffectiveKv(pv1EffectiveKv);
+    } else {
+      this.pv1Valve.clearEffectiveKv();
+    }
     const isPv1Passable = pv1PositionPct > 2;
+    const canPassFlow = this.pv1Valve.getEffectiveKv() > 1e-6;
 
     // Apply suction blockage fault extra K
     this.suctionPipe.fittingsK = 3.0 + this.pump.getSuctionBlockageExtraK();
@@ -335,8 +343,8 @@ export class RawMilkSupplyCircuit {
     let pDischargeBar = pSiloAbsBar;
     let nodePressuresBar: Record<string, number> | undefined;
 
-    if (isPumpRunning && isPv1Passable) {
-      // 1. Pump is running and PV-1 is passable: solve operating point
+    if (isPumpRunning && canPassFlow) {
+      // 1. Pump is running and PV-1 has passable flow or seat leakage: solve operating point
       const elements = [
         this.siloToSuction,
         this.suctionPipe,
@@ -369,7 +377,7 @@ export class RawMilkSupplyCircuit {
         fluid,
         {
           maxFlowLph: this.pump.ratedFlowLph * 1.5,
-          toleranceLph: 1.0,
+          toleranceLph: 0.1,
           inletPressureBar: pAtmBar,
           pumpIndex: 2,
           pumpId: 'pump',
@@ -392,8 +400,8 @@ export class RawMilkSupplyCircuit {
       // Read suction and discharge pressures from solver's node pressures as single source of truth
       pSuctionBar = nodePressuresBar['PIPE-SUCTION'];
       pDischargeBar = nodePressuresBar['pump'];
-    } else if (isPumpRunning && !isPv1Passable) {
-      // 2. PV-1 is closed while pump runs: flow = 0, discharge pressure = shut-off head
+    } else if (isPumpRunning && !canPassFlow) {
+      // 2. PV-1 is completely closed and non-passable (effectiveKv <= 1e-6): flow = 0, discharge pressure = shut-off head
       solvedFlowLph = 0;
       pSuctionBar = Number(pSiloAbsBar.toFixed(4));
       const shutOffHeadM = this.pump.getHeadM(0, currentSpeedRatio);
