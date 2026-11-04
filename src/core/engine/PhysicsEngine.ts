@@ -18,7 +18,7 @@ import type {
   HeatExchangerConfig,
 } from './types';
 import { PHEAssemblyModel } from './phe/index';
-import { RawMilkSupplyCircuit } from './circuits/index';
+import { RawMilkSupplyCircuit, WaterInletCircuit } from './circuits/index';
 import { OnOffValveModel, type ValveFaultMode } from './valves/index';
 
 export interface PlantTopology {
@@ -46,6 +46,11 @@ export class PhysicsEngine {
 
   // Dedicated Raw Milk Supply Circuit (Silo -> P-RAW -> PV-1 -> Balance Tank)
   public rawMilkCircuit?: RawMilkSupplyCircuit;
+
+  // Dedicated Water Inlet Supply Circuit (Mains -> Pipe -> PV-2 -> Balance Tank)
+  public waterInletCircuit?: WaterInletCircuit;
+  private lastWaterInflowLph: number = 0;
+  private lastWaterTempC: number = 25.0;
 
   // Reusable On/Off Valve Models (valveId -> OnOffValveModel)
   private onOffValves: Map<string, OnOffValveModel> = new Map();
@@ -89,10 +94,14 @@ export class PhysicsEngine {
       this.pheAssembly = new PHEAssemblyModel();
       const pRawPump = this.topology.pumps.find((p) => p.id === 'P-RAW');
       this.rawMilkCircuit = new RawMilkSupplyCircuit(pRawPump?.centrifugalConfig);
+      this.waterInletCircuit = new WaterInletCircuit();
     } else {
       this.pheAssembly = undefined;
       this.rawMilkCircuit = undefined;
+      this.waterInletCircuit = undefined;
     }
+    this.lastWaterInflowLph = 0;
+    this.lastWaterTempC = 25.0;
 
     // Initialize tanks
     for (const tank of this.topology.tanks) {
@@ -173,6 +182,11 @@ export class PhysicsEngine {
           this.rawMilkCircuit.clearFault('raw_silo_level');
         }
       }
+      if (this.waterInletCircuit) {
+        if (fault.deviceId === 'PV-2' || fault.deviceId === 'WATER_SUPPLY') {
+          this.waterInletCircuit.clearFault('water_supply_loss');
+        }
+      }
     } else {
       this.faults.set(fault.deviceId, fault);
       const valveModel = this.onOffValves.get(fault.deviceId);
@@ -186,6 +200,11 @@ export class PhysicsEngine {
           this.rawMilkCircuit.applyFault('raw_supply_empty', fault.value);
         } else if (fault.mode === 'raw_silo_level') {
           this.rawMilkCircuit.applyFault('raw_silo_level', fault.value);
+        }
+      }
+      if (this.waterInletCircuit) {
+        if (fault.mode === 'water_supply_loss') {
+          this.waterInletCircuit.applyFault('water_supply_loss');
         }
       }
     }
@@ -203,6 +222,7 @@ export class PhysicsEngine {
       valve.clearAllFaults();
     }
     this.rawMilkCircuit?.clearAllFaults();
+    this.waterInletCircuit?.clearAllFaults();
   }
 
   public getFaults(): DeviceFault[] {
@@ -259,6 +279,8 @@ export class PhysicsEngine {
         outputs: { ...plcCommands },
       },
       alarms: this.deriveAlarms(devicesRecord),
+      waterInflowLph: this.lastWaterInflowLph,
+      waterTempC: this.lastWaterTempC,
     };
   }
 
@@ -601,12 +623,30 @@ export class PhysicsEngine {
         this.connectionFlows.set('PIPE-RAW-IN', Math.max(0, rawFlow));
         this.connectionFlows.set('PIPE-PV1-BAL', Math.max(0, rawFlow));
       }
+
+      let waterFlowLpm = 0;
+      if (this.waterInletCircuit) {
+        const pv2 = this.states.get('PV-2');
+        const pv2Pos = pv2?.positionPct ?? (pv2?.isOpen ? 100 : 0);
+        const pv2Model = this.onOffValves.get('PV-2');
+        const pv2EffectiveKv = pv2Model?.getEffectiveKv();
+        const waterOut = this.waterInletCircuit.step(dt, {
+          pv2PositionPct: pv2Pos,
+          pv2EffectiveKv,
+        });
+        this.lastWaterInflowLph = waterOut.flowLph;
+        this.lastWaterTempC = waterOut.waterTempC;
+        waterFlowLpm = waterOut.flowLpm;
+        this.connectionFlows.set('PIPE-WATER-IN', Math.max(0, waterFlowLpm));
+      } else {
+        this.lastWaterInflowLph = 0;
+      }
       const divertFlow = pv12?.isOpen ? feedFlow : 0;
       const forwardFlow = pv11?.isOpen ? feedFlow : 0;
 
       // Balance Tank volume integration
       if (balTank) {
-        const netBalFlow = rawFlow - feedFlow + divertFlow;
+        const netBalFlow = rawFlow + waterFlowLpm - feedFlow + divertFlow;
         const deltaBal = netBalFlow * dtMin;
         const newBalVol = Math.max(50, Math.min(600, (balTank.volumeL ?? 450) + deltaBal));
         balTank.volumeL = Number(newBalVol.toFixed(4));
@@ -814,6 +854,15 @@ export class PhysicsEngine {
     if (this.rawMilkCircuit) {
       const circuitOut = this.rawMilkCircuit.getOutputs();
       for (const a of circuitOut.alarms) {
+        if (!alarms.includes(a)) {
+          alarms.push(a);
+        }
+      }
+    }
+
+    if (this.waterInletCircuit) {
+      const waterOut = this.waterInletCircuit.getOutputs();
+      for (const a of waterOut.alarms) {
         if (!alarms.includes(a)) {
           alarms.push(a);
         }

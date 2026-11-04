@@ -3,3 +3,4 @@
  */
 
 export * from './RawMilkSupplyCircuit';
+export * from './WaterInletCircuit';

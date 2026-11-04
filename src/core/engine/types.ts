@@ -134,4 +134,6 @@ export interface SimulationSnapshot {
     outputs: Record<string, boolean | number>; // PLC to Sim (Commands)
   };
   alarms: string[];
+  waterInflowLph?: number;
+  waterTempC?: number;
 }
