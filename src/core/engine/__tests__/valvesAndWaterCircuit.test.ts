@@ -233,6 +233,7 @@ describe('Valves & Water Inlet Circuit Integration Tests (Part 5)', () => {
       balTankState.volumeL = 100.0;
       balTankState.levelPct = (100.0 / 600.0) * 100;
     }
+    engine.getBalanceTank()?.reset((100.0 / 600.0) * 100);
 
     const initVol = (engine as any).states.get('TK-BALANCE')?.volumeL ?? 100;
 

@@ -66,6 +66,24 @@ export const FaultDeck: React.FC = () => {
       fault: { deviceId: 'TK-BALANCE', mode: 'sensor_offset' as const, value: -40 },
     },
     {
+      title: 'TK-BALANCE Low Level Switch LS1 Stuck Off',
+      category: 'Instrumentation',
+      desc: 'Simulates LS1 switch contact failure stuck in off (false) state.',
+      fault: { deviceId: 'TK-BALANCE', mode: 'ls1_fail' as const, value: 0 },
+    },
+    {
+      title: 'TK-BALANCE High Level Switch LS2 Stuck On',
+      category: 'Instrumentation',
+      desc: 'Simulates LS2 switch stuck in active high-level on (true) state.',
+      fault: { deviceId: 'TK-BALANCE', mode: 'ls2_fail' as const, value: 1 },
+    },
+    {
+      title: 'TK-BALANCE Tank Shell Rupture (Sanitary Leak)',
+      category: 'Mechanical Tank',
+      desc: 'Simulates tank leak discharging fluid at 500 L/h.',
+      fault: { deviceId: 'TK-BALANCE', mode: 'tank_leak' as const, value: 500 },
+    },
+    {
       title: 'PHE Plate Defect / Gasket Rupture (Plate Leak)',
       category: 'Plate Heat Exchanger',
       desc: 'Simulates a perforated plate between streams. Tests sanitary cross-contamination differential pressure rule (PT4 > PT2).',

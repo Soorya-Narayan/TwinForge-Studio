@@ -99,7 +99,10 @@ export type FaultMode =
   | 'actuator_air_loss'
   | 'instrument_air_loss'
   | 'solenoid_power_loss'
-  | 'water_supply_loss';
+  | 'water_supply_loss'
+  | 'ls1_fail'
+  | 'ls2_fail'
+  | 'tank_leak';
 
 export interface DeviceFault {
   deviceId: string;
@@ -122,6 +125,14 @@ export interface DevicePhysicalState {
   conductivityMs?: number;   // CIP solutions
   flowRateLpm?: number;      // Pipes / Transmitters
   pressureBar?: number;
+  composition?: {
+    waterFrac: number;
+    productFrac: number;
+    fatPct: number;
+  };
+  overflowTotalL?: number;
+  productOverflowTotalL?: number;
+  airEntrainmentFrac?: number;
 }
 
 export interface SimulationSnapshot {
@@ -136,4 +147,22 @@ export interface SimulationSnapshot {
   alarms: string[];
   waterInflowLph?: number;
   waterTempC?: number;
+  balanceTank?: {
+    volumeL: number;
+    levelPct: number;
+    temperatureC: number;
+    composition: {
+      waterFrac: number;
+      productFrac: number;
+      fatPct: number;
+    };
+    actualOutflowLph: number;
+    overflowLph: number;
+    overflowTotalL: number;
+    productOverflowTotalL: number;
+    ls1: boolean;
+    ls2: boolean;
+    airEntrainmentFrac: number;
+    alarms: string[];
+  };
 }

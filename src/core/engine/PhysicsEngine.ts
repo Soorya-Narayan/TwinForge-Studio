@@ -21,6 +21,8 @@ import type {
 import { PHEAssemblyModel } from './phe/index';
 import { RawMilkSupplyCircuit, WaterInletCircuit } from './circuits/index';
 import { OnOffValveModel, type ValveFaultMode } from './valves/index';
+import { BalanceTankModel, DEFAULT_BALANCE_TANK_CONFIG, type BalanceTankFaultMode, type InflowStream } from './tanks/index';
+import { RAW_MILK_COMPOSITION, MAINS_WATER_COMPOSITION } from './fluids/index';
 
 export interface PlantTopology {
   tanks: TankConfig[];
@@ -56,6 +58,10 @@ export class PhysicsEngine {
   // Reusable On/Off Valve Models (valveId -> OnOffValveModel)
   private onOffValves: Map<string, OnOffValveModel> = new Map();
 
+  // Balance Tank Model (TK-BALANCE)
+  public balanceTank?: BalanceTankModel;
+  public divertReturnPoint: 'after_holding_tube' | 'after_chilling' = 'after_holding_tube';
+
   // Engine-level utility supply state
   public utilities = {
     instrumentAirOk: true,
@@ -80,6 +86,14 @@ export class PhysicsEngine {
     return this.topology;
   }
 
+  public getBalanceTank(): BalanceTankModel | undefined {
+    return this.balanceTank;
+  }
+
+  public setDivertReturnPoint(point: 'after_holding_tube' | 'after_chilling'): void {
+    this.divertReturnPoint = point;
+  }
+
   public reset(): void {
     this.scan = 0;
     this.timeMs = 0;
@@ -92,11 +106,18 @@ export class PhysicsEngine {
     };
 
     if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
+      const balCfg = this.topology.tanks.find((t) => t.id === 'TK-BALANCE');
+      this.balanceTank = new BalanceTankModel({
+        ...DEFAULT_BALANCE_TANK_CONFIG,
+        initialLevelPct: balCfg?.initialLevelPct ?? 75,
+        initialTempC: balCfg?.initialTempC ?? 4.0,
+      });
       this.pheAssembly = new PHEAssemblyModel();
       const pRawPump = this.topology.pumps.find((p) => p.id === 'P-RAW');
       this.rawMilkCircuit = new RawMilkSupplyCircuit(pRawPump?.centrifugalConfig);
       this.waterInletCircuit = new WaterInletCircuit();
     } else {
+      this.balanceTank = undefined;
       this.pheAssembly = undefined;
       this.rawMilkCircuit = undefined;
       this.waterInletCircuit = undefined;
@@ -204,6 +225,9 @@ export class PhysicsEngine {
           this.waterInletCircuit.clearFault('water_supply_loss');
         }
       }
+      if (this.balanceTank && (fault.deviceId === 'TK-BALANCE' || fault.deviceId === 'TK_BAL')) {
+        this.balanceTank.clearAllFaults();
+      }
     } else {
       this.faults.set(this.faultKey(fault.deviceId, fault.mode), fault);
       const valveModel = this.onOffValves.get(fault.deviceId);
@@ -222,6 +246,11 @@ export class PhysicsEngine {
       if (this.waterInletCircuit) {
         if (fault.mode === 'water_supply_loss') {
           this.waterInletCircuit.applyFault('water_supply_loss');
+        }
+      }
+      if (this.balanceTank && (fault.deviceId === 'TK-BALANCE' || fault.deviceId === 'TK_BAL')) {
+        if (fault.mode === 'ls1_fail' || fault.mode === 'ls2_fail' || fault.mode === 'tank_leak') {
+          this.balanceTank.applyFault(fault.mode, fault.value);
         }
       }
     }
@@ -256,6 +285,11 @@ export class PhysicsEngine {
         this.waterInletCircuit.clearFault('water_supply_loss');
       }
     }
+    if (this.balanceTank && (deviceId === 'TK-BALANCE' || deviceId === 'TK_BAL')) {
+      if (mode === 'ls1_fail' || mode === 'ls2_fail' || mode === 'tank_leak') {
+        this.balanceTank.clearFault(mode as BalanceTankFaultMode);
+      }
+    }
     this.updateUtilityStates();
   }
 
@@ -267,6 +301,7 @@ export class PhysicsEngine {
     }
     this.rawMilkCircuit?.clearAllFaults();
     this.waterInletCircuit?.clearAllFaults();
+    this.balanceTank?.clearAllFaults();
   }
 
   public getFaults(): DeviceFault[] {
@@ -330,6 +365,7 @@ export class PhysicsEngine {
       alarms: this.deriveAlarms(devicesRecord),
       waterInflowLph: this.lastWaterInflowLph,
       waterTempC: this.lastWaterTempC,
+      balanceTank: this.balanceTank ? this.balanceTank.getOutputs() : undefined,
     };
   }
 
@@ -560,64 +596,182 @@ export class PhysicsEngine {
       state.levelPct = Number(((newVol / tank.capacityL) * 100).toFixed(2));
     }
 
-    // Heat Exchangers Integration
-    if (this.pheAssembly) {
-      const feedPump = this.states.get('P-FEED');
+    // Specialized Continuous Dairy Pasteurizer Hydraulics, Balance Tank & PHE Dynamics
+    if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE') && this.balanceTank) {
+      const balTank = this.states.get('TK-BALANCE');
+      const prodTank = this.states.get('TK-PRODUCT');
+      const pFeed = this.states.get('P-FEED');
       const hwPump = this.states.get('P-HOTWATER');
       const scvValve = this.states.get('SCV-1');
       const pv10Valve = this.states.get('PV-10');
-      const pv11Valve = this.states.get('PV-11');
-      const pv12Valve = this.states.get('PV-12');
-      const balTank = this.states.get('TK-BALANCE');
+      const pv1 = this.states.get('PV-1');
+      const pv2 = this.states.get('PV-2');
+      const pv11 = this.states.get('PV-11');
+      const pv12 = this.states.get('PV-12');
 
-      const feedPumpSpd = (feedPump?.speedPct ?? 0) / 100.0;
-      const feedFlowLph = feedPumpSpd * 10000.0;
+      // 1. Raw milk supply circuit
+      let rawFlowLpm = 0;
+      if (this.rawMilkCircuit) {
+        const cmdRaw = commands['P_RAW_START'] ?? commands['P_RAW'] ?? commands['P-RAW'];
+        const spRaw = commands['P_RAW_SPEED_SP'] ?? commands['P_RAW_SPD_SP'];
+        const pv1Pos = pv1?.positionPct ?? (pv1?.isOpen ? 100 : 0);
+        const pv1Model = this.onOffValves.get('PV-1');
+        const pv1EffectiveKv = pv1Model?.getEffectiveKv();
+        const currentBalLevel = this.balanceTank.getOutputs().levelPct;
+        const circuitOut = this.rawMilkCircuit.step(dt, {
+          startCmd: Boolean(cmdRaw),
+          speedSpPct: typeof spRaw === 'number' ? spRaw : undefined,
+          pv1PositionPct: pv1Pos,
+          pv1EffectiveKv,
+          balanceTankLevelPct: currentBalLevel,
+        });
+        rawFlowLpm = circuitOut.flowLpm;
+        const pRaw = this.states.get('P-RAW');
+        if (pRaw) {
+          pRaw.speedPct = circuitOut.pumpState.speedPct;
+          pRaw.isRunning = (circuitOut.pumpState.speedPct ?? 0) > 10;
+        }
+        this.connectionFlows.set('PIPE-RAW-IN', Math.max(0, rawFlowLpm));
+        this.connectionFlows.set('PIPE-PV1-BAL', Math.max(0, rawFlowLpm));
+      }
 
-      const hwPumpSpeed = (hwPump?.speedPct ?? 0) / 100.0;
-      const steamOpening = (scvValve?.positionPct ?? 0) / 100.0;
-      const hwFlowLph = hwPumpSpeed * 12000.0;
-      const hwSupplyTemp = hwPumpSpeed > 0.05 ? (75.0 + steamOpening * 20.0) : 25.0;
+      // 2. Water inlet circuit
+      let waterFlowLpm = 0;
+      let waterFlowLph = 0;
+      let waterTempC = 25.0;
+      if (this.waterInletCircuit) {
+        const pv2Pos = pv2?.positionPct ?? (pv2?.isOpen ? 100 : 0);
+        const pv2Model = this.onOffValves.get('PV-2');
+        const pv2EffectiveKv = pv2Model?.getEffectiveKv();
+        const waterOut = this.waterInletCircuit.step(dt, {
+          pv2PositionPct: pv2Pos,
+          pv2EffectiveKv,
+        });
+        this.lastWaterInflowLph = waterOut.flowLph;
+        this.lastWaterTempC = waterOut.waterTempC;
+        waterFlowLph = waterOut.flowLph;
+        waterTempC = waterOut.waterTempC;
+        waterFlowLpm = waterOut.flowLpm;
+        this.connectionFlows.set('PIPE-WATER-IN', Math.max(0, waterFlowLpm));
+      } else {
+        this.lastWaterInflowLph = 0;
+      }
 
-      const cwValveOpen = Boolean(pv10Valve?.isOpen ?? true);
-      const cwFlowLph = cwValveOpen ? 12000.0 : 0.0;
-      const cwSupplyTemp = 1.5;
+      // 3. Requested feed flow and diversion return
+      const feedPumpSpd = (pFeed?.speedPct ?? 0) / 100.0;
+      const requestedFeedFlowLph = feedPumpSpd * 10000.0;
+      const isDiverting = Boolean(pv12?.isOpen);
+      const divertFlowLph = isDiverting ? requestedFeedFlowLph : 0.0;
 
-      const isForward = Boolean(pv11Valve?.isOpen) && !pv12Valve?.isOpen && feedFlowLph > 500;
+      let divertTempC = 88.0;
+      if (this.pheAssembly) {
+        if (this.divertReturnPoint === 'after_chilling') {
+          divertTempC = this.pheAssembly.chilling.getMetrics().tempColdOutC || 4.0;
+        } else {
+          divertTempC = this.pheAssembly.getOverallMetrics().holdingTubeExitTempC || 88.0;
+        }
+      }
 
-      // Extract fault states
-      const foulingFault = this.getFault('PHE-HEATING', 'fouling') ?? this.getFault('PHE', 'fouling');
-      const foulingMult = foulingFault ? (foulingFault.value ?? 3.0) : 1.0;
-      const leakFault = this.getFault('PHE-HEATING', 'plate_leak') ?? this.getFault('PHE', 'plate_leak');
-      const leakPct = leakFault ? (leakFault.value ?? 50) : 0;
-      const lossHw = this.hasFault('PHE-HEATING', 'loss_of_hot_water') || this.hasFault('PHE', 'loss_of_hot_water') || hwPumpSpeed < 0.05;
-      const lossCw = this.hasFault('PHE-HEATING', 'loss_of_chilled_water') || this.hasFault('PHE', 'loss_of_chilled_water') || !cwValveOpen;
+      // Build Inflows to Balance Tank
+      const inflows: InflowStream[] = [];
+      if (rawFlowLpm > 0) {
+        inflows.push({
+          id: 'RAW_MILK',
+          flowLph: rawFlowLpm * 60.0,
+          tempC: 4.0,
+          composition: RAW_MILK_COMPOSITION,
+        });
+      }
+      if (waterFlowLph > 0) {
+        inflows.push({
+          id: 'WATER',
+          flowLph: waterFlowLph,
+          tempC: waterTempC,
+          composition: MAINS_WATER_COMPOSITION,
+        });
+      }
+      if (isDiverting && divertFlowLph > 0) {
+        inflows.push({
+          id: 'DIVERT_RETURN',
+          flowLph: divertFlowLph,
+          tempC: divertTempC,
+          composition: this.balanceTank.getComposition(),
+        });
+      }
 
-      const metrics = this.pheAssembly.step(dt, {
-        feedFlowRateLph: feedFlowLph,
-        rawMilkTempC: balTank?.temperatureC ?? 4.0,
-        hotWaterFlowRateLph: hwFlowLph,
-        hotWaterSupplyTempC: hwSupplyTemp,
-        chilledWaterFlowRateLph: cwFlowLph,
-        chilledWaterSupplyTempC: cwSupplyTemp,
-        isForwardFlow: isForward,
-        foulingMultiplier: foulingMult,
-        plateLeakSizePct: leakPct,
-        lossOfHotWater: lossHw,
-        lossOfChilledWater: lossCw,
+      // 4. Step Balance Tank model
+      const balTankOut = this.balanceTank.step(dt, {
+        inflows,
+        requestedOutflowLph: requestedFeedFlowLph,
       });
 
-      // Update simulated device states
-      const chillState = this.states.get('PHE-CHILLING');
-      if (chillState) chillState.temperatureC = metrics.chilling.tempHotOutC;
+      if (balTank) {
+        balTank.volumeL = balTankOut.volumeL;
+        balTank.levelPct = balTankOut.levelPct;
+        balTank.temperatureC = balTankOut.temperatureC;
+        balTank.composition = balTankOut.composition;
+        balTank.overflowTotalL = balTankOut.overflowTotalL;
+        balTank.productOverflowTotalL = balTankOut.productOverflowTotalL;
+        balTank.airEntrainmentFrac = balTankOut.airEntrainmentFrac;
+      }
 
-      const reg1State = this.states.get('PHE-REG01');
-      if (reg1State) reg1State.temperatureC = metrics.reg01.tempColdOutC;
+      const actualFeedFlowLph = balTankOut.actualOutflowLph;
 
-      const reg2State = this.states.get('PHE-REG02');
-      if (reg2State) reg2State.temperatureC = metrics.reg02.tempColdOutC;
+      // 5. Step PHE Assembly with actual feed flow and tank temperature
+      if (this.pheAssembly) {
+        const hwPumpSpeed = (hwPump?.speedPct ?? 0) / 100.0;
+        const steamOpening = (scvValve?.positionPct ?? 0) / 100.0;
+        const hwFlowLph = hwPumpSpeed * 12000.0;
+        const hwSupplyTemp = hwPumpSpeed > 0.05 ? 75.0 + steamOpening * 20.0 : 25.0;
 
-      const heatState = this.states.get('PHE-HEATING');
-      if (heatState) heatState.temperatureC = metrics.heating.tempColdOutC;
+        const cwValveOpen = Boolean(pv10Valve?.isOpen ?? true);
+        const cwFlowLph = cwValveOpen ? 12000.0 : 0.0;
+        const cwSupplyTemp = 1.5;
+
+        const isForward = Boolean(pv11?.isOpen) && !isDiverting && actualFeedFlowLph > 500;
+
+        const foulingFault = this.getFault('PHE-HEATING', 'fouling') ?? this.getFault('PHE', 'fouling');
+        const foulingMult = foulingFault ? foulingFault.value ?? 3.0 : 1.0;
+        const leakFault = this.getFault('PHE-HEATING', 'plate_leak') ?? this.getFault('PHE', 'plate_leak');
+        const leakPct = leakFault ? leakFault.value ?? 50 : 0;
+        const lossHw = this.hasFault('PHE-HEATING', 'loss_of_hot_water') || this.hasFault('PHE', 'loss_of_hot_water') || hwPumpSpeed < 0.05;
+        const lossCw = this.hasFault('PHE-HEATING', 'loss_of_chilled_water') || this.hasFault('PHE', 'loss_of_chilled_water') || !cwValveOpen;
+
+        const metrics = this.pheAssembly.step(dt, {
+          feedFlowRateLph: actualFeedFlowLph,
+          rawMilkTempC: balTankOut.temperatureC,
+          hotWaterFlowRateLph: hwFlowLph,
+          hotWaterSupplyTempC: hwSupplyTemp,
+          chilledWaterFlowRateLph: cwFlowLph,
+          chilledWaterSupplyTempC: cwSupplyTemp,
+          isForwardFlow: isForward,
+          foulingMultiplier: foulingMult,
+          plateLeakSizePct: leakPct,
+          lossOfHotWater: lossHw,
+          lossOfChilledWater: lossCw,
+        });
+
+        const chillState = this.states.get('PHE-CHILLING');
+        if (chillState) chillState.temperatureC = metrics.chilling.tempHotOutC;
+
+        const reg1State = this.states.get('PHE-REG01');
+        if (reg1State) reg1State.temperatureC = metrics.reg01.tempColdOutC;
+
+        const reg2State = this.states.get('PHE-REG02');
+        if (reg2State) reg2State.temperatureC = metrics.reg02.tempColdOutC;
+
+        const heatState = this.states.get('PHE-HEATING');
+        if (heatState) heatState.temperatureC = metrics.heating.tempColdOutC;
+      }
+
+      // 6. Product Storage Silo volume integration
+      const forwardFlowLpm = (pv11?.isOpen && !isDiverting) ? (actualFeedFlowLph / 60.0) : 0;
+      if (prodTank && forwardFlowLpm > 0) {
+        const deltaProd = forwardFlowLpm * dtMin;
+        const newProdVol = Math.min(10000, (prodTank.volumeL ?? 1000) + deltaProd);
+        prodTank.volumeL = Number(newProdVol.toFixed(2));
+        prodTank.levelPct = Number(((newProdVol / 10000) * 100).toFixed(2));
+      }
     } else {
       // Fallback for non-pasteurizer topologies
       for (const hx of this.topology.exchangers) {
@@ -634,78 +788,6 @@ export class PhysicsEngine {
           const currentTemp = state.temperatureC ?? 20.0;
           state.temperatureC = Number((currentTemp + (steamTemp - currentTemp) * 0.20 * dt).toFixed(2));
         }
-      }
-    }
-
-    // Specialized Dairy Pasteurizer Tank Mass Dynamics
-    if (this.topology.tanks.some((t) => t.id === 'TK-BALANCE')) {
-      const balTank = this.states.get('TK-BALANCE');
-      const prodTank = this.states.get('TK-PRODUCT');
-      const pFeed = this.states.get('P-FEED');
-      const pv1 = this.states.get('PV-1');
-      const pv11 = this.states.get('PV-11');
-      const pv12 = this.states.get('PV-12');
-
-      const feedFlow = ((pFeed?.speedPct ?? 0) / 100) * 166.7;
-      let rawFlow = 0;
-      if (this.rawMilkCircuit) {
-        const cmdRaw = commands['P_RAW_START'] ?? commands['P_RAW'] ?? commands['P-RAW'];
-        const spRaw = commands['P_RAW_SPEED_SP'] ?? commands['P_RAW_SPD_SP'];
-        const pv1Pos = pv1?.positionPct ?? (pv1?.isOpen ? 100 : 0);
-        const pv1Model = this.onOffValves.get('PV-1');
-        const pv1EffectiveKv = pv1Model?.getEffectiveKv();
-        const circuitOut = this.rawMilkCircuit.step(dt, {
-          startCmd: Boolean(cmdRaw),
-          speedSpPct: typeof spRaw === 'number' ? spRaw : undefined,
-          pv1PositionPct: pv1Pos,
-          pv1EffectiveKv,
-          balanceTankLevelPct: balTank?.levelPct,
-        });
-        rawFlow = circuitOut.flowLpm;
-        const pRaw = this.states.get('P-RAW');
-        if (pRaw) {
-          pRaw.speedPct = circuitOut.pumpState.speedPct;
-          pRaw.isRunning = (circuitOut.pumpState.speedPct ?? 0) > 10;
-        }
-        this.connectionFlows.set('PIPE-RAW-IN', Math.max(0, rawFlow));
-        this.connectionFlows.set('PIPE-PV1-BAL', Math.max(0, rawFlow));
-      }
-
-      let waterFlowLpm = 0;
-      if (this.waterInletCircuit) {
-        const pv2 = this.states.get('PV-2');
-        const pv2Pos = pv2?.positionPct ?? (pv2?.isOpen ? 100 : 0);
-        const pv2Model = this.onOffValves.get('PV-2');
-        const pv2EffectiveKv = pv2Model?.getEffectiveKv();
-        const waterOut = this.waterInletCircuit.step(dt, {
-          pv2PositionPct: pv2Pos,
-          pv2EffectiveKv,
-        });
-        this.lastWaterInflowLph = waterOut.flowLph;
-        this.lastWaterTempC = waterOut.waterTempC;
-        waterFlowLpm = waterOut.flowLpm;
-        this.connectionFlows.set('PIPE-WATER-IN', Math.max(0, waterFlowLpm));
-      } else {
-        this.lastWaterInflowLph = 0;
-      }
-      const divertFlow = pv12?.isOpen ? feedFlow : 0;
-      const forwardFlow = pv11?.isOpen ? feedFlow : 0;
-
-      // Balance Tank volume integration
-      if (balTank) {
-        const netBalFlow = rawFlow + waterFlowLpm - feedFlow + divertFlow;
-        const deltaBal = netBalFlow * dtMin;
-        const newBalVol = Math.max(50, Math.min(600, (balTank.volumeL ?? 450) + deltaBal));
-        balTank.volumeL = Number(newBalVol.toFixed(4));
-        balTank.levelPct = Number(((newBalVol / 600) * 100).toFixed(2));
-      }
-
-      // Product Storage Silo volume integration
-      if (prodTank && forwardFlow > 0) {
-        const deltaProd = forwardFlow * dtMin;
-        const newProdVol = Math.min(10000, (prodTank.volumeL ?? 1000) + deltaProd);
-        prodTank.volumeL = Number(newProdVol.toFixed(2));
-        prodTank.levelPct = Number(((newProdVol / 10000) * 100).toFixed(2));
       }
     }
   }
@@ -860,12 +942,20 @@ export class PhysicsEngine {
       }
 
       // Flowmeter (0 - 12,000 LPH, rated 10,000 LPH)
-      inputs['FM'] = Number(((feedSpd / 100) * 10000).toFixed(0)); // LPH
+      const feedFlowLph = this.balanceTank ? this.balanceTank.getOutputs().actualOutflowLph : ((feedSpd / 100) * 10000);
+      inputs['FM'] = Number(feedFlowLph.toFixed(0)); // LPH
 
       // Level Transmitters & Switches
-      inputs['LT1'] = Number(balLevel.toFixed(1));
-      inputs['LS1'] = balLevel < 15; // Low level switch cutoff
-      inputs['LS2'] = balLevel > 95; // High level switch cutoff
+      if (this.balanceTank) {
+        const balOut = this.balanceTank.getOutputs();
+        inputs['LT1'] = Number(balOut.levelPct.toFixed(1));
+        inputs['LS1'] = balOut.ls1;
+        inputs['LS2'] = balOut.ls2;
+      } else {
+        inputs['LT1'] = Number(balLevel.toFixed(1));
+        inputs['LS1'] = balLevel < 15; // Low level switch cutoff
+        inputs['LS2'] = balLevel > 95; // High level switch cutoff
+      }
     }
 
     return inputs;
@@ -895,6 +985,15 @@ export class PhysicsEngine {
       }
       if (!metrics.isLegalHoldingTime && isFinite(metrics.holdingTubeResidenceTimeS) && metrics.holdingTubeResidenceTimeS > 0) {
         alarms.push('ALARM_LEGAL_UNDER_HOLDING_TIME');
+      }
+    }
+
+    if (this.balanceTank) {
+      const balOut = this.balanceTank.getOutputs();
+      for (const a of balOut.alarms) {
+        if (!alarms.includes(a)) {
+          alarms.push(a);
+        }
       }
     }
 
