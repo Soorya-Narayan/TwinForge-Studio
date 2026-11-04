@@ -33,6 +33,9 @@ export class CentrifugalPumpModel {
   public readonly peakEfficiency: number;
   public readonly npshrRatedM: number;
   public readonly deadheadTimeoutS: number;
+  public readonly tripCurrentRatio: number;
+  public readonly tripTimeS: number;
+  public readonly overloadLimit: number;
 
   // Physical dynamic states
   private speedRatio: number = 0; // s in [0, 1]
@@ -69,6 +72,9 @@ export class CentrifugalPumpModel {
     this.peakEfficiency = (config.efficiencyPeak.efficiencyPct.value) / 100;
     this.npshrRatedM = config.npshrRatedM.value;
     this.deadheadTimeoutS = config.deadheadTimeoutS?.value ?? 10.0;
+    this.tripCurrentRatio = config.motor.tripCurrentRatio?.value ?? 1.2;
+    this.tripTimeS = config.motor.tripTimeS?.value ?? 30.0;
+    this.overloadLimit = (Math.pow(this.tripCurrentRatio, 2) - 1) * this.tripTimeS;
 
     // Fit quadratic curve: H(Q) = a + b*Q + c*Q² through (0, H0), (Q1, H1), (Q2, H2)
     this.a = H0;
@@ -270,9 +276,8 @@ export class CentrifugalPumpModel {
       this.overloadIntegral = Math.max(0, this.overloadIntegral - 0.5 * dt);
     }
 
-    // Trip limit: 30s at 120% current = (1.2² - 1) * 30 = 13.2
-    const overloadLimit = 13.2;
-    if (this.overloadIntegral >= overloadLimit) {
+    // Trip limit computed from motor config: (tripCurrentRatio² - 1) * tripTimeS
+    if (this.overloadIntegral >= this.overloadLimit) {
       this.tripped = true;
       runFeedback = false;
     }
@@ -335,7 +340,7 @@ export class CentrifugalPumpModel {
   }
 
   public getOverloadPct(): number {
-    return Math.min(100, Math.max(0, (this.overloadIntegral / 13.2) * 100));
+    return Math.min(100, Math.max(0, (this.overloadIntegral / this.overloadLimit) * 100));
   }
 
   public getState(): PumpState {

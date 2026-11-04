@@ -489,6 +489,73 @@ describe('Centrifugal Pump Model & Raw Milk Supply Circuit Tests', () => {
       const pumpHeadNegStatic = circuit.pump.getHeadM(out.flowLph, out.pumpState.speedRatio);
       expect(Math.abs(systemHeadNegStatic - pumpHeadNegStatic)).toBeLessThan(0.1);
     });
+
+    it('17. verifies changing tripTimeS to 60 s makes the trip take twice as long, and getOverloadPct() reaches 100 exactly when the trip occurs', () => {
+      const dt = 0.05;
+
+      // 1. Base pump with tripTimeS = 30 s
+      const pump30 = new CentrifugalPumpModel({
+        ...DEFAULT_P_RAW_CONFIG,
+        motor: {
+          ...DEFAULT_P_RAW_CONFIG.motor,
+          tripCurrentRatio: { value: 1.2, source: 'placeholder' },
+          tripTimeS: { value: 30.0, source: 'placeholder' },
+        },
+      });
+      pump30.applyFault('motor_overload', 1.3);
+
+      let t30 = 0;
+      let state30 = pump30.getState();
+      let lastPct30 = 0;
+      while (!state30.tripped && t30 < 60) {
+        lastPct30 = pump30.getOverloadPct();
+        t30 += dt;
+        state30 = pump30.step(dt, {
+          startCmd: true,
+          flowLph: 12000,
+          suctionPressureAbsBar: 1.2,
+          fluidTempC: 4,
+          fluidDensityKgM3: 1032,
+          suctionPipeDiameterMm: 48,
+        });
+      }
+      expect(state30.tripped).toBe(true);
+      expect(lastPct30).toBeLessThan(100);
+      expect(pump30.getOverloadPct()).toBe(100);
+
+      // 2. Modified pump with tripTimeS = 60 s
+      const pump60 = new CentrifugalPumpModel({
+        ...DEFAULT_P_RAW_CONFIG,
+        motor: {
+          ...DEFAULT_P_RAW_CONFIG.motor,
+          tripCurrentRatio: { value: 1.2, source: 'placeholder' },
+          tripTimeS: { value: 60.0, source: 'placeholder' },
+        },
+      });
+      pump60.applyFault('motor_overload', 1.3);
+
+      let t60 = 0;
+      let state60 = pump60.getState();
+      let lastPct60 = 0;
+      while (!state60.tripped && t60 < 120) {
+        lastPct60 = pump60.getOverloadPct();
+        t60 += dt;
+        state60 = pump60.step(dt, {
+          startCmd: true,
+          flowLph: 12000,
+          suctionPressureAbsBar: 1.2,
+          fluidTempC: 4,
+          fluidDensityKgM3: 1032,
+          suctionPipeDiameterMm: 48,
+        });
+      }
+      expect(state60.tripped).toBe(true);
+      expect(lastPct60).toBeLessThan(100);
+      expect(pump60.getOverloadPct()).toBe(100);
+
+      // Verify trip takes twice as long
+      expect(t60 / t30).toBeCloseTo(2.0, 1);
+    });
   });
 });
 

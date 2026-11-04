@@ -16,6 +16,8 @@ export interface MotorConfig {
   motorEfficiency: NumericParameter<number>; // e.g. 0.85
   rampUpTimeS: NumericParameter<number>; // e.g. 2.0 s
   coastDownTauS: NumericParameter<number>; // e.g. 3.0 s
+  tripCurrentRatio?: NumericParameter<number>; // e.g. 1.2
+  tripTimeS?: NumericParameter<number>; // e.g. 30 s
 }
 
 export interface CentrifugalPumpConfig {

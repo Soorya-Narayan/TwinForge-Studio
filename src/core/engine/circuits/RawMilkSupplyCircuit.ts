@@ -62,6 +62,8 @@ export const DEFAULT_P_RAW_CONFIG: CentrifugalPumpConfig = {
     motorEfficiency: { value: 0.85, source: 'placeholder' },
     rampUpTimeS: { value: 2.0, source: 'placeholder' },
     coastDownTauS: { value: 3.0, source: 'placeholder' },
+    tripCurrentRatio: { value: 1.2, source: 'placeholder' },
+    tripTimeS: { value: 30.0, source: 'placeholder' },
   },
   efficiencyPeak: {
     flowLph: { value: 12000, source: 'placeholder' },

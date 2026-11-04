@@ -4,6 +4,8 @@ import type { RawMilkSupplyCircuit } from '../../../core/engine/circuits/RawMilk
 import { useSimulationStore } from '../../../store/useSimulationStore';
 import { Play, Square, Sliders, ShieldAlert, RotateCcw, AlertTriangle } from 'lucide-react';
 
+import type { FaultMode } from '../../../core/engine/types';
+
 interface PumpControlsCardProps {
   circuit: RawMilkSupplyCircuit;
   outputs: CircuitOutputs;
@@ -21,7 +23,7 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
   const pv1 = snapshot?.devices['PV-1'];
   const pv1Pos = pv1?.positionPct ?? (pv1?.isOpen ? 100 : 0);
 
-  const isFaultActive = (deviceId: string, mode: string) => {
+  const isFaultActive = (deviceId: string, mode: FaultMode) => {
     return faults.some((f) => f.deviceId === deviceId && f.mode === mode);
   };
 
@@ -37,11 +39,11 @@ export const PumpControlsCard: React.FC<PumpControlsCardProps> = ({ circuit, out
     setRawSiloLevel(val);
   };
 
-  const handleToggleFault = (deviceId: string, mode: string, value?: number) => {
+  const handleToggleFault = (deviceId: string, mode: FaultMode, value?: number) => {
     if (isFaultActive(deviceId, mode)) {
       injectFault({ deviceId, mode: 'none' });
     } else {
-      injectFault({ deviceId, mode: mode as any, value });
+      injectFault({ deviceId, mode, value });
     }
   };
 
